@@ -25,7 +25,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Name and email required' }, { status: 400 });
     }
 
-    const externalId = `bl_main_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // BL- prefix → orderko's webhook router fans this into bosslabs.
+    // Keep the prefix in sync with backend/routes/public.js in orderko.
+    const externalId = `BL-MAIN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const base = siteUrl(req);
     const bumped = Boolean(body.bump);
 

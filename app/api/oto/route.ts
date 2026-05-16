@@ -14,8 +14,9 @@ function siteUrl(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { orderId?: string };
-    const mainOrder = body.orderId || `bl_main_unknown_${Date.now()}`;
-    const externalId = `bl_oto_${mainOrder}_${Date.now()}`;
+    const mainOrder = body.orderId || `BL-MAIN-unknown-${Date.now()}`;
+    // BL- prefix → orderko fans this into bosslabs (same convention as /checkout).
+    const externalId = `BL-OTO-${mainOrder}-${Date.now()}`;
     const base = siteUrl(req);
 
     // In production: look up the original order in Supabase to pre-fill
