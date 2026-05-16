@@ -64,11 +64,29 @@ Resend API key, OneWaySMS credentials, Zoom URLs, and Messenger group URL are co
 Required because Vercel's filesystem is ephemeral — the JSON fallback won't persist signups between requests.
 
 1. Create a project at [supabase.com](https://supabase.com/dashboard)
-2. Open **SQL Editor → New query**, paste the contents of
-   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql), and Run
-3. Copy from **Settings → API**:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **`service_role` secret** → `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose to client)
+2. Copy from **Settings → API**:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL` in `.env.local`
+   - **`service_role` secret** → `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`
+3. Run the migration. Two paths:
+
+   **Path A — automated (~10 seconds):**
+   ```bash
+   # 1. Generate a personal access token (once):
+   #    https://supabase.com/dashboard/account/tokens
+   # 2. Add it to .env.local:
+   #    SUPABASE_ACCESS_TOKEN=sbp_...
+   # 3. Run:
+   npm run db:scaffold
+   ```
+
+   **Path B — manual SQL editor (~30 seconds):**
+   ```
+   1. Open: https://supabase.com/dashboard/project/<your-ref>/sql/new
+   2. Paste the contents of supabase/migrations/0001_init.sql
+   3. Click Run
+   ```
+
+Both create the same schema: 4 tables (`signups`, `email_templates`, `sms_templates`, `settings`), RLS enabled, 5 email + 5 SMS templates seeded, default settings row.
 
 ### 2. Connect the repo + set env vars
 
