@@ -2,13 +2,14 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OnboardingForm } from '@/components/OnboardingForm';
-import { WEBINAR } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
-export default function ThankYouPage({
+export default async function ThankYouPage({
   searchParams,
 }: {
   searchParams: { order?: string };
 }) {
+  const webinar = await getWebinarInfo();
   return (
     <>
       <header className="border-b border-white/[0.05] bg-[#06070A]/80 backdrop-blur-md">
@@ -57,8 +58,8 @@ export default function ThankYouPage({
 
           {/* Webinar details card */}
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.06] sm:grid-cols-3">
-            <DetailCell label="Webinar" value={WEBINAR.name} />
-            <DetailCell label="Date" value={WEBINAR.date} />
+            <DetailCell label="Webinar" value={webinar.name} />
+            <DetailCell label="Date" value={webinar.date} />
             <DetailCell label="Format" value="Live on Zoom" />
           </div>
 

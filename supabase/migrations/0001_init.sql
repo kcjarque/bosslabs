@@ -41,6 +41,11 @@ create table if not exists sms_templates (
 
 create table if not exists settings (
   id integer primary key default 1,
+  webinar_name text default 'AI Coding 101 — The BOSSLABS AI Webinar',
+  webinar_date text default 'To Be Announced',
+  webinar_time text default '8:00 PM',
+  webinar_timezone text default 'PHT',
+  webinar_starts_at_iso text default '',
   resend_api_key text default '',
   resend_from_email text default 'hello@bosslabs.ai',
   resend_from_name text default 'BOSSLABS AI',
@@ -56,6 +61,13 @@ create table if not exists settings (
   constraint settings_singleton check (id = 1)
 );
 insert into settings (id) values (1) on conflict (id) do nothing;
+
+-- Idempotent add-columns for projects already scaffolded on an older schema.
+alter table settings add column if not exists webinar_name text default 'AI Coding 101 — The BOSSLABS AI Webinar';
+alter table settings add column if not exists webinar_date text default 'To Be Announced';
+alter table settings add column if not exists webinar_time text default '8:00 PM';
+alter table settings add column if not exists webinar_timezone text default 'PHT';
+alter table settings add column if not exists webinar_starts_at_iso text default '';
 
 -- ─── Row Level Security ───────────────────────────────────────────────────
 -- The Next.js server uses the service-role key, which bypasses RLS. We enable

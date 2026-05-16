@@ -1,10 +1,13 @@
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
-import { FREE_GIFT, MESSENGER_GROUP_URL, WEBINAR } from '@/lib/config';
+import { FREE_GIFT, MESSENGER_GROUP_URL } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
 export const metadata = { title: "You're In — BOSSLABS AI" };
 
-export default function RegisteredPage() {
+export default async function RegisteredPage() {
+  const webinar = await getWebinarInfo();
+  const messengerUrl = webinar.messengerGroupUrl || MESSENGER_GROUP_URL;
   return (
     <>
       <header className="border-b border-white/[0.05] bg-[#06070A]/80 backdrop-blur-md">
@@ -67,7 +70,7 @@ export default function RegisteredPage() {
               </p>
 
               <a
-                href={MESSENGER_GROUP_URL}
+                href={messengerUrl}
                 target="_blank"
                 rel="noopener"
                 className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-full bg-[#0084FF] px-7 py-4 font-sans text-base font-medium text-white shadow-[0_10px_30px_-10px_rgba(0,132,255,0.7)] transition hover:bg-[#1a8eff] sm:w-auto"
@@ -94,9 +97,9 @@ export default function RegisteredPage() {
 
           {/* Webinar details */}
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.06] sm:grid-cols-3">
-            <DetailCell label="Webinar" value={WEBINAR.name} />
-            <DetailCell label="Date" value={WEBINAR.date} />
-            <DetailCell label="Time" value={`${WEBINAR.time} ${WEBINAR.timezone}`} />
+            <DetailCell label="Webinar" value={webinar.name} />
+            <DetailCell label="Date" value={webinar.date} />
+            <DetailCell label="Time" value={`${webinar.time} ${webinar.timezone}`} />
           </div>
 
           {/* Next steps */}

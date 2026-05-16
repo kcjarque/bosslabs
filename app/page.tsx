@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { OptInPage } from '@/components/OptInPage';
+import { getWebinarInfo } from '@/lib/webinar';
 
 export const metadata: Metadata = {
   title: 'Reserve a Seat — BOSSLABS AI · For Filipino Business Owners',
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Page() {
-  return <OptInPage />;
+export default async function Page() {
+  const webinar = await getWebinarInfo();
+  return <OptInPage webinar={webinar} />;
 }

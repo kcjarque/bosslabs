@@ -33,28 +33,28 @@ import {
   OFFER,
   PILLARS,
   SUBHEADLINE,
-  WEBINAR,
   WHAT_IS,
   WINS,
 } from '@/lib/config';
+import type { WebinarInfo } from '@/lib/webinar';
 
-export function OptInPage() {
+export function OptInPage({ webinar }: { webinar: WebinarInfo }) {
   return (
     <>
       <MinimalHeader />
       <main className="relative">
-        <Hero />
+        <Hero webinar={webinar} />
         <AuthorityBar />
         <WhatIsSection />
         <OurAppsShowcase />
         <Pillars />
         <ManifestoBlock />
-        <FoundersDetail />
+        <FoundersDetail webinar={webinar} />
         <WorkflowDiagram />
         <ClaudeCodeExplainer />
         <YourTicketIncludes />
         <Wins />
-        <FinalUrgency />
+        <FinalUrgency webinar={webinar} />
       </main>
       <MinimalFooter />
       <StickyMobileCta />
@@ -120,7 +120,7 @@ function PaidCta({ className = '' }: { className?: string }) {
 /* --------------------------------------------------------------------- */
 /* 1 — HERO                                                              */
 /* --------------------------------------------------------------------- */
-function Hero() {
+function Hero({ webinar }: { webinar: WebinarInfo }) {
   return (
     <section className="relative isolate overflow-hidden">
       <HeroBackground />
@@ -128,7 +128,7 @@ function Hero() {
         <div className="mx-auto max-w-4xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-1.5 text-[10px] uppercase tracking-[0.22em] text-cyan-300 sm:text-[11px]">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
-            Live on Zoom · {WEBINAR.date} · {WEBINAR.time} {WEBINAR.timezone}
+            Live on Zoom · {webinar.date} · {webinar.time} {webinar.timezone}
           </div>
 
           <h1 className="mt-7 font-serif text-[32px] leading-[1.06] tracking-[-0.01em] text-white sm:text-[52px] md:text-[64px] lg:text-[72px]">
@@ -412,7 +412,7 @@ function Bracket({ className = '' }: { className?: string }) {
   );
 }
 
-function FoundersDetail() {
+function FoundersDetail({ webinar }: { webinar: WebinarInfo }) {
   return (
     <section className="border-t border-white/[0.05] py-20 sm:py-24">
       <div className="container-tight">
@@ -436,7 +436,7 @@ function FoundersDetail() {
         <div className="mt-14 flex flex-col items-center gap-3">
           <PaidCta className="w-full sm:w-auto" />
           <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-            Live on Zoom · {WEBINAR.date} · {WEBINAR.time} {WEBINAR.timezone}
+            Live on Zoom · {webinar.date} · {webinar.time} {webinar.timezone}
           </p>
         </div>
       </div>
@@ -704,7 +704,7 @@ function Wins() {
 /* --------------------------------------------------------------------- */
 /* 6 — FINAL URGENCY BLOCK                                               */
 /* --------------------------------------------------------------------- */
-function FinalUrgency() {
+function FinalUrgency({ webinar }: { webinar: WebinarInfo }) {
   return (
     <section className="border-t border-danger-700/40 bg-gradient-to-b from-danger-900/20 via-transparent to-transparent py-20 sm:py-28">
       <div className="container-tight">
@@ -724,7 +724,7 @@ function FinalUrgency() {
           </div>
 
           <div className="mt-8 inline-block rounded-3xl border border-danger-700/40 bg-[#06070A] px-6 py-8 sm:mt-10 sm:px-10 sm:py-10">
-            <CountdownDisplay startsAtIso={WEBINAR.startsAtIso} />
+            <CountdownDisplay startsAtIso={webinar.startsAtIso} />
             <p className="mt-6 font-sans text-[10px] uppercase tracking-[0.22em] text-danger-200 sm:text-[11px]">
               Until your session goes live
             </p>

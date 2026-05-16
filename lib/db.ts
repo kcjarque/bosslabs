@@ -63,13 +63,22 @@ export type SmsTemplate = {
 };
 
 export type Settings = {
+  /* Webinar (edit live from /admin/settings — falls back to env vars on cold start) */
+  webinarName: string;
+  webinarDate: string;
+  webinarTime: string;
+  webinarTimezone: string;
+  webinarStartsAtIso: string;
+  /* Email — Resend */
   resendApiKey: string;
   resendFromEmail: string;
   resendFromName: string;
+  /* SMS — OneWaySMS */
   onewaysmsEndpoint: string;
   onewaysmsUsername: string;
   onewaysmsPassword: string;
   onewaysmsSenderId: string;
+  /* Webinar deliverables */
   zoomRegisterUrl: string;
   zoomJoinUrl: string;
   replayUrl: string;
@@ -77,6 +86,11 @@ export type Settings = {
 };
 
 const DEFAULT_SETTINGS: Settings = {
+  webinarName: 'AI Coding 101 — The BOSSLABS AI Webinar',
+  webinarDate: 'To Be Announced',
+  webinarTime: '8:00 PM',
+  webinarTimezone: 'PHT',
+  webinarStartsAtIso: '',
   resendApiKey: '',
   resendFromEmail: 'hello@bosslabs.ai',
   resendFromName: 'BOSSLABS AI',
@@ -145,6 +159,11 @@ function signupToRow(s: Signup): SignupRow {
 
 type SettingsRow = {
   id: number;
+  webinar_name: string;
+  webinar_date: string;
+  webinar_time: string;
+  webinar_timezone: string;
+  webinar_starts_at_iso: string;
   resend_api_key: string;
   resend_from_email: string;
   resend_from_name: string;
@@ -160,6 +179,11 @@ type SettingsRow = {
 
 function rowToSettings(r: SettingsRow): Settings {
   return {
+    webinarName: r.webinar_name ?? '',
+    webinarDate: r.webinar_date ?? '',
+    webinarTime: r.webinar_time ?? '',
+    webinarTimezone: r.webinar_timezone ?? '',
+    webinarStartsAtIso: r.webinar_starts_at_iso ?? '',
     resendApiKey: r.resend_api_key ?? '',
     resendFromEmail: r.resend_from_email ?? '',
     resendFromName: r.resend_from_name ?? '',
@@ -176,6 +200,11 @@ function rowToSettings(r: SettingsRow): Settings {
 
 function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   const out: Partial<SettingsRow> = { id: 1 };
+  if (s.webinarName !== undefined) out.webinar_name = s.webinarName;
+  if (s.webinarDate !== undefined) out.webinar_date = s.webinarDate;
+  if (s.webinarTime !== undefined) out.webinar_time = s.webinarTime;
+  if (s.webinarTimezone !== undefined) out.webinar_timezone = s.webinarTimezone;
+  if (s.webinarStartsAtIso !== undefined) out.webinar_starts_at_iso = s.webinarStartsAtIso;
   if (s.resendApiKey !== undefined) out.resend_api_key = s.resendApiKey;
   if (s.resendFromEmail !== undefined) out.resend_from_email = s.resendFromEmail;
   if (s.resendFromName !== undefined) out.resend_from_name = s.resendFromName;

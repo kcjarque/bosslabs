@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn } from '@/lib/admin-auth';
-import { getSignups, getSettings, type Signup } from '@/lib/db';
+import { getSignups, type Signup } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { WEBINAR } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
 export const runtime = 'nodejs';
 
@@ -30,19 +30,20 @@ export async function POST(req: Request) {
     if (!signup) return NextResponse.json({ error: 'Signup not found' }, { status: 404 });
   }
 
-  const settings = await getSettings();
+  const webinar = await getWebinarInfo();
   const vars: Record<string, string> = {
     firstName: signup?.firstName || body.firstName || 'there',
     lastName: signup?.lastName || '',
     email: signup?.email || body.to || '',
     phone: signup?.phone || body.to || '',
-    webinarDate: WEBINAR.date,
-    webinarTime: WEBINAR.time,
-    webinarTimezone: WEBINAR.timezone,
-    zoomRegisterUrl: settings.zoomRegisterUrl,
-    zoomJoinUrl: settings.zoomJoinUrl,
-    replayUrl: settings.replayUrl,
-    messengerGroupUrl: settings.messengerGroupUrl,
+    webinarName: webinar.name,
+    webinarDate: webinar.date,
+    webinarTime: webinar.time,
+    webinarTimezone: webinar.timezone,
+    zoomRegisterUrl: webinar.zoomRegisterUrl,
+    zoomJoinUrl: webinar.zoomJoinUrl,
+    replayUrl: webinar.replayUrl,
+    messengerGroupUrl: webinar.messengerGroupUrl,
   };
 
   if (body.channel === 'email') {

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { addSignup, getSettings } from '@/lib/db';
+import { addSignup } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { WEBINAR } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
 export const runtime = 'nodejs';
 
@@ -29,18 +29,19 @@ export async function POST(req: Request) {
     });
 
     // Fire-and-forget welcome email + SMS (template lookup, with var injection).
-    const settings = await getSettings();
+    const webinar = await getWebinarInfo();
     const vars = {
       firstName: signup.firstName,
       email: signup.email,
       phone: signup.phone,
-      webinarDate: WEBINAR.date,
-      webinarTime: WEBINAR.time,
-      webinarTimezone: WEBINAR.timezone,
-      zoomRegisterUrl: settings.zoomRegisterUrl,
-      zoomJoinUrl: settings.zoomJoinUrl,
-      replayUrl: settings.replayUrl,
-      messengerGroupUrl: settings.messengerGroupUrl,
+      webinarName: webinar.name,
+      webinarDate: webinar.date,
+      webinarTime: webinar.time,
+      webinarTimezone: webinar.timezone,
+      zoomRegisterUrl: webinar.zoomRegisterUrl,
+      zoomJoinUrl: webinar.zoomJoinUrl,
+      replayUrl: webinar.replayUrl,
+      messengerGroupUrl: webinar.messengerGroupUrl,
     };
 
     Promise.all([

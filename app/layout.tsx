@@ -3,7 +3,7 @@ import { Inter, Orbitron, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 import { CountdownBar } from '@/components/CountdownBar';
 import { PageGlow } from '@/components/PageGlow';
-import { WEBINAR } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -38,7 +38,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const webinar = await getWebinarInfo();
   return (
     <html
       lang="en"
@@ -47,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="relative font-sans antialiased">
         <PageGlow />
         <div className="relative z-10">
-          <CountdownBar startsAtIso={WEBINAR.startsAtIso} />
+          <CountdownBar startsAtIso={webinar.startsAtIso} />
           {children}
         </div>
       </body>

@@ -40,6 +40,62 @@ export function SettingsForm({ initial }: { initial: Settings }) {
       className="space-y-5"
     >
       <Section
+        title="Webinar"
+        description="These flow into the landing page (hero, host CTA, final countdown) and every email + SMS template variable. Editable live — no redeploy."
+      >
+        <Field label="Webinar name" hint="Used in email + SMS subjects and the thank-you page detail card.">
+          <input
+            type="text"
+            className="input"
+            value={values.webinarName}
+            onChange={(e) => update('webinarName', e.target.value)}
+            placeholder="AI Coding 101 — The BOSSLABS AI Webinar"
+          />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr_0.7fr]">
+          <Field label="Date (display)" hint="Free text — whatever reads well on the page.">
+            <input
+              type="text"
+              className="input"
+              value={values.webinarDate}
+              onChange={(e) => update('webinarDate', e.target.value)}
+              placeholder="May 21, 2026"
+            />
+          </Field>
+          <Field label="Time (display)">
+            <input
+              type="text"
+              className="input"
+              value={values.webinarTime}
+              onChange={(e) => update('webinarTime', e.target.value)}
+              placeholder="8:00 PM"
+            />
+          </Field>
+          <Field label="Timezone">
+            <input
+              type="text"
+              className="input"
+              value={values.webinarTimezone}
+              onChange={(e) => update('webinarTimezone', e.target.value)}
+              placeholder="PHT"
+            />
+          </Field>
+        </div>
+        <Field
+          label="Countdown ISO timestamp"
+          hint="What the red countdown bar ticks toward. Must be ISO 8601 with a timezone (e.g. 2026-05-21T20:00:00+08:00). Leave blank for a +14-day fallback."
+        >
+          <input
+            type="text"
+            className="input"
+            value={values.webinarStartsAtIso}
+            onChange={(e) => update('webinarStartsAtIso', e.target.value)}
+            placeholder="2026-05-21T20:00:00+08:00"
+          />
+        </Field>
+      </Section>
+
+      <Section
         title="Email · Resend"
         description="Free tier: 3,000 emails / month, 100 / day. Create a key at resend.com/api-keys."
       >
