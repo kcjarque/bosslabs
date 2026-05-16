@@ -59,18 +59,54 @@ Resend API key, OneWaySMS credentials, Zoom URLs, and Messenger group URL are co
 
 ## Deploy to Vercel
 
-1. **Set required env vars** in the Vercel dashboard (the block above)
-2. **Connect the repo + deploy** — no `vercel.json` needed, Next.js auto-detects
-3. **Important**: Vercel's serverless filesystem is **ephemeral**. The `/data/*.json` storage works on a single-instance VPS but won't persist between deploys on Vercel.
+### 1. Provision Supabase (one-time)
 
-### Swap the JSON storage for a real DB before high traffic
+Required because Vercel's filesystem is ephemeral — the JSON fallback won't persist signups between requests.
 
-All read/write goes through [`lib/db.ts`](lib/db.ts) — ~12 functions. To swap to Supabase / Postgres / Vercel KV:
+1. Create a project at [supabase.com](https://supabase.com/dashboard)
+2. Open **SQL Editor → New query**, paste the contents of
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql), and Run
+3. Copy from **Settings → API**:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **`service_role` secret** → `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose to client)
 
-1. Replace the bodies of `getSignups`, `addSignup`, `updateSignup`, `getEmailTemplates`, `saveEmailTemplate`, `getSmsTemplates`, `saveSmsTemplate`, `getSettings`, `saveSettings`
-2. Everything else (admin UI, public forms, send routes) stays exactly the same
+### 2. Connect the repo + set env vars
 
-The seed templates in `data/email_templates.json` + `data/sms_templates.json` are committed — port them into your DB at migration time.
+1. **Import** `kcjarque/bosslabs` into Vercel (Next.js auto-detected, no `vercel.json` needed)
+2. **Environment Variables** (Production):
+   ```
+   ADMIN_PASSWORD                   <your strong password>
+   ADMIN_COOKIE_SECRET              <long random string>
+   NEXT_PUBLIC_SITE_URL             https://your-domain.com
+   NEXT_PUBLIC_WEBINAR_DATE         <real date>
+   NEXT_PUBLIC_WEBINAR_TIME         8:00 PM
+   NEXT_PUBLIC_WEBINAR_TZ           PHT
+   NEXT_PUBLIC_WEBINAR_STARTS_AT_ISO 2026-06-14T20:00:00+08:00
+   NEXT_PUBLIC_SUPABASE_URL         <from Supabase>
+   SUPABASE_SERVICE_ROLE_KEY        <from Supabase>
+   ```
+   Leave `XENDIT_SECRET_KEY` blank to keep checkout in demo mode until you wire it.
+3. Deploy.
+
+### 3. Configure runtime tokens
+
+Open `https://your-domain.com/admin/login`, sign in, then **Settings**:
+- Paste your Resend API key + From email/name
+- Paste your OneWaySMS username/password + Sender ID
+- Paste your Zoom register/join URLs + Messenger group URL
+
+These persist in Supabase (the `settings` table), so they survive deploys.
+
+### Dev vs. production storage
+
+The app picks the storage backend at runtime:
+
+| Env vars set? | Backend |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | **Supabase** (real DB) |
+| Neither set | **JSON files** in `/data/` (dev only) |
+
+This means local dev works with **zero setup** (file fallback), and Vercel uses Supabase automatically once env vars are set.
 
 ## Brand
 

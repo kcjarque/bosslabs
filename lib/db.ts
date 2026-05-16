@@ -1,56 +1,25 @@
 /**
  * Mini backend storage layer.
  *
- * Backs everything with JSON files inside /data so the admin works the moment
- * you `pnpm dev` — no Supabase setup required. Swap the read/write helpers
- * later when you move to a real DB.
+ * Two backends with the SAME public API:
  *
- * IMPORTANT: this is for local / single-instance hosting only. On Vercel and
- * other serverless platforms the filesystem is ephemeral — move to Supabase,
- * Upstash KV, or any real DB before deploy.
+ *   1. **Supabase** (production) — used when NEXT_PUBLIC_SUPABASE_URL and
+ *      SUPABASE_SERVICE_ROLE_KEY are both present in the environment.
+ *      Run `supabase/migrations/0001_init.sql` once to provision tables.
+ *
+ *   2. **JSON files** in `/data` (dev / single-instance VPS) — used as a
+ *      fallback when Supabase env vars are missing. Convenient for local
+ *      development without setting up a database. NOT safe on Vercel
+ *      because the serverless filesystem is ephemeral.
+ *
+ * The public API exported below is identical for both backends — every
+ * `app/api/*` route and every admin component just imports from here.
  */
 
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-
-async function ensureDir() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  } catch {}
-}
-
-async function readJson<T>(file: string, fallback: T): Promise<T> {
-  await ensureDir();
-  try {
-    const raw = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-/* Serialize writes per file so two concurrent requests don't race on the
- * .tmp → final rename. Simple module-level promise chain — good enough for
- * a JSON-file backed mini-CRM. Swap for a real DB before high load. */
-const writeChain: Record<string, Promise<void>> = {};
-
-async function writeJson<T>(file: string, data: T) {
-  await ensureDir();
-  const prev = writeChain[file] || Promise.resolve();
-  const next = prev
-    .catch(() => undefined)
-    .then(async () => {
-      const tmp = path.join(DATA_DIR, `${file}.${process.pid}.${Date.now()}.tmp`);
-      const final = path.join(DATA_DIR, file);
-      await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-      await fs.rename(tmp, final);
-    });
-  writeChain[file] = next;
-  return next;
-}
+import { getSupabase, isSupabaseConfigured } from './supabase';
 
 /* --------------------------------------------------------------------- */
 /* TYPES                                                                 */
@@ -94,16 +63,13 @@ export type SmsTemplate = {
 };
 
 export type Settings = {
-  /* Email — Resend */
   resendApiKey: string;
   resendFromEmail: string;
   resendFromName: string;
-  /* SMS — OneWaySMS */
   onewaysmsEndpoint: string;
   onewaysmsUsername: string;
   onewaysmsPassword: string;
   onewaysmsSenderId: string;
-  /* Webinar deliverables */
   zoomRegisterUrl: string;
   zoomJoinUrl: string;
   replayUrl: string;
@@ -125,10 +91,157 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 /* --------------------------------------------------------------------- */
+/* Row mapping (snake_case ↔ camelCase)                                  */
+/* --------------------------------------------------------------------- */
+
+type SignupRow = {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+  email: string;
+  phone: string;
+  source: SignupSource;
+  status: SignupStatus;
+  amount_centavos: number | null;
+  bumped: boolean | null;
+  message: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+function rowToSignup(r: SignupRow): Signup {
+  return {
+    id: r.id,
+    firstName: r.first_name,
+    lastName: r.last_name ?? undefined,
+    email: r.email,
+    phone: r.phone,
+    source: r.source,
+    status: r.status,
+    amountCentavos: r.amount_centavos ?? undefined,
+    bumped: r.bumped ?? undefined,
+    message: r.message ?? undefined,
+    metadata: r.metadata ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+function signupToRow(s: Signup): SignupRow {
+  return {
+    id: s.id,
+    first_name: s.firstName,
+    last_name: s.lastName ?? null,
+    email: s.email,
+    phone: s.phone,
+    source: s.source,
+    status: s.status,
+    amount_centavos: s.amountCentavos ?? null,
+    bumped: s.bumped ?? null,
+    message: s.message ?? null,
+    metadata: s.metadata ?? null,
+    created_at: s.createdAt,
+  };
+}
+
+type SettingsRow = {
+  id: number;
+  resend_api_key: string;
+  resend_from_email: string;
+  resend_from_name: string;
+  onewaysms_endpoint: string;
+  onewaysms_username: string;
+  onewaysms_password: string;
+  onewaysms_sender_id: string;
+  zoom_register_url: string;
+  zoom_join_url: string;
+  replay_url: string;
+  messenger_group_url: string;
+};
+
+function rowToSettings(r: SettingsRow): Settings {
+  return {
+    resendApiKey: r.resend_api_key ?? '',
+    resendFromEmail: r.resend_from_email ?? '',
+    resendFromName: r.resend_from_name ?? '',
+    onewaysmsEndpoint: r.onewaysms_endpoint ?? '',
+    onewaysmsUsername: r.onewaysms_username ?? '',
+    onewaysmsPassword: r.onewaysms_password ?? '',
+    onewaysmsSenderId: r.onewaysms_sender_id ?? '',
+    zoomRegisterUrl: r.zoom_register_url ?? '',
+    zoomJoinUrl: r.zoom_join_url ?? '',
+    replayUrl: r.replay_url ?? '',
+    messengerGroupUrl: r.messenger_group_url ?? '',
+  };
+}
+
+function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
+  const out: Partial<SettingsRow> = { id: 1 };
+  if (s.resendApiKey !== undefined) out.resend_api_key = s.resendApiKey;
+  if (s.resendFromEmail !== undefined) out.resend_from_email = s.resendFromEmail;
+  if (s.resendFromName !== undefined) out.resend_from_name = s.resendFromName;
+  if (s.onewaysmsEndpoint !== undefined) out.onewaysms_endpoint = s.onewaysmsEndpoint;
+  if (s.onewaysmsUsername !== undefined) out.onewaysms_username = s.onewaysmsUsername;
+  if (s.onewaysmsPassword !== undefined) out.onewaysms_password = s.onewaysmsPassword;
+  if (s.onewaysmsSenderId !== undefined) out.onewaysms_sender_id = s.onewaysmsSenderId;
+  if (s.zoomRegisterUrl !== undefined) out.zoom_register_url = s.zoomRegisterUrl;
+  if (s.zoomJoinUrl !== undefined) out.zoom_join_url = s.zoomJoinUrl;
+  if (s.replayUrl !== undefined) out.replay_url = s.replayUrl;
+  if (s.messengerGroupUrl !== undefined) out.messenger_group_url = s.messengerGroupUrl;
+  return out;
+}
+
+/* --------------------------------------------------------------------- */
+/* JSON file fallback (only used when Supabase env vars are missing)     */
+/* --------------------------------------------------------------------- */
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+
+async function ensureDir() {
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+  } catch {}
+}
+
+async function readJson<T>(file: string, fallback: T): Promise<T> {
+  await ensureDir();
+  try {
+    const raw = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+const writeChain: Record<string, Promise<void>> = {};
+
+async function writeJson<T>(file: string, data: T) {
+  await ensureDir();
+  const prev = writeChain[file] || Promise.resolve();
+  const next = prev
+    .catch(() => undefined)
+    .then(async () => {
+      const tmp = path.join(DATA_DIR, `${file}.${process.pid}.${Date.now()}.tmp`);
+      const final = path.join(DATA_DIR, file);
+      await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+      await fs.rename(tmp, final);
+    });
+  writeChain[file] = next;
+  return next;
+}
+
+/* --------------------------------------------------------------------- */
 /* SIGNUPS                                                               */
 /* --------------------------------------------------------------------- */
 
 export async function getSignups(): Promise<Signup[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`Supabase getSignups: ${error.message}`);
+    return (data as SignupRow[]).map(rowToSignup);
+  }
   const list = await readJson<Signup[]>('signups.json', []);
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -136,19 +249,48 @@ export async function getSignups(): Promise<Signup[]> {
 export async function addSignup(
   data: Omit<Signup, 'id' | 'createdAt' | 'status'> & { status?: SignupStatus },
 ): Promise<Signup> {
-  const list = await readJson<Signup[]>('signups.json', []);
   const signup: Signup = {
     id: `sig_${crypto.randomBytes(6).toString('hex')}`,
     createdAt: new Date().toISOString(),
     status: data.status ?? 'registered',
     ...data,
   };
+
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase().from('signups').insert(signupToRow(signup));
+    if (error) throw new Error(`Supabase addSignup: ${error.message}`);
+    return signup;
+  }
+
+  const list = await readJson<Signup[]>('signups.json', []);
   list.unshift(signup);
   await writeJson('signups.json', list);
   return signup;
 }
 
 export async function updateSignup(id: string, patch: Partial<Signup>): Promise<Signup | null> {
+  if (isSupabaseConfigured()) {
+    const update: Partial<SignupRow> = {};
+    if (patch.firstName !== undefined) update.first_name = patch.firstName;
+    if (patch.lastName !== undefined) update.last_name = patch.lastName ?? null;
+    if (patch.email !== undefined) update.email = patch.email;
+    if (patch.phone !== undefined) update.phone = patch.phone;
+    if (patch.source !== undefined) update.source = patch.source;
+    if (patch.status !== undefined) update.status = patch.status;
+    if (patch.amountCentavos !== undefined) update.amount_centavos = patch.amountCentavos ?? null;
+    if (patch.bumped !== undefined) update.bumped = patch.bumped ?? null;
+    if (patch.message !== undefined) update.message = patch.message ?? null;
+    if (patch.metadata !== undefined) update.metadata = patch.metadata ?? null;
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) return null;
+    return rowToSignup(data as SignupRow);
+  }
+
   const list = await readJson<Signup[]>('signups.json', []);
   const i = list.findIndex((s) => s.id === id);
   if (i === -1) return null;
@@ -158,14 +300,29 @@ export async function updateSignup(id: string, patch: Partial<Signup>): Promise<
 }
 
 /* --------------------------------------------------------------------- */
-/* TEMPLATES                                                             */
+/* EMAIL TEMPLATES                                                       */
 /* --------------------------------------------------------------------- */
 
 export async function getEmailTemplates(): Promise<EmailTemplate[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('email_templates')
+      .select('id, name, subject, html')
+      .order('id');
+    if (error) throw new Error(`Supabase getEmailTemplates: ${error.message}`);
+    return (data as EmailTemplate[]) ?? [];
+  }
   return readJson<EmailTemplate[]>('email_templates.json', []);
 }
 
 export async function saveEmailTemplate(t: EmailTemplate) {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase()
+      .from('email_templates')
+      .upsert({ ...t, updated_at: new Date().toISOString() });
+    if (error) throw new Error(`Supabase saveEmailTemplate: ${error.message}`);
+    return;
+  }
   const list = await getEmailTemplates();
   const i = list.findIndex((x) => x.id === t.id);
   if (i === -1) list.push(t);
@@ -173,11 +330,30 @@ export async function saveEmailTemplate(t: EmailTemplate) {
   await writeJson('email_templates.json', list);
 }
 
+/* --------------------------------------------------------------------- */
+/* SMS TEMPLATES                                                         */
+/* --------------------------------------------------------------------- */
+
 export async function getSmsTemplates(): Promise<SmsTemplate[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('sms_templates')
+      .select('id, name, body')
+      .order('id');
+    if (error) throw new Error(`Supabase getSmsTemplates: ${error.message}`);
+    return (data as SmsTemplate[]) ?? [];
+  }
   return readJson<SmsTemplate[]>('sms_templates.json', []);
 }
 
 export async function saveSmsTemplate(t: SmsTemplate) {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase()
+      .from('sms_templates')
+      .upsert({ ...t, updated_at: new Date().toISOString() });
+    if (error) throw new Error(`Supabase saveSmsTemplate: ${error.message}`);
+    return;
+  }
   const list = await getSmsTemplates();
   const i = list.findIndex((x) => x.id === t.id);
   if (i === -1) list.push(t);
@@ -190,11 +366,27 @@ export async function saveSmsTemplate(t: SmsTemplate) {
 /* --------------------------------------------------------------------- */
 
 export async function getSettings(): Promise<Settings> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('settings')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase getSettings: ${error.message}`);
+    if (!data) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...rowToSettings(data as SettingsRow) };
+  }
   const stored = await readJson<Partial<Settings>>('settings.json', {});
   return { ...DEFAULT_SETTINGS, ...stored };
 }
 
-export async function saveSettings(patch: Partial<Settings>) {
+export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
+  if (isSupabaseConfigured()) {
+    const row = { ...settingsToRow(patch), id: 1, updated_at: new Date().toISOString() };
+    const { error } = await getSupabase().from('settings').upsert(row);
+    if (error) throw new Error(`Supabase saveSettings: ${error.message}`);
+    return getSettings();
+  }
   const current = await getSettings();
   const next: Settings = { ...current, ...patch };
   await writeJson('settings.json', next);
