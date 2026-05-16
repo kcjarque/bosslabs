@@ -1,0 +1,171 @@
+/* Admin-only overrides — flip the page from dark editorial to light dashboard. */
+.admin-shell {
+  /* Reset the body's dark radial gradient (set in globals.css) for /admin/* */
+  background-image: none !important;
+}
+
+.admin-shell h1,
+.admin-shell h2,
+.admin-shell h3,
+.admin-shell h4 {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.admin-shell .card {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  color: #0F172A;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.admin-shell .label {
+  margin-bottom: 0.35rem;
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+
+.admin-shell .input,
+.admin-shell .select {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #CBD5E1;
+  background: white;
+  padding: 0.55rem 0.75rem;
+  font-size: 14px;
+  color: #0F172A;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.admin-shell .input:focus,
+.admin-shell .select:focus {
+  border-color: #00B8E6;
+  box-shadow: 0 0 0 3px rgba(0, 184, 230, 0.18);
+}
+.admin-shell .input::placeholder {
+  color: #94A3B8;
+}
+
+.admin-shell .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  padding: 0.55rem 0.95rem;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, transform 0.05s;
+  white-space: nowrap;
+}
+.admin-shell .btn-primary {
+  background: #0F172A;
+  color: white;
+}
+.admin-shell .btn-primary:hover {
+  background: #1E293B;
+}
+.admin-shell .btn-primary:active {
+  transform: translateY(1px);
+}
+.admin-shell .btn-secondary {
+  background: white;
+  color: #0F172A;
+  border: 1px solid #CBD5E1;
+}
+.admin-shell .btn-secondary:hover {
+  background: #F8FAFC;
+}
+.admin-shell .btn-ghost {
+  background: transparent;
+  color: #64748B;
+}
+.admin-shell .btn-ghost:hover {
+  color: #0F172A;
+}
+.admin-shell .btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-shell .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  padding: 0.15rem 0.55rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+}
+.admin-shell .pill-cyan {
+  border-color: rgba(0, 184, 230, 0.4);
+  background: rgba(0, 184, 230, 0.08);
+  color: #0093B8;
+}
+.admin-shell .pill-green {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+.admin-shell .pill-amber {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+  color: #92400E;
+}
+.admin-shell .pill-red {
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(220, 38, 38, 0.06);
+  color: #B91C1C;
+}
+
+.admin-shell table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-shell th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748B;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  font-weight: 600;
+}
+.admin-shell td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 13px;
+  color: #0F172A;
+  vertical-align: top;
+}
+.admin-shell tr:hover td {
+  background: #F8FAFC;
+}
+
+.admin-shell textarea.input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 220px;
+}
+
+/* Override globals.css `:root` so default text is dark on admin pages */
+.admin-shell {
+  color: #0F172A;
+}
+
+/* Strip CountdownBar global tint impact — keep it but make admin links visible. */
+.admin-shell a {
+  color: inherit;
+}

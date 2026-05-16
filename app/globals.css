@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #06070A;
+  --foreground: #F2F3F6;
+  --brand: #00B8E6;
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-image:
+    radial-gradient(60% 50% at 50% -5%, rgba(0,184,230,0.07), transparent 60%),
+    radial-gradient(40% 30% at 90% 110%, rgba(0,184,230,0.04), transparent 60%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .container-tight {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+  .container-narrow {
+    @apply mx-auto w-full max-w-3xl px-5 sm:px-8;
+  }
+  .eyebrow {
+    @apply inline-flex items-center gap-2 font-sans text-[11px] uppercase tracking-[0.28em] text-ink-200;
+  }
+  .eyebrow-danger {
+    @apply inline-flex items-center gap-2 font-sans text-[11px] uppercase tracking-[0.28em] text-danger-400;
+  }
+  .pulse-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full bg-danger-400;
+    animation: pulseDot 1.8s ease-in-out infinite;
+  }
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Hero DNA-helix background animations */
+@keyframes helix-drift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-200px); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.85); }
+  50% { opacity: 0.75; transform: scale(1.15); }
+}
+@keyframes orb-breath {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes flow-dash {
+  to { stroke-dashoffset: -200; }
+}
+
+.hero-bg .helix-strand {
+  stroke-dasharray: 4 6;
+  animation: flow-dash 18s linear infinite;
+}
+.hero-bg .helix-strand-2 {
+  animation-direction: reverse;
+  animation-duration: 22s;
+}
+.hero-bg .helix-group {
+  animation: helix-drift 36s linear infinite;
+}
+.hero-bg .twinkle {
+  animation: twinkle 4s ease-in-out infinite;
+}
+.hero-bg .orb {
+  animation: orb-breath 8s ease-in-out infinite;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hero-bg .helix-strand,
+  .hero-bg .helix-group,
+  .hero-bg .twinkle,
+  .hero-bg .orb {
+    animation: none;
+  }
+}
+  .eyebrow-italic {
+    @apply inline-block font-serif italic text-cyan-300/90 text-base sm:text-lg;
+  }
+  /* Editorial display headline — Instrument Serif, generous line-height, italic accents */
+  .h-display {
+    @apply font-serif text-[36px] leading-[1.04] tracking-[-0.01em] text-white sm:text-[56px] md:text-[68px] lg:text-[78px];
+    font-weight: 400;
+  }
+  .h-section {
+    @apply font-serif text-[28px] leading-[1.08] tracking-[-0.01em] text-white sm:text-4xl md:text-5xl;
+    font-weight: 400;
+  }
+  .h-sub {
+    @apply font-serif text-xl leading-[1.15] tracking-[-0.005em] text-white sm:text-2xl md:text-3xl;
+    font-weight: 400;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3.5 font-sans text-sm font-medium tracking-tight text-black transition hover:bg-cyan-300 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.02] px-6 py-3.5 font-sans text-sm font-medium tracking-tight text-white/90 transition hover:border-white/30 hover:text-white;
+  }
+  .btn-cyan {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-cyan-500 px-7 py-3.5 font-sans text-sm font-medium tracking-tight text-black transition hover:bg-cyan-400 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .card {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.015] p-6 shadow-card backdrop-blur-sm;
+  }
+  .stat-num {
+    @apply font-serif text-4xl tracking-tight text-white sm:text-5xl;
+    font-weight: 400;
+  }
+  .stat-label {
+    @apply mt-2 font-sans text-[11px] uppercase tracking-[0.22em] text-ink-200;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 font-sans text-sm text-white placeholder:text-ink-300 outline-none transition focus:border-cyan-500/60 focus:ring-2 focus:ring-cyan-500/15;
+  }
+  .label {
+    @apply mb-1.5 block font-sans text-xs uppercase tracking-[0.18em] text-ink-200;
+  }
+  .divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent;
+  }
+  .manifesto {
+    @apply font-serif text-[22px] leading-[1.3] tracking-[-0.005em] text-white sm:text-3xl md:text-4xl;
+    font-weight: 400;
+  }
+  .lead {
+    @apply font-sans text-[15px] text-ink-100 sm:text-[17px] leading-relaxed;
+  }
+}
+
+/* Wordmark — the logo retains its bespoke geometric tech feel. */
+.brand-wordmark {
+  font-family: var(--font-orbitron), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.brand-wordmark .accent { color: var(--brand); }
+.brand-tagline {
+  font-family: var(--font-orbitron), system-ui, sans-serif;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  font-size: 0.6em;
+  color: #9CA0AC;
+}
+
+/* Italic serif accent used inside display headlines */
+.accent-italic {
+  font-family: var(--font-instrument), Georgia, serif;
+  font-style: italic;
+  color: #80DBF6;
+}
