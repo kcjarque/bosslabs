@@ -241,9 +241,27 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
+/** Vercel + most serverless platforms expose this as truthy. */
+function isServerlessRuntime() {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.VERCEL_ENV ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME,
+  );
+}
+
 const writeChain: Record<string, Promise<void>> = {};
 
 async function writeJson<T>(file: string, data: T) {
+  // Refuse to silently corrupt on read-only / ephemeral filesystems.
+  if (isServerlessRuntime()) {
+    throw new Error(
+      'Storage backend not configured. ' +
+        'Set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in your Vercel ' +
+        'project environment variables, then redeploy. ' +
+        'JSON file storage only works on local dev or single-instance VPS.',
+    );
+  }
   await ensureDir();
   const prev = writeChain[file] || Promise.resolve();
   const next = prev

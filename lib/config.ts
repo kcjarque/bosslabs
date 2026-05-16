@@ -284,6 +284,8 @@ export type AppShowcase = {
   metric: { value: string; label: string };
   detail: { value: string; label: string };
   built: string;
+  /** Optional. Drop a file at /public/apps/<slug>.png to use a real screenshot. */
+  screenshot?: string;
 };
 
 export const OUR_APPS: AppShowcase[] = [
@@ -298,6 +300,7 @@ export const OUR_APPS: AppShowcase[] = [
     metric: { value: '₱48,249', label: 'May revenue · 6 jobs' },
     detail: { value: '14% bays', label: '2 of 14 occupied' },
     built: 'Shipped in 7 days',
+    screenshot: '/apps/station-five.png',
   },
   {
     slug: 'solarmaxx',
@@ -310,6 +313,7 @@ export const OUR_APPS: AppShowcase[] = [
     metric: { value: '3/3', label: 'Systems online · 100% uptime' },
     detail: { value: '3.2h', label: 'Avg ticket response' },
     built: 'Shipped in 1 week',
+    screenshot: '/apps/solarmaxx.png',
   },
   {
     slug: 'bm-hub',
@@ -322,6 +326,7 @@ export const OUR_APPS: AppShowcase[] = [
     metric: { value: '74', label: 'Winner score · ₱11K spend' },
     detail: { value: '10/10', label: 'CTX + SCORED coverage' },
     built: 'Shipped in 1 weekend',
+    screenshot: '/apps/bm-hub.png',
   },
   {
     slug: 'flowbot',
@@ -334,6 +339,7 @@ export const OUR_APPS: AppShowcase[] = [
     metric: { value: '8 steps', label: 'Setter AI Test Run · live' },
     detail: { value: 'Live preview', label: 'Trigger → close in one flow' },
     built: 'Shipped in 24 hours',
+    screenshot: '/apps/flowbot.png',
   },
   {
     slug: 'taskman',
@@ -346,6 +352,7 @@ export const OUR_APPS: AppShowcase[] = [
     metric: { value: '14 / 8', label: 'Pending · ongoing today' },
     detail: { value: '58 done', label: 'This quarter · personal + org' },
     built: 'Shipped in 3 days',
+    screenshot: '/apps/taskman.png',
   },
 ];
 
