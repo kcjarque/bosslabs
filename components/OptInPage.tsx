@@ -789,7 +789,7 @@ function FinalUrgency({ webinar }: { webinar: WebinarInfo }) {
           <div className="mt-8 inline-flex w-full flex-col items-center gap-3 sm:w-auto">
             <PaidCta className="w-full sm:w-auto" />
             <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-              7-day refund · Cards · GCash · Maya · GrabPay
+              7-day refund · Cards · GCash · Maya
             </p>
           </div>
         </div>
