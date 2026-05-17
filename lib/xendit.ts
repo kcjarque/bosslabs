@@ -6,6 +6,28 @@
  * during dev/preview without real credentials.
  */
 
+/**
+ * Xendit Invoice API `payment_methods` whitelist. When passed, the hosted
+ * invoice page only shows these channels — anything else is hidden.
+ * Values come from https://docs.xendit.co/invoice — keep this narrow on
+ * purpose so the checkout matches the badges shown on our own page.
+ */
+export type XenditPaymentMethod =
+  | 'CREDIT_CARD'
+  | 'GCASH'
+  | 'PAYMAYA'
+  | 'GRABPAY'
+  | 'SHOPEEPAY'
+  | 'BPI'
+  | 'BDO'
+  | 'UNIONBANK';
+
+export const DEFAULT_PAYMENT_METHODS: XenditPaymentMethod[] = [
+  'CREDIT_CARD',
+  'GCASH',
+  'PAYMAYA',
+];
+
 type CreateInvoiceArgs = {
   externalId: string;
   amount: number; // in major units (PHP, not centavos)
@@ -14,6 +36,7 @@ type CreateInvoiceArgs = {
   successRedirectUrl: string;
   failureRedirectUrl: string;
   customer?: { givenNames?: string; email?: string; mobileNumber?: string };
+  paymentMethods?: XenditPaymentMethod[];
 };
 
 type InvoiceResult = {
@@ -52,6 +75,8 @@ export async function createInvoice(args: CreateInvoiceArgs): Promise<InvoiceRes
       success_redirect_url: args.successRedirectUrl,
       failure_redirect_url: args.failureRedirectUrl,
       currency: 'PHP',
+      // Restrict hosted invoice page to the methods we advertise on-site.
+      payment_methods: args.paymentMethods ?? DEFAULT_PAYMENT_METHODS,
       customer: args.customer
         ? {
             given_names: args.customer.givenNames,
