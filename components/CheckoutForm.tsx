@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PaymentLogos } from './PaymentLogos';
 
 export function CheckoutForm() {
   const [loading, setLoading] = useState(false);
@@ -66,9 +67,17 @@ export function CheckoutForm() {
       <button type="submit" disabled={loading} className="btn-primary w-full !py-4 text-base">
         {loading ? 'Securing your seat…' : 'Pay ₱999 · Reserve My Seat'}
       </button>
-      <p className="text-center text-[11px] uppercase tracking-[0.22em] text-ink-300">
-        Cards · GCash · Maya · GrabPay · Bank Transfer
-      </p>
+
+      {/* Payment options — Credit Card / GCash / Maya */}
+      <div>
+        <div className="text-center text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
+          Choose your payment method
+        </div>
+        <PaymentLogos className="mt-3" />
+        <p className="mt-3 text-center text-[10px] text-ink-300 sm:text-[11px]">
+          Credit Card · GCash · Maya
+        </p>
+      </div>
     </form>
   );
 }

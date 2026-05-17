@@ -20,18 +20,45 @@ export function Footer() {
             </div>
           </div>
         </div>
-        <div className="mt-10 max-w-4xl text-[11px] leading-relaxed text-ink-300">
-          <p className="uppercase tracking-[0.22em] text-ink-200">
-            Earnings & Results Disclaimer
-          </p>
-          <p className="mt-2">
-            The results, case studies, and testimonials featured on this page are not typical and do not
-            guarantee that you will achieve the same. Income examples are shared voluntarily by clients and
-            represent their individual experience. Your results will vary based on your business,
-            implementation, work ethic, and market conditions. Nothing on this page is a promise or
-            guarantee of earnings. This site is not affiliated with, endorsed by, or sponsored by Meta,
-            Google, Zoom, or any third-party platform mentioned.
-          </p>
+        <div className="mt-10 max-w-4xl space-y-6 text-[11px] leading-relaxed text-ink-300">
+          <div>
+            <p className="uppercase tracking-[0.22em] text-ink-200">
+              Earnings & Results Disclaimer
+            </p>
+            <p className="mt-2">
+              The results, case studies, and testimonials featured on this page are not typical and do not
+              guarantee that you will achieve the same. Income examples are shared voluntarily by clients and
+              represent their individual experience. Your results will vary based on your business,
+              implementation, work ethic, and market conditions. Nothing on this page is a promise or
+              guarantee of earnings.
+            </p>
+          </div>
+
+          <div>
+            <p className="uppercase tracking-[0.22em] text-ink-200">
+              Meta / Facebook Disclaimer
+            </p>
+            <p className="mt-2">
+              This site is <strong className="font-semibold text-ink-100">not</strong> a part of the
+              Facebook&trade; website or Meta Platforms, Inc. This site is{' '}
+              <strong className="font-semibold text-ink-100">NOT</strong> endorsed by, affiliated with,
+              or sponsored by Facebook, Instagram, WhatsApp, or Meta Platforms, Inc. in any way.
+              FACEBOOK&trade;, INSTAGRAM&trade;, and META&trade; are trademarks of Meta Platforms, Inc.
+              Any reference to these platforms is for descriptive purposes only.
+            </p>
+          </div>
+
+          <div>
+            <p className="uppercase tracking-[0.22em] text-ink-200">
+              Third-Party Disclaimer
+            </p>
+            <p className="mt-2">
+              BOSSLABS AI is an independent education company. We are not affiliated with, endorsed
+              by, or sponsored by Anthropic (the makers of Claude), Zoom, Google, Xendit, GCash, Maya,
+              or any other third-party platform or trademark holder mentioned on this page.
+              All product names, logos, and brands are property of their respective owners.
+            </p>
+          </div>
         </div>
         <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-ink-300">
           <a href="/privacy" className="hover:text-cyan-400">Privacy</a>

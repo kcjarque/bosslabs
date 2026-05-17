@@ -92,12 +92,38 @@ function MinimalFooter() {
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
           © {new Date().getFullYear()} BOSSLABS AI · All rights reserved.
         </div>
-        <p className="mx-auto max-w-3xl text-[10px] leading-relaxed text-ink-300 sm:text-[11px]">
-          The results, case studies, and stories on this page are not typical and do not
-          guarantee that you will achieve the same. Your results depend on your business,
-          your effort, and your market. This event is not affiliated with, endorsed by, or
-          sponsored by Meta, Zoom, Anthropic, or any third-party platform.
-        </p>
+
+        <div className="mx-auto max-w-3xl space-y-4 px-1 text-left sm:text-center">
+          <p className="text-[10px] leading-relaxed text-ink-300 sm:text-[11px]">
+            <span className="block font-semibold uppercase tracking-[0.22em] text-ink-200">
+              Earnings & Results Disclaimer
+            </span>
+            The results, case studies, and stories on this page are not typical and do not
+            guarantee that you will achieve the same. Your results depend on your business,
+            your effort, and your market.
+          </p>
+
+          <p className="text-[10px] leading-relaxed text-ink-300 sm:text-[11px]">
+            <span className="block font-semibold uppercase tracking-[0.22em] text-ink-200">
+              Meta / Facebook Disclaimer
+            </span>
+            This site is <strong className="font-semibold text-ink-100">not</strong> a part of the
+            Facebook&trade; website or Meta Platforms, Inc. This site is{' '}
+            <strong className="font-semibold text-ink-100">NOT</strong> endorsed by, affiliated with,
+            or sponsored by Facebook, Instagram, WhatsApp, or Meta Platforms, Inc. in any way.
+            FACEBOOK&trade;, INSTAGRAM&trade;, and META&trade; are trademarks of Meta Platforms, Inc.
+          </p>
+
+          <p className="text-[10px] leading-relaxed text-ink-300 sm:text-[11px]">
+            <span className="block font-semibold uppercase tracking-[0.22em] text-ink-200">
+              Third-Party Disclaimer
+            </span>
+            BOSSLABS AI is an independent education company. We are not affiliated with, endorsed
+            by, or sponsored by Anthropic, Zoom, Google, Xendit, GCash, Maya, or any other
+            third-party platform mentioned. All product names, logos, and brands are property of
+            their respective owners.
+          </p>
+        </div>
       </div>
     </footer>
   );

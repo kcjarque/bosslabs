@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
+import { PaymentLogos } from './PaymentLogos';
 
 export function CheckoutFlow() {
   const [loading, setLoading] = useState(false);
@@ -91,11 +92,19 @@ export function CheckoutFlow() {
             ? 'Securing your seat…'
             : `Pay ${formatPHP(total)} · Reserve My Seat`}
         </button>
-        <p className="mt-3 text-center text-[11px] uppercase tracking-[0.22em] text-ink-300">
-          Cards · GCash · Maya · GrabPay · Bank Transfer
-        </p>
 
-        <div className="mt-8 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-ink-300">
+        {/* Payment options — visible right under the Pay button */}
+        <div className="mt-5">
+          <div className="text-center text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
+            Choose your payment method
+          </div>
+          <PaymentLogos className="mt-3" />
+          <p className="mt-3 text-center text-[10px] text-ink-300 sm:text-[11px]">
+            Credit Card · GCash · Maya
+          </p>
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-3 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
           <LockIcon /> Encrypted · Powered by Xendit
         </div>
       </div>
