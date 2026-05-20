@@ -2,16 +2,64 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OnboardingForm } from '@/components/OnboardingForm';
+import { PurchasePixel } from '@/components/PurchasePixel';
+import { getSignups } from '@/lib/db';
+import { OFFER } from '@/lib/config';
 import { getWebinarInfo } from '@/lib/webinar';
+
+/**
+ * Look up the signup by externalId so the client pixel can fire a Purchase
+ * event matching what was actually charged (₱999 base, ₱2,996 if bumped at
+ * checkout, or ₱2,996 if they took the OTO upsell after). Falls back to
+ * the headline price if lookup fails — we still send *something* to Meta.
+ */
+async function resolvePurchaseAmount(
+  orderId: string | undefined,
+  otoParam: string | undefined,
+): Promise<{ value: number; bumped: boolean }> {
+  const didOto = otoParam === '1';
+  if (!orderId) {
+    return {
+      value: (OFFER.main.priceCentavos + (didOto ? OFFER.oto.priceCentavos : 0)) / 100,
+      bumped: didOto,
+    };
+  }
+  try {
+    const signups = await getSignups();
+    const signup = signups.find((s) => {
+      const meta = s.metadata as { externalId?: string } | undefined;
+      return meta?.externalId === orderId;
+    });
+    const base = (signup?.amountCentavos ?? OFFER.main.priceCentavos) / 100;
+    // OTO is a separate invoice — if user took it after checkout, add it here
+    // so Meta sees the full LTV from this buyer in a single Purchase event.
+    const addedOto = didOto && !signup?.bumped ? OFFER.oto.priceCentavos / 100 : 0;
+    return {
+      value: base + addedOto,
+      bumped: Boolean(signup?.bumped) || didOto,
+    };
+  } catch {
+    return {
+      value: (OFFER.main.priceCentavos + (didOto ? OFFER.oto.priceCentavos : 0)) / 100,
+      bumped: didOto,
+    };
+  }
+}
 
 export default async function ThankYouPage({
   searchParams,
 }: {
-  searchParams: { order?: string };
+  searchParams: { order?: string; oto?: string };
 }) {
   const webinar = await getWebinarInfo();
+  const purchase = await resolvePurchaseAmount(searchParams.order, searchParams.oto);
   return (
     <>
+      <PurchasePixel
+        orderId={searchParams.order ?? ''}
+        value={purchase.value}
+        bumped={purchase.bumped}
+      />
       <header className="border-b border-white/[0.05] bg-[#06070A]/80 backdrop-blur-md">
         <div className="container-tight flex h-16 items-center justify-between">
           <div className="inline-flex items-center gap-3">

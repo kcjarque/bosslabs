@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
+import { getFbCookies, newEventId, trackPixelEvent } from '@/lib/meta-client';
 import { PaymentLogos } from './PaymentLogos';
 
 type PayMethod = 'GCASH' | 'CREDIT_CARD' | 'BANKS';
@@ -23,13 +24,41 @@ export function CheckoutFlow() {
     setError(null);
 
     const fd = new FormData(formEl);
+    const totalPhp = total / 100;
+    // Shared event ID so the pixel event + the CAPI event the server fires
+    // get deduplicated by Meta as a single InitiateCheckout.
+    const eventId = newEventId('ic');
+    const fb = getFbCookies();
+
     const payload = {
       name: String(fd.get('name') || '').trim(),
       email: String(fd.get('email') || '').trim(),
       mobile: String(fd.get('mobile') || '').trim(),
       bump,
       paymentMethod: method,
+      // Meta deduplication + matching fields — server uses these to fire
+      // a paired CAPI event with the same eventId, fbp, and fbc.
+      meta: {
+        eventId,
+        fbp: fb.fbp,
+        fbc: fb.fbc,
+        sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      },
     };
+
+    // Fire pixel InitiateCheckout BEFORE the server hop so it's emitted
+    // even if the user closes the tab during /api/checkout latency.
+    trackPixelEvent(
+      'InitiateCheckout',
+      {
+        value: totalPhp,
+        currency: 'PHP',
+        content_name: OFFER.main.name,
+        content_ids: [bump ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
+        num_items: bump ? 2 : 1,
+      },
+      eventId,
+    );
 
     try {
       const res = await fetch('/api/checkout', {

@@ -18,6 +18,8 @@ import { getSignups, updateSignup } from '@/lib/db';
 import { getWebinarInfo } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { sendCapiEvent } from '@/lib/meta';
+import { OFFER } from '@/lib/config';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -81,6 +83,46 @@ export async function POST(req: Request) {
   if (signup.phone) {
     await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars });
   }
+
+  // CAPI Purchase event — the highest-value signal for Meta Ads. Fires
+  // server-side from the webhook so ad blockers + iOS ATT can't drop it.
+  // Dedupes with the pixel Purchase event fired on /thank-you via shared
+  // event_id (stored in metadata.meta.purchaseEventId during /api/checkout).
+  const metaStash = (signup.metadata as { meta?: {
+    fbp?: string;
+    fbc?: string;
+    clientIp?: string;
+    clientUserAgent?: string;
+    purchaseEventId?: string;
+    sourceUrl?: string;
+  } } | undefined)?.meta;
+  const bumped = Boolean(signup.bumped);
+  const amountPhp = (event.amount ?? signup.amountCentavos ?? 0) / (event.amount ? 1 : 100);
+
+  void sendCapiEvent({
+    eventName: 'Purchase',
+    eventId: metaStash?.purchaseEventId ?? `purchase_${event.external_id}`,
+    eventSourceUrl: metaStash?.sourceUrl,
+    userData: {
+      email: signup.email,
+      phone: signup.phone,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      fbp: metaStash?.fbp,
+      fbc: metaStash?.fbc,
+      clientIp: metaStash?.clientIp,
+      clientUserAgent: metaStash?.clientUserAgent,
+      country: 'ph',
+      externalId: event.external_id,
+    },
+    customData: {
+      value: amountPhp,
+      currency: 'PHP',
+      contentName: bumped ? `${OFFER.main.name} + ${OFFER.oto.name}` : OFFER.main.name,
+      contentIds: [bumped ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
+      numItems: bumped ? 2 : 1,
+    },
+  });
 
   await updateSignup(signup.id, {
     status: 'paid',

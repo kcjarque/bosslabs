@@ -3,6 +3,7 @@ import { Inter, Orbitron, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 import { CountdownBar } from '@/components/CountdownBar';
 import { PageGlow } from '@/components/PageGlow';
+import { MetaPixel } from '@/components/MetaPixel';
 import { getWebinarInfo } from '@/lib/webinar';
 
 const inter = Inter({
@@ -50,6 +51,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${orbitron.variable} ${instrument.variable}`}
     >
       <body className="relative font-sans antialiased">
+        <MetaPixel />
         <PageGlow />
         <div className="relative z-10">
           <CountdownBar startsAtIso={webinar.startsAtIso} />
