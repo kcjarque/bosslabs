@@ -64,8 +64,8 @@ export default async function RegisteredPage() {
                 <span className="accent-italic">Messenger group</span> to unlock your free gift.
               </h2>
               <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
-                The Claude Code Starter Pack is dropped in the group the moment you join.
-                We also use the group for live webinar reminders, replay links, and
+                The Claude Code Skills Pack is dropped in the group the moment you join.
+                We also use the group for live webinar reminders, 7-day replay links, and
                 post-event Q&amp;A — no DMs from us, just signal.
               </p>
 

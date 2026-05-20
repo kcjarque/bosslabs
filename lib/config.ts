@@ -163,15 +163,16 @@ export const HOST = {
 /* FREE GIFT — the lead magnet that makes the opt-in valuable            */
 /* --------------------------------------------------------------------- */
 export const FREE_GIFT = {
-  name: 'The Claude Code Starter Pack',
+  name: 'The Claude Code Skills Pack',
   worth: '₱4,997 value',
   bullets: [
-    '50+ production-grade prompts (sales, ops, hiring, content)',
+    'Reusable Claude Code Skills (sales, ops, hiring, content)',
     '4 starter repos — CRM, HR portal, booking tool, AI agent',
     'The exact 24-hour build workflow we use every week',
+    'BOSSLABS Community access (Messenger + ongoing Q&A)',
   ],
   unlockNote:
-    'Register + join the BOSSLABS Messenger group to unlock. Delivered the moment you join.',
+    'Register + join the BOSSLABS Messenger Community to unlock. Delivered the moment you join.',
 };
 
 /* --------------------------------------------------------------------- */
@@ -245,26 +246,28 @@ export const OFFER = {
   bonus: {
     title: 'Free Tools Stack — included',
     items: [
-      'Claude Code starter pack (configs and prompts)',
+      'Claude Code Skills pack (configs, prompts, and reusable skills)',
       'Founder Workflow Audit Checklist',
-      'Zoom replay (48-hour access)',
+      '7-day Zoom replay access',
+      'BOSSLABS Community access (Messenger + ongoing Q&A)',
     ],
   },
   oto: {
-    sku: 'BL_OTO_SCRIPTS',
-    name: 'Scripts, Prompts and Automation — Digital Course',
+    sku: 'BL_OTO_AUDIT',
+    name: 'One-on-One AI Integration Audit',
     priceCentavos: 199700,
     currency: 'PHP',
     label: '₱1,997',
     crossed: '₱4,997',
     promise:
-      'The exact prompts, scripts, and automation recipes we use inside our own Claude Code projects. Copy. Paste. Ship.',
+      'A private 45-minute call with Mikee or Kyle. We audit your business, find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps to build. You walk away with a custom integration plan — not a course.',
     inclusions: [
-      '50+ production-grade prompts (sales, ops, hiring, content)',
-      'Claude Code starter repos — CRM, HR, booking, AI agents',
-      'n8n and Make automation recipes (with screen recordings)',
-      'Private community for 90 days',
-      'Lifetime updates',
+      'Live 45-min 1:1 call (Zoom) with Mikee or Kyle',
+      'Custom AI Integration Map — top 3 apps for YOUR business',
+      'Workflow leak audit — exact ₱amount you can reclaim',
+      'Implementation roadmap (priority order, week-by-week)',
+      'Recording + written summary delivered within 48 hours',
+      'Priority queue for follow-up questions for 30 days',
     ],
   },
 };

@@ -51,8 +51,9 @@ export default async function ThankYouPage({
               <span className="accent-italic">Welcome to BOSSLABS AI.</span>
             </h1>
             <p className="lead mx-auto mt-5 max-w-xl">
-              Your Zoom link, replay access, and the Claude Code Starter Pack are on the
-              way to your inbox. Check spam if it doesn't show up in 5 minutes.
+              Your Zoom link, 7-day replay access, the Claude Code Skills Pack, and
+              your Community invite are on the way to your inbox. Check spam if it
+              doesn't show up in 5 minutes.
             </p>
           </div>
 
@@ -89,8 +90,8 @@ export default async function ThankYouPage({
               />
               <NextStep
                 n="02"
-                title="Skim the pack"
-                body="Open the Claude Code Starter Pack. 50+ prompts + starter repos waiting."
+                title="Open the Skills pack"
+                body="Claude Code Skills + Founder Audit Checklist + Community invite — all in your inbox."
                 Icon={PackIcon}
               />
               <NextStep

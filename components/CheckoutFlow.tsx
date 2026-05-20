@@ -112,7 +112,7 @@ export function CheckoutFlow() {
                 BOSSLABS AI — Live Webinar
               </div>
               <div className="mt-1 text-xs text-ink-200">
-                90 min · Live on Zoom · 48-hr replay
+                90 min · Live on Zoom · 7-day replay · Community access
               </div>
             </div>
             <div className="font-serif text-2xl text-white">
@@ -134,15 +134,15 @@ export function CheckoutFlow() {
           {bump && (
             <div className="mt-6 border-t border-cyan-500/30 pt-6">
               <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-                Bundle added
+                1:1 Audit added
               </div>
               <div className="mt-3 flex items-start justify-between gap-4">
                 <div>
                   <div className="font-serif text-lg text-white">
-                    Scripts, Prompts & Automation
+                    One-on-One AI Integration Audit
                   </div>
                   <div className="mt-1 text-xs text-ink-200">
-                    Digital course · Lifetime access
+                    45-min private call · Custom integration map
                   </div>
                 </div>
                 <div className="font-serif text-xl text-cyan-400">
@@ -205,12 +205,13 @@ function BumpCard({
             One-time add-on · Save 60%
           </div>
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
-            YES — Add the Scripts, Prompts &amp; Automation Bundle
+            YES — Add a One-on-One AI Integration Audit
           </h3>
           <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-100 sm:text-[14px]">
-            The exact prompts, scripts, and automation recipes we use inside our own
-            Claude Code projects. 50+ production-grade prompts. Starter repos for CRM,
-            HR, booking, and AI agents. Add it now for less than half the regular price.
+            A private 45-minute call with Mikee or Kyle. We audit your business,
+            find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps
+            to build. You walk away with a custom integration plan — not a course.
+            Add it now at half the regular price, this page only.
           </p>
           <div className="mt-3 flex items-baseline gap-3">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">

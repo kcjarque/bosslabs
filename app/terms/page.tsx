@@ -16,14 +16,15 @@ export default function TermsPage() {
       <Section title="What you're buying">
         <p>
           A live 90-minute Zoom webinar conducted by Michael Manago and Kyle
-          Jarque, plus a 48-hour replay, the Free Tools Stack (Notion blueprint
-          and starter pack), and any included bonuses described on the checkout
-          page at the time of purchase.
+          Jarque, plus a 7-day replay, the Free Tools Stack (Claude Code Skills
+          pack, Founder Workflow Audit Checklist), BOSSLABS Community access,
+          and any included bonuses described on the checkout page at the time
+          of purchase.
         </p>
         <p>
-          The optional Scripts, Prompts & Automation bundle (One-Time Offer) is
-          a separately delivered digital product, available only at the time of
-          purchase on the post-checkout offer page.
+          The optional One-on-One AI Integration Audit (One-Time Offer) is a
+          separately delivered 45-minute private call with a BOSSLABS founder,
+          available only at the time of purchase on the post-checkout offer page.
         </p>
       </Section>
 

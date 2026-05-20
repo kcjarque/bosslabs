@@ -37,14 +37,14 @@ function BumpedConfirmation({ orderId }: { orderId: string }) {
               />
             </svg>
           </div>
-          <div className="eyebrow mt-6 justify-center">You added the bundle</div>
+          <div className="eyebrow mt-6 justify-center">1:1 Audit added</div>
           <h1 className="h-display mt-4">
             Smart move. <span className="accent-italic">Welcome aboard.</span>
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Your webinar seat plus the Scripts, Prompts &amp; Automation bundle
-            are locked in. We will send the Zoom link, the bundle access, and
-            the Free Tools stack to your email within minutes.
+            Your webinar seat plus your One-on-One AI Integration Audit are locked in.
+            We will send the Zoom link, the audit scheduling link, and the Free Tools
+            Stack to your email within minutes.
           </p>
           <div className="mt-10 inline-flex flex-col items-center gap-3 w-full sm:w-auto">
             <Link
@@ -91,9 +91,9 @@ function LastChance({ orderId }: { orderId: string }) {
             before your webinar.
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Operators who attend with the{' '}
-            <span className="text-white">Scripts, Prompts &amp; Automation</span>{' '}
-            bundle install <span className="text-white">3× faster</span> on average.
+            Operators who attend with a{' '}
+            <span className="text-white">One-on-One AI Integration Audit</span>{' '}
+            ship their first app <span className="text-white">3× faster</span> on average.
             This is the only page where you can add it for{' '}
             <span className="text-white">{OFFER.oto.label}</span>{' '}
             <span className="text-ink-300 line-through">{OFFER.oto.crossed}</span>.
@@ -104,7 +104,7 @@ function LastChance({ orderId }: { orderId: string }) {
         <div className="mx-auto mt-10 max-w-3xl">
           <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-5 shadow-glow sm:p-10">
             <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-              The Bundle
+              The Audit
             </div>
             <h2 className="h-sub mt-3">{OFFER.oto.name}</h2>
             <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">

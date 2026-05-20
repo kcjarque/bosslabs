@@ -640,7 +640,13 @@ function YourTicketIncludes() {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[3px] flex-none text-cyan-400">
                       <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span>48-hour Zoom replay access</span>
+                    <span>7-day Zoom replay access</span>
+                  </li>
+                  <li className="flex items-start gap-3 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[3px] flex-none text-cyan-400">
+                      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>BOSSLABS Community access (Messenger)</span>
                   </li>
                 </ul>
                 <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-cyan-300 sm:text-[11px]">
