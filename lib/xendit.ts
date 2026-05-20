@@ -28,6 +28,28 @@ export const DEFAULT_PAYMENT_METHODS: XenditPaymentMethod[] = [
   'PAYMAYA',
 ];
 
+/**
+ * Payment-method groups exposed as explicit buttons on the checkout. Each
+ * group resolves to a Xendit `payment_methods` array — when /api/checkout
+ * passes a group, the hosted invoice page only shows those channels (so a
+ * buyer who clicked "Pay via GCash" lands directly on GCash, not the
+ * Xendit method-picker page).
+ */
+export const PAYMENT_METHOD_GROUPS = {
+  GCASH: ['GCASH'] as XenditPaymentMethod[],
+  CREDIT_CARD: ['CREDIT_CARD'] as XenditPaymentMethod[],
+  // Xendit's PH bank/direct-debit channels — buyer picks BPI/BDO/UnionBank
+  // on the Xendit page after clicking "Pay via Banks" here.
+  BANKS: ['BPI', 'BDO', 'UNIONBANK'] as XenditPaymentMethod[],
+} as const;
+
+export type PaymentMethodGroup = keyof typeof PAYMENT_METHOD_GROUPS;
+
+export function resolvePaymentMethods(group: PaymentMethodGroup | undefined): XenditPaymentMethod[] {
+  if (!group) return DEFAULT_PAYMENT_METHODS;
+  return PAYMENT_METHOD_GROUPS[group] ?? DEFAULT_PAYMENT_METHODS;
+}
+
 type CreateInvoiceArgs = {
   externalId: string;
   amount: number; // in major units (PHP, not centavos)

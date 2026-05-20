@@ -4,24 +4,33 @@ import { useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
 import { PaymentLogos } from './PaymentLogos';
 
+type PayMethod = 'GCASH' | 'CREDIT_CARD' | 'BANKS';
+
 export function CheckoutFlow() {
-  const [loading, setLoading] = useState(false);
+  // `loading` is the method currently in flight — lets us spinner just that
+  // button while the other two stay disabled (prevents double-submits).
+  const [loading, setLoading] = useState<PayMethod | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bump, setBump] = useState(false);
 
   const total = OFFER.main.priceCentavos + (bump ? OFFER.oto.priceCentavos : 0);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
+  async function payWith(method: PayMethod, formEl: HTMLFormElement) {
+    // Trigger native HTML5 validation on name/email/mobile before posting.
+    if (!formEl.reportValidity()) return;
+
+    setLoading(method);
     setError(null);
-    const fd = new FormData(e.currentTarget);
+
+    const fd = new FormData(formEl);
     const payload = {
       name: String(fd.get('name') || '').trim(),
       email: String(fd.get('email') || '').trim(),
       mobile: String(fd.get('mobile') || '').trim(),
       bump,
+      paymentMethod: method,
     };
+
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -33,12 +42,15 @@ export function CheckoutFlow() {
       window.location.href = data.redirectUrl;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
-      setLoading(false);
+      setLoading(null);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
+    <form
+      onSubmit={(e) => e.preventDefault()}
+      className="grid gap-10 lg:grid-cols-[1.1fr_1fr]"
+    >
       {/* Left — fields + bump + CTA */}
       <div>
         <div className="eyebrow">Step 1 of 2 · Secure checkout</div>
@@ -83,15 +95,37 @@ export function CheckoutFlow() {
         {/* Trust line — single testimonial right above Pay button */}
         <CheckoutSocialProof />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary mt-6 w-full !py-4 text-base"
-        >
-          {loading
-            ? 'Securing your seat…'
-            : `Pay ${formatPHP(total)} · Reserve My Seat`}
-        </button>
+        {/* Three explicit pay buttons — each routes to its own Xendit channel,
+            so a buyer who clicks "Pay via GCash" lands directly on GCash. */}
+        <div className="mt-6 space-y-3">
+          <PayButton
+            method="GCASH"
+            label="Pay via GCash"
+            icon={<GCashIcon />}
+            price={formatPHP(total)}
+            loading={loading === 'GCASH'}
+            disabled={loading !== null}
+            onClick={(e) => payWith('GCASH', e.currentTarget.form!)}
+          />
+          <PayButton
+            method="CREDIT_CARD"
+            label="Pay via Credit Card"
+            icon={<CreditCardIcon />}
+            price={formatPHP(total)}
+            loading={loading === 'CREDIT_CARD'}
+            disabled={loading !== null}
+            onClick={(e) => payWith('CREDIT_CARD', e.currentTarget.form!)}
+          />
+          <PayButton
+            method="BANKS"
+            label="Pay via Banks"
+            icon={<BankIcon />}
+            price={formatPHP(total)}
+            loading={loading === 'BANKS'}
+            disabled={loading !== null}
+            onClick={(e) => payWith('BANKS', e.currentTarget.form!)}
+          />
+        </div>
 
         {/* Security + payment methods — single trust block under the Pay button */}
         <SecurePaymentStrip />
@@ -261,6 +295,112 @@ function LockIcon({ size = 14 }: { size?: number }) {
       <path
         d="M7 10V8a5 5 0 0 1 10 0v2m-12 0h14v10H5V10Z"
         stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * PayButton — one of three method-specific CTAs. All three share the same
+ * structure (icon, label, price); only the brand affordance and onClick
+ * differ. Tap-target sized for mobile (44px+ touch target).
+ */
+function PayButton({
+  method,
+  label,
+  icon,
+  price,
+  loading,
+  disabled,
+  onClick,
+}: {
+  method: 'GCASH' | 'CREDIT_CARD' | 'BANKS';
+  label: string;
+  icon: React.ReactNode;
+  price: string;
+  loading: boolean;
+  disabled: boolean;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${label} — ${price}`}
+      data-method={method}
+      className="group relative flex w-full items-center gap-3 rounded-full border border-cyan-500/40 bg-gradient-to-r from-cyan-500/[0.12] via-cyan-500/[0.06] to-transparent px-5 py-4 text-left transition hover:border-cyan-400 hover:from-cyan-500/[0.18] hover:to-cyan-500/[0.04] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+    >
+      {/* Brand icon badge */}
+      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-[#06070A]/60 sm:h-10 sm:w-10">
+        {icon}
+      </span>
+      {/* Label + price */}
+      <span className="flex flex-1 items-center justify-between gap-3 min-w-0">
+        <span className="font-serif text-[15px] leading-tight text-white sm:text-[17px]">
+          {loading ? 'Securing your seat…' : label}
+        </span>
+        <span className="font-serif text-[15px] tracking-tight text-cyan-300 whitespace-nowrap sm:text-[17px]">
+          {price}
+        </span>
+      </span>
+      {/* Chevron */}
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        className="flex-none text-cyan-400 transition group-hover:translate-x-0.5"
+        aria-hidden="true"
+      >
+        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+/* Brand-affordance icons — kept inline so a single file ships the whole
+   checkout flow. No external SVG files, no broken-image fallbacks. */
+
+function GCashIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="#0066CC" />
+      <text
+        x="16"
+        y="20.5"
+        textAnchor="middle"
+        fontFamily="Inter, system-ui, sans-serif"
+        fontWeight="800"
+        fontSize="11"
+        fill="#FFFFFF"
+        letterSpacing="-0.5"
+      >
+        GC
+      </text>
+    </svg>
+  );
+}
+
+function CreditCardIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2.5" stroke="#00B8E6" strokeWidth="1.6" />
+      <path d="M2.5 10h19" stroke="#00B8E6" strokeWidth="1.6" />
+      <rect x="5" y="13.5" width="5" height="2" rx="0.5" fill="#00B8E6" />
+    </svg>
+  );
+}
+
+function BankIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M3 10l9-5 9 5M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"
+        stroke="#00B8E6"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"

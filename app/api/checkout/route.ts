@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { OFFER } from '@/lib/config';
-import { createInvoice } from '@/lib/xendit';
+import {
+  createInvoice,
+  PAYMENT_METHOD_GROUPS,
+  resolvePaymentMethods,
+  type PaymentMethodGroup,
+} from '@/lib/xendit';
 import { addSignup } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -19,11 +24,19 @@ export async function POST(req: Request) {
       email?: string;
       mobile?: string;
       bump?: boolean;
+      paymentMethod?: PaymentMethodGroup;
     };
 
     if (!body.email || !body.name) {
       return NextResponse.json({ error: 'Name and email required' }, { status: 400 });
     }
+
+    // Validate paymentMethod group — accept only known keys, fall back to default mix.
+    const group =
+      body.paymentMethod && body.paymentMethod in PAYMENT_METHOD_GROUPS
+        ? body.paymentMethod
+        : undefined;
+    const paymentMethods = resolvePaymentMethods(group);
 
     // BL- prefix → orderko's webhook router fans this into bosslabs.
     // Keep the prefix in sync with backend/routes/public.js in orderko.
@@ -49,6 +62,7 @@ export async function POST(req: Request) {
         email: body.email,
         mobileNumber: body.mobile,
       },
+      paymentMethods,
     });
 
     // Persist the lead immediately (pending status). The Xendit webhook will
@@ -63,7 +77,11 @@ export async function POST(req: Request) {
       status: 'registered',
       amountCentavos,
       bumped,
-      metadata: { externalId, demo: invoice.demo },
+      metadata: {
+        externalId,
+        demo: invoice.demo,
+        paymentMethodGroup: group ?? 'ALL',
+      },
     });
 
     return NextResponse.json({ redirectUrl: invoice.invoiceUrl, demo: invoice.demo });
