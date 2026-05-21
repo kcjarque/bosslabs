@@ -32,7 +32,7 @@ export function OurAppsShowcase() {
           </h2>
           <p className="lead mt-5">
             Every tool below runs an actual Filipino business. Each one was built
-            by Michael or Kyle using nothing but Claude Code. This is the same
+            by Mikee or Kyle using nothing but Claude Code. This is the same
             playbook we hand you on the call.
           </p>
         </div>

@@ -58,7 +58,11 @@ export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
   const phone = normalizePhPhone(args.to);
 
   if (!settings.onewaysmsUsername || !settings.onewaysmsPassword) {
-    console.log('[sms/demo]', { to: phone, body });
+    // Don't log full phone/body — Vercel logs are searchable + retained.
+    console.log('[sms/demo]', {
+      to: phone ? `${phone.slice(0, 3)}***${phone.slice(-2)}` : '[empty]',
+      bodyLen: body.length,
+    });
     return { ok: true, id: `demo_${Date.now()}`, provider: 'demo' };
   }
 

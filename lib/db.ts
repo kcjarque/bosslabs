@@ -280,6 +280,29 @@ async function writeJson<T>(file: string, data: T) {
 /* SIGNUPS                                                               */
 /* --------------------------------------------------------------------- */
 
+/**
+ * Find a single signup by the externalId stashed in metadata. Used by the
+ * Xendit webhook + thank-you page — both hot paths that previously did a
+ * full table scan. Supabase narrows server-side via jsonb arrow operator.
+ */
+export async function findSignupByExternalId(externalId: string): Promise<Signup | null> {
+  if (!externalId) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .filter('metadata->>externalId', 'eq', externalId)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findSignupByExternalId: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return (
+    list.find((s) => (s.metadata as { externalId?: string } | undefined)?.externalId === externalId) ??
+    null
+  );
+}
+
 export async function getSignups(): Promise<Signup[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
@@ -427,17 +450,46 @@ export async function getSettings(): Promise<Settings> {
   return { ...DEFAULT_SETTINGS, ...stored };
 }
 
+/** Fields whose value must never leave the server unredacted. */
+const SECRET_FIELDS: ReadonlyArray<keyof Settings> = [
+  'resendApiKey',
+  'onewaysmsPassword',
+];
+
+/**
+ * Same as getSettings() but with secret fields blanked out — safe to serialize
+ * into a server-rendered page or send to the admin browser. Callers that
+ * actually need to use the secret (e.g. sending an email) should use
+ * getSettings() directly.
+ */
+export async function getSettingsForAdmin(): Promise<Settings> {
+  const s = await getSettings();
+  const out: Settings = { ...s };
+  for (const k of SECRET_FIELDS) {
+    if (out[k]) (out as Record<string, string>)[k as string] = '';
+  }
+  return out;
+}
+
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
+  // Merge with current so empty/missing secret fields don't wipe the stored
+  // values (the admin UI sends "" for unchanged secrets).
+  const current = await getSettings();
+  const merged: Settings = { ...current };
+  for (const [k, v] of Object.entries(patch) as Array<[keyof Settings, unknown]>) {
+    const isSecret = (SECRET_FIELDS as readonly string[]).includes(k as string);
+    if (isSecret && (v === '' || v === undefined)) continue; // leave existing value alone
+    if (v === undefined) continue;
+    (merged as Record<string, unknown>)[k as string] = v;
+  }
   if (isSupabaseConfigured()) {
-    const row = { ...settingsToRow(patch), id: 1, updated_at: new Date().toISOString() };
+    const row = { ...settingsToRow(merged), id: 1, updated_at: new Date().toISOString() };
     const { error } = await getSupabase().from('settings').upsert(row);
     if (error) throw new Error(`Supabase saveSettings: ${error.message}`);
     return getSettings();
   }
-  const current = await getSettings();
-  const next: Settings = { ...current, ...patch };
-  await writeJson('settings.json', next);
-  return next;
+  await writeJson('settings.json', merged);
+  return merged;
 }
 
 /* --------------------------------------------------------------------- */

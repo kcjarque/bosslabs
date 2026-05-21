@@ -1,12 +1,15 @@
 import { requireAdmin } from '@/lib/admin-auth';
-import { getSettings } from '@/lib/db';
+import { getSettingsForAdmin } from '@/lib/db';
 import { SettingsForm } from '@/components/SettingsForm';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   requireAdmin();
-  const settings = await getSettings();
+  // Secrets are blanked here before the page is rendered — they never
+  // touch the browser's DOM/view-source. Leave a secret field blank in
+  // the form to keep the stored value; type a new value to replace it.
+  const settings = await getSettingsForAdmin();
   return (
     <div className="space-y-6">
       <header>
@@ -14,8 +17,9 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Tokens are stored in <code>data/settings.json</code> on the server. Never
-          commit this file. Rotate any key that ever appears in a screenshot.
+          Stored encrypted at rest in Supabase. Secret fields below are
+          masked — leave blank to keep the current value, or type a new one
+          to overwrite. Rotate any key that ever appears in a screenshot.
         </p>
       </header>
       <SettingsForm initial={settings} />

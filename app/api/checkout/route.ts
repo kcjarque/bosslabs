@@ -8,15 +8,9 @@ import {
 } from '@/lib/xendit';
 import { addSignup } from '@/lib/db';
 import { extractClientIp, extractFbCookies, sendCapiEvent } from '@/lib/meta';
+import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
-
-function siteUrl(req: Request) {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
-  const url = new URL(req.url);
-  return `${url.protocol}//${url.host}`;
-}
 
 export async function POST(req: Request) {
   try {

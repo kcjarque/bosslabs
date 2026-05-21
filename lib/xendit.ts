@@ -6,18 +6,22 @@
  * during dev/preview without real credentials.
  */
 
+import { timingSafeEqual } from 'crypto';
+
 /**
  * Xendit Invoice API `payment_methods` whitelist. When passed, the hosted
  * invoice page only shows these channels — anything else is hidden.
  * Values come from https://docs.xendit.co/invoice — keep this narrow on
  * purpose so the checkout matches the badges shown on our own page.
  */
+/**
+ * Active payment methods. GrabPay + ShopeePay were intentionally removed
+ * from the offer — re-add to the union if you ever re-enable them.
+ */
 export type XenditPaymentMethod =
   | 'CREDIT_CARD'
   | 'GCASH'
   | 'PAYMAYA'
-  | 'GRABPAY'
-  | 'SHOPEEPAY'
   | 'BPI'
   | 'BDO'
   | 'UNIONBANK';
@@ -120,7 +124,15 @@ export async function createInvoice(args: CreateInvoiceArgs): Promise<InvoiceRes
 
 export function verifyWebhook(headerToken: string | null) {
   // Xendit signs callbacks with a static token configured in the dashboard.
+  // Use timingSafeEqual to defend against subtle timing-leak attacks.
   const expected = process.env.XENDIT_WEBHOOK_TOKEN;
-  if (!expected) return false;
-  return headerToken === expected;
+  if (!expected) {
+    console.warn('[xendit] XENDIT_WEBHOOK_TOKEN unset — refusing all callbacks.');
+    return false;
+  }
+  if (!headerToken) return false;
+  const a = Buffer.from(headerToken, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

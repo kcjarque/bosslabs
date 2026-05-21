@@ -22,6 +22,6 @@
   {
     "id": "replay",
     "name": "Replay Available",
-    "body": "BOSSLABS AI replay is up for 48 hours. Watch tonight: {{replayUrl}}"
+    "body": "BOSSLABS AI replay is up for 7 days. Watch this week: {{replayUrl}}"
   }
 ]

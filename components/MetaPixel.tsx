@@ -1,13 +1,21 @@
 /**
- * MetaPixel — installs the Meta Pixel snippet site-wide.
+ * MetaPixel — installs the Meta Pixel snippet site-wide AND fires PageView
+ * on every Next.js App Router client navigation.
+ *
+ * Why this matters: Next App Router uses client-side route transitions, so
+ * the inline `fbq('track','PageView')` in the snippet only fires on the
+ * very first load. Without the route-change effect below, Meta sees 1
+ * PageView per session — kills retargeting audiences and ViewContent rates.
  *
  * Gated on NEXT_PUBLIC_META_PIXEL_ID so dev/preview without the env var
  * renders nothing (no broken pixel calls, no console noise).
- *
- * Mounted in app/layout.tsx so PageView fires on every route.
  */
 
+'use client';
+
 import Script from 'next/script';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef } from 'react';
 
 export function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
@@ -39,6 +47,34 @@ fbq('track', 'PageView');
           src={`https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`}
         />
       </noscript>
+      {/* useSearchParams() must be inside a Suspense boundary in App Router */}
+      <Suspense fallback={null}>
+        <RouteChangePageView />
+      </Suspense>
     </>
   );
+}
+
+/**
+ * Fires fbq('track','PageView') on every pathname change. Skips the very
+ * first effect (initial mount) because the inline snippet above already
+ * fired PageView for that load — would double-count otherwise.
+ */
+function RouteChangePageView() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
+    if (!fbq) return;
+    fbq('track', 'PageView');
+  }, [pathname, searchParams]);
+
+  return null;
 }

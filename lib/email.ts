@@ -16,6 +16,13 @@ export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'demo' }
   | { ok: false; error: string };
 
+/** Show only the local-part initial + domain ending so logs aren't a PII leak. */
+function redactEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '[redacted]';
+  return `${local?.[0] ?? '*'}***@${domain}`;
+}
+
 export type SendEmailArgs = {
   to: string;
   templateId?: string;
@@ -63,9 +70,14 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     return { ok: false, error: 'subject and html are required' };
   }
 
-  // Demo fallback — log the email and return ok so the funnel keeps moving
+  // Demo fallback — log redacted info and return ok so the funnel keeps moving.
+  // Never put the full recipient email into logs; Vercel logs are searchable.
   if (!settings.resendApiKey) {
-    console.log('[email/demo]', { to: args.to, subject, htmlPreview: html.slice(0, 120) });
+    console.log('[email/demo]', {
+      to: redactEmail(args.to),
+      subject,
+      htmlLen: html.length,
+    });
     return { ok: true, id: `demo_${Date.now()}`, provider: 'demo' };
   }
 

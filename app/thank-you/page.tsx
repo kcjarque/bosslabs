@@ -75,6 +75,14 @@ export default async function ThankYouPage({
 
       <main className="container-tight py-12 sm:py-20">
         <div className="mx-auto max-w-3xl">
+          {searchParams.oto === 'failed' && (
+            <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center text-[13px] text-amber-100 sm:text-[14px]">
+              Your <strong>1:1 AI Integration Audit</strong> bundle didn&rsquo;t go through,
+              but your webinar seat is locked in. We&rsquo;ll email you a private link
+              within 24 hours so you can grab the audit at the same checkout-only
+              price — no need to retry now.
+            </div>
+          )}
           {/* Celebration hero */}
           <div className="relative text-center">
             {/* Confetti-style dots radiating from the badge */}

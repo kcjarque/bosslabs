@@ -1,9 +1,10 @@
 /**
  * Admin auth — single shared password (env var `ADMIN_PASSWORD`).
  *
- * Signs an HMAC cookie so brute-force or tampering is harder than a static
- * "password=true" string. Set `ADMIN_PASSWORD` and `ADMIN_COOKIE_SECRET`
- * in `.env.local`.
+ * Signs an HMAC cookie so tampering is harder than a static "password=true"
+ * string. In production both `ADMIN_PASSWORD` and `ADMIN_COOKIE_SECRET`
+ * MUST be set — the module throws on first use if either is missing so we
+ * fail closed instead of falling back to a published default.
  */
 
 import crypto from 'crypto';
@@ -13,14 +14,46 @@ import { redirect } from 'next/navigation';
 export const ADMIN_COOKIE = 'bl_admin';
 const ONE_DAY = 60 * 60 * 24;
 
-function secret() {
-  return process.env.ADMIN_COOKIE_SECRET || 'change-me-please';
+function isProd() {
+  return process.env.NODE_ENV === 'production';
 }
 
-export function adminPassword() {
-  // Default to 'bosslabs' for first-run convenience. Always set ADMIN_PASSWORD
-  // in production.
-  return process.env.ADMIN_PASSWORD || 'bosslabs';
+function secret(): string {
+  const s = process.env.ADMIN_COOKIE_SECRET;
+  if (!s) {
+    if (isProd()) {
+      throw new Error(
+        'ADMIN_COOKIE_SECRET is not set. Generate one with `node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"` and set it in your Vercel env vars.',
+      );
+    }
+    // Dev only — log loudly so first-runner sees it.
+    console.warn(
+      '[admin-auth] ADMIN_COOKIE_SECRET unset; using insecure dev fallback. NEVER deploy without this set.',
+    );
+    return 'dev-only-not-for-production';
+  }
+  return s;
+}
+
+export function adminPassword(): string {
+  const p = process.env.ADMIN_PASSWORD;
+  if (!p) {
+    if (isProd()) {
+      throw new Error('ADMIN_PASSWORD is not set. Set it in your Vercel env vars before exposing /admin.');
+    }
+    console.warn('[admin-auth] ADMIN_PASSWORD unset; dev fallback "bosslabs". Set the env var for any non-localhost deploy.');
+    return 'bosslabs';
+  }
+  return p;
+}
+
+/** Constant-time string equality — defends against timing-attack on password + signature compares. */
+export function safeEqual(a: string, b: string): boolean {
+  // Equalize lengths first; timingSafeEqual throws on unequal buffer sizes.
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
 }
 
 function sign(value: string) {
@@ -38,7 +71,7 @@ export function isValidSession(raw: string | undefined | null) {
   const [issuedAt, sig] = raw.split('.');
   if (!issuedAt || !sig) return false;
   const expected = sign(issuedAt);
-  if (sig !== expected) return false;
+  if (!safeEqual(sig, expected)) return false;
   const age = (Date.now() - Number(issuedAt)) / 1000;
   return age >= 0 && age < 7 * ONE_DAY;
 }
@@ -53,4 +86,39 @@ export function requireAdmin() {
 export function isAdminLoggedIn() {
   const c = cookies().get(ADMIN_COOKIE)?.value;
   return isValidSession(c);
+}
+
+/**
+ * Lightweight CSRF check for state-changing admin API routes. Verifies the
+ * request's Origin/Referer matches our own host so a logged-in admin who
+ * lands on a hostile page can't have their session abused via cross-site
+ * POST. Returns true when the request is same-origin (or local dev), false
+ * when it should be rejected.
+ */
+export function isSameOrigin(req: Request): boolean {
+  const url = new URL(req.url);
+  const host = req.headers.get('host') ?? url.host;
+  const origin = req.headers.get('origin');
+  const referer = req.headers.get('referer');
+
+  // Origin header is the strongest signal — set by browser on every CORS-able
+  // request including fetch() POSTs. Same-origin browsers always send it.
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
+  // Fallback to Referer for older browsers / non-fetch flows.
+  if (referer) {
+    try {
+      return new URL(referer).host === host;
+    } catch {
+      return false;
+    }
+  }
+  // No Origin and no Referer — almost certainly a curl/fetch from a server.
+  // Reject by default; legit admin browser traffic will always have one.
+  return false;
 }

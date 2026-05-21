@@ -99,13 +99,14 @@ export function SettingsForm({ initial }: { initial: Settings }) {
         title="Email · Resend"
         description="Free tier: 3,000 emails / month, 100 / day. Create a key at resend.com/api-keys."
       >
-        <Field label="API Key" hint="re_…">
+        <Field label="API Key" hint="re_… · leave blank to keep current">
           <input
             type="password"
+            autoComplete="new-password"
             className="input"
             value={values.resendApiKey}
             onChange={(e) => update('resendApiKey', e.target.value)}
-            placeholder="re_xxx"
+            placeholder="••••••••  (stored — blank to keep)"
           />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -151,12 +152,14 @@ export function SettingsForm({ initial }: { initial: Settings }) {
               onChange={(e) => update('onewaysmsUsername', e.target.value)}
             />
           </Field>
-          <Field label="API password">
+          <Field label="API password" hint="Leave blank to keep current">
             <input
               type="password"
+              autoComplete="new-password"
               className="input"
               value={values.onewaysmsPassword}
               onChange={(e) => update('onewaysmsPassword', e.target.value)}
+              placeholder="••••••••  (stored — blank to keep)"
             />
           </Field>
         </div>
@@ -222,7 +225,7 @@ export function SettingsForm({ initial }: { initial: Settings }) {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <span className="text-xs text-slate-500">
-          Stored locally in <code>/data/settings.json</code>. Gitignored.
+          Secrets masked in transit — leave blank to keep the stored value.
         </span>
         <button
           type="submit"

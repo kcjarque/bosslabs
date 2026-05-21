@@ -1,20 +1,26 @@
 /**
  * Xendit webhook — fan-out target for orderko (BL- prefix → forwarded here).
  *
- * On status === 'PAID':
- *   1. Find the signup by externalId (stored in metadata when /api/checkout ran)
- *   2. Flip status → 'paid'
- *   3. Fire `paid_confirmation` email + SMS so the buyer gets their Zoom link
- *      immediately (don't wait for the next cron tick).
+ * Handles two invoice shapes:
  *
- * On status === 'EXPIRED' | 'FAILED': leave the signup as 'registered' so the
- * admin can manually follow up. We don't auto-cancel — sometimes Xendit
- * marks expired and the buyer pays via a different invoice.
+ *   - BL-MAIN-<rand>: the main ₱999 / ₱2,996 (bumped) webinar purchase.
+ *     Flip the signup status, send the paid_confirmation email/SMS, and
+ *     fire a CAPI Purchase event.
+ *
+ *   - BL-OTO-<mainOrderId>-<ts>: the standalone OTO (1:1 Audit) invoice
+ *     when a buyer didn't bump at checkout but opted in on the /oto page.
+ *     Marks the parent signup as bumped=true and fires a SECOND CAPI
+ *     Purchase event for the OTO amount so Meta sees the full LTV.
+ *
+ * Side-effects are idempotent: every send is gated on a marker that's
+ * written BEFORE the send. Concurrent webhook deliveries from Xendit
+ * (which retries on its end) can't double-send emails or fire two CAPI
+ * events for the same invoice.
  */
 
 import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
-import { getSignups, updateSignup } from '@/lib/db';
+import { findSignupByExternalId, updateSignup } from '@/lib/db';
 import { getWebinarInfo } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -24,42 +30,84 @@ import { OFFER } from '@/lib/config';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
+type XenditEvent = {
+  id?: string;
+  external_id?: string;
+  status?: 'PAID' | 'EXPIRED' | 'PENDING' | 'FAILED';
+  amount?: number;
+};
+
+function redact<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  // Vercel function logs are searchable. Strip PII before logging.
+  const out: Record<string, unknown> = { ...obj };
+  for (const k of ['payer_email', 'email', 'phone', 'mobile_number']) {
+    if (k in out) out[k] = '[redacted]';
+  }
+  return out as Partial<T>;
+}
+
 export async function POST(req: Request) {
   const token = req.headers.get('x-callback-token');
   if (!verifyWebhook(token)) {
     return NextResponse.json({ error: 'invalid token' }, { status: 401 });
   }
 
-  const event = (await req.json()) as {
-    id?: string;
-    external_id?: string;
-    status?: 'PAID' | 'EXPIRED' | 'PENDING' | 'FAILED';
-    amount?: number;
-  };
-
-  console.log('[xendit-webhook]', event);
+  const event = (await req.json().catch(() => ({}))) as XenditEvent;
+  console.log('[xendit-webhook]', redact(event));
 
   if (event.status !== 'PAID' || !event.external_id) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  // Find the signup by externalId stored in metadata during checkout.
-  const signups = await getSignups();
-  const signup = signups.find((s) => {
-    const meta = s.metadata as { externalId?: string } | undefined;
-    return meta?.externalId === event.external_id;
-  });
+  // Route by externalId prefix.
+  if (event.external_id.startsWith('BL-OTO-')) {
+    return handleOtoPaid(event);
+  }
+  if (event.external_id.startsWith('BL-MAIN-')) {
+    return handleMainPaid(event);
+  }
+  return NextResponse.json({ ok: true, unknownPrefix: true });
+}
 
+/* --------------------------------------------------------------------- */
+/* MAIN purchase — ₱999 webinar (+ optional bump baked into single invoice) */
+/* --------------------------------------------------------------------- */
+async function handleMainPaid(event: XenditEvent) {
+  const externalId = event.external_id!;
+  const signup = await findSignupByExternalId(externalId);
   if (!signup) {
-    console.warn('[xendit-webhook] no signup matched', event.external_id);
+    console.warn('[xendit-webhook] no signup matched', externalId);
     return NextResponse.json({ ok: true, matched: false });
   }
 
-  // Idempotency — if we already marked paid + sent confirmation, bail.
-  const meta = (signup.metadata ?? {}) as { confirmationSent?: string };
+  const meta = (signup.metadata ?? {}) as {
+    confirmationSent?: string;
+    meta?: {
+      fbp?: string;
+      fbc?: string;
+      clientIp?: string;
+      clientUserAgent?: string;
+      purchaseEventId?: string;
+      sourceUrl?: string;
+    };
+  };
+
+  // Idempotency: if already processed, bail without re-sending.
   if (signup.status === 'paid' && meta.confirmationSent) {
     return NextResponse.json({ ok: true, alreadyPaid: true });
   }
+
+  // Write the marker FIRST, then do side-effects. A retried webhook that
+  // arrives mid-flight sees the marker and bails cleanly.
+  await updateSignup(signup.id, {
+    status: 'paid',
+    metadata: {
+      ...(signup.metadata ?? {}),
+      confirmationSent: new Date().toISOString(),
+      xenditInvoiceId: event.id,
+      paidAmount: event.amount,
+    },
+  });
 
   const webinar = await getWebinarInfo();
   const vars = {
@@ -74,7 +122,6 @@ export async function POST(req: Request) {
     replayUrl: webinar.replayUrl,
   };
 
-  // Best-effort sends — don't break the webhook if one provider fails.
   const emailRes = await sendEmail({
     to: signup.email,
     templateId: 'paid_confirmation',
@@ -84,36 +131,24 @@ export async function POST(req: Request) {
     await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars });
   }
 
-  // CAPI Purchase event — the highest-value signal for Meta Ads. Fires
-  // server-side from the webhook so ad blockers + iOS ATT can't drop it.
-  // Dedupes with the pixel Purchase event fired on /thank-you via shared
-  // event_id (stored in metadata.meta.purchaseEventId during /api/checkout).
-  const metaStash = (signup.metadata as { meta?: {
-    fbp?: string;
-    fbc?: string;
-    clientIp?: string;
-    clientUserAgent?: string;
-    purchaseEventId?: string;
-    sourceUrl?: string;
-  } } | undefined)?.meta;
+  // CAPI Purchase event for the main invoice (₱999 or ₱2,996 if bumped).
   const bumped = Boolean(signup.bumped);
   const amountPhp = (event.amount ?? signup.amountCentavos ?? 0) / (event.amount ? 1 : 100);
-
   void sendCapiEvent({
     eventName: 'Purchase',
-    eventId: metaStash?.purchaseEventId ?? `purchase_${event.external_id}`,
-    eventSourceUrl: metaStash?.sourceUrl,
+    eventId: meta.meta?.purchaseEventId ?? `purchase_${externalId}`,
+    eventSourceUrl: meta.meta?.sourceUrl,
     userData: {
       email: signup.email,
       phone: signup.phone,
       firstName: signup.firstName,
       lastName: signup.lastName,
-      fbp: metaStash?.fbp,
-      fbc: metaStash?.fbc,
-      clientIp: metaStash?.clientIp,
-      clientUserAgent: metaStash?.clientUserAgent,
+      fbp: meta.meta?.fbp,
+      fbc: meta.meta?.fbc,
+      clientIp: meta.meta?.clientIp,
+      clientUserAgent: meta.meta?.clientUserAgent,
       country: 'ph',
-      externalId: event.external_id,
+      externalId,
     },
     customData: {
       value: amountPhp,
@@ -124,15 +159,80 @@ export async function POST(req: Request) {
     },
   });
 
+  return NextResponse.json({ ok: true, emailOk: emailRes.ok });
+}
+
+/* --------------------------------------------------------------------- */
+/* OTO purchase — standalone 1:1 audit invoice (bought after main checkout) */
+/* --------------------------------------------------------------------- */
+async function handleOtoPaid(event: XenditEvent) {
+  // OTO externalId pattern: BL-OTO-<mainOrderId>-<ts>
+  // Extract the main order ID by stripping prefix + the trailing -<ts>.
+  const stripped = event.external_id!.replace(/^BL-OTO-/, '');
+  const lastDash = stripped.lastIndexOf('-');
+  const mainOrderId = lastDash > 0 ? stripped.slice(0, lastDash) : stripped;
+
+  const signup = await findSignupByExternalId(mainOrderId);
+  if (!signup) {
+    console.warn('[xendit-webhook] OTO has no parent signup', mainOrderId);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+
+  const meta = (signup.metadata ?? {}) as {
+    otoConfirmed?: string;
+    meta?: {
+      fbp?: string;
+      fbc?: string;
+      clientIp?: string;
+      clientUserAgent?: string;
+      sourceUrl?: string;
+    };
+  };
+
+  // Idempotency for the OTO leg.
+  if (meta.otoConfirmed) {
+    return NextResponse.json({ ok: true, alreadyOto: true });
+  }
+
   await updateSignup(signup.id, {
-    status: 'paid',
+    bumped: true,
     metadata: {
       ...(signup.metadata ?? {}),
-      confirmationSent: new Date().toISOString(),
-      xenditInvoiceId: event.id,
-      paidAmount: event.amount,
+      otoConfirmed: new Date().toISOString(),
+      otoInvoiceId: event.id,
+      otoExternalId: event.external_id,
+      otoAmount: event.amount,
     },
   });
 
-  return NextResponse.json({ ok: true, emailOk: emailRes.ok });
+  // Fire a separate CAPI Purchase for the OTO so Meta attributes the
+  // upsell revenue. Distinct eventId from the main invoice — these are
+  // two separate purchases in Meta's eyes.
+  const amountPhp = event.amount ?? OFFER.oto.priceCentavos / 100;
+  void sendCapiEvent({
+    eventName: 'Purchase',
+    eventId: `purchase_${event.external_id}`,
+    eventSourceUrl: meta.meta?.sourceUrl,
+    userData: {
+      email: signup.email,
+      phone: signup.phone,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      fbp: meta.meta?.fbp,
+      fbc: meta.meta?.fbc,
+      clientIp: meta.meta?.clientIp,
+      clientUserAgent: meta.meta?.clientUserAgent,
+      country: 'ph',
+      externalId: event.external_id,
+    },
+    customData: {
+      value: amountPhp,
+      currency: 'PHP',
+      contentName: OFFER.oto.name,
+      contentIds: [OFFER.oto.sku],
+      numItems: 1,
+    },
+  });
+
+  return NextResponse.json({ ok: true, oto: true });
 }

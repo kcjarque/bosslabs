@@ -93,6 +93,22 @@ function MinimalFooter() {
           © {new Date().getFullYear()} BOSSLABS AI · All rights reserved.
         </div>
 
+        {/* Compliance links — required by PH Data Privacy Act + Meta ad policy */}
+        <nav
+          aria-label="Footer"
+          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]"
+        >
+          <a href="/privacy" className="hover:text-ink-100">Privacy</a>
+          <span aria-hidden className="text-ink-300/60">·</span>
+          <a href="/terms" className="hover:text-ink-100">Terms</a>
+          <span aria-hidden className="text-ink-300/60">·</span>
+          <a href="/contact" className="hover:text-ink-100">Contact</a>
+          <span aria-hidden className="text-ink-300/60">·</span>
+          <a href="mailto:hello@bosslabs.ai" className="hover:text-ink-100">
+            hello@bosslabs.ai
+          </a>
+        </nav>
+
         <div className="mx-auto max-w-3xl space-y-4 px-1 text-left sm:text-center">
           <p className="text-[10px] leading-relaxed text-ink-300 sm:text-[11px]">
             <span className="block font-semibold uppercase tracking-[0.22em] text-ink-200">

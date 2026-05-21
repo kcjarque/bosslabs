@@ -15,6 +15,8 @@ export function ContactForm() {
       name: String(fd.get('name') || '').trim(),
       email: String(fd.get('email') || '').trim(),
       message: String(fd.get('message') || '').trim(),
+      // Honeypot — only bots fill this field. Empty means human.
+      website: String(fd.get('website') || ''),
     };
     try {
       const res = await fetch('/api/contact', {
@@ -44,6 +46,17 @@ export function ContactForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      {/* Honeypot — hidden from real users + screen readers, filled by bots */}
+      <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', height: 0, overflow: 'hidden' }}>
+        <label htmlFor="website">Website (leave blank)</label>
+        <input
+          id="website"
+          name="website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label className="label" htmlFor="name">Your name</label>

@@ -4,11 +4,13 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+    // Log only the field-name surface, not the values — every value is
+    // potentially PII and Vercel function logs are searchable + retained.
+    console.log('[onboarding] submission keys:', Object.keys(body));
 
     // TODO: persist to Supabase + register payer in Zoom Webinar + push to email tool.
-    // For now we log so the form is fully testable end-to-end in dev.
-    console.log('[onboarding] submission:', body);
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

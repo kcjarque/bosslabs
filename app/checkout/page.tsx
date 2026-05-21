@@ -3,11 +3,24 @@ import { Footer } from '@/components/Footer';
 import { CheckoutFlow } from '@/components/CheckoutFlow';
 import { PILLARS } from '@/lib/config';
 
-export default function CheckoutPage() {
+export default function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: { status?: string };
+}) {
+  const failed = searchParams.status === 'failed';
   return (
     <>
       <Nav ctaLabel="Need help?" ctaHref="mailto:hello@bosslabs.ai" />
       <main>
+        {failed && (
+          <div className="border-y border-red-500/30 bg-red-500/10">
+            <div className="container-tight py-3 text-center text-[12px] text-red-200 sm:text-[13px]">
+              Your payment didn&rsquo;t go through. Don&rsquo;t worry — your details
+              are still here. Pick a method below and try again.
+            </div>
+          </div>
+        )}
         <section className="container-tight py-10 sm:py-16">
           <CheckoutFlow />
         </section>

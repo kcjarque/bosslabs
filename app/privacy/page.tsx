@@ -32,11 +32,34 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section title="Cookies">
+      <Section title="Cookies & advertising pixels">
         <p>
-          We use a small number of first-party cookies for session, checkout
-          state, and analytics. No third-party advertising cookies are set on
-          this site.
+          We use first-party cookies for session, checkout state, and admin
+          authentication.
+        </p>
+        <p>
+          We also use the <strong>Meta Pixel</strong> (Facebook/Instagram) and
+          the <strong>Meta Conversions API (CAPI)</strong> to measure ad
+          performance and deliver more relevant ads to people who visit our
+          site. These set the <code>_fbp</code> and (when arriving from a
+          Meta ad) <code>_fbc</code> cookies in your browser, and send hashed
+          (SHA-256, non-reversible) versions of your email, mobile number,
+          and name to Meta along with anonymized event data when you view a
+          page, start checkout, or complete a purchase. We rely on the
+          legitimate-interest basis under RA 10173 for this measurement.
+        </p>
+        <p>
+          You can opt out of Meta's ads-personalization in your{' '}
+          <a
+            className="text-cyan-400 hover:underline"
+            href="https://www.facebook.com/settings?tab=ads"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Facebook ad preferences
+          </a>
+          , and block all cookies via your browser settings — neither will
+          break the site, but ads you see elsewhere may be less relevant.
         </p>
       </Section>
 

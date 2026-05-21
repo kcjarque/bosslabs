@@ -6,25 +6,25 @@ export const BRAND = {
 
 export const FOUNDERS = [
   {
-    name: 'Michael Manago',
+    name: 'Mikee Manago',
     role: 'Co-Founder · Operator',
-    bio: 'Tired of waiting for developers who were too expensive or never delivered. Learned Claude Code, shipped 3 internal tools in one weekend, and never looked back. Now teaching every Filipino business owner the same shortcut.',
-    shipped: ['Custom CRMs', 'Sales playbooks', 'Operator dashboards'],
+    bio: 'Ex-employee turned serial entrepreneur. Owns businesses in car detailing, real estate, healthcare, and more — every one built from zero with real customers, real cash, real outcomes. Came to AI for one reason: lower the cost of running a business so the operator wins. Lives in sales, relationships, and value creation.',
+    shipped: ['Multi-business operator', 'Sales + relationships', 'Real PH revenue'],
     expertise: [
-      { label: 'Operations', value: 95 },
-      { label: 'Sales systems', value: 88 },
-      { label: 'AI prompting', value: 82 },
+      { label: 'Sales & deals', value: 96 },
+      { label: 'Operations', value: 92 },
+      { label: 'Relationships', value: 95 },
     ],
   },
   {
     name: 'Kyle Jarque',
     role: 'Co-Founder · Engineer',
-    bio: 'Engineer-operator. Built our entire stack — CRM, HR portal, AI agents — using just Claude Code, one night per tool. Believes every Filipino business owner can do the same. That is all he teaches.',
-    shipped: ['12+ production apps', 'AI agents (Messenger, support)', 'Workflow automations'],
+    bio: 'Industrial engineer by training. Marketer in FMCG, then operator in e-commerce, now builder in AI. Believes the advantage goes to business owners who become tech-enabled — not the ones who show off tech. Builds the tools, deploys the AI, ships the systems that actually work.',
+    shipped: ['Industrial engineer', 'FMCG → e-com → AI', '5 production PH apps'],
     expertise: [
       { label: 'Claude Code', value: 96 },
-      { label: 'Engineering', value: 92 },
-      { label: 'Automation', value: 90 },
+      { label: 'Systems design', value: 94 },
+      { label: 'Automation', value: 92 },
     ],
   },
 ];
@@ -147,8 +147,8 @@ export const PILLARS = [
 /* MEET YOUR HOST                                                        */
 /* --------------------------------------------------------------------- */
 export const HOST = {
-  name: 'Michael Manago & Kyle Jarque',
-  shortName: 'Michael & Kyle',
+  name: 'Mikee Manago & Kyle Jarque',
+  shortName: 'Mikee & Kyle',
   story:
     'Two Filipino operators who got tired of getting quoted ₱500K and 6-month timelines for apps we could ship ourselves. We taught ourselves Claude Code, built our entire stack — CRM, HR portal, AI agents — one night per tool, then started teaching what we learned. Today, 3,000+ Filipino business owners have followed the same playbook.',
   credentials: [
@@ -266,7 +266,7 @@ export const OFFER = {
       'Custom AI Integration Map — top 3 apps for YOUR business',
       'Workflow leak audit — exact ₱amount you can reclaim',
       'Implementation roadmap (priority order, week-by-week)',
-      'Recording + written summary delivered within 48 hours',
+      'Recording + written summary delivered within 2 business days',
       'Priority queue for follow-up questions for 30 days',
     ],
   },
@@ -361,10 +361,14 @@ export const OUR_APPS: AppShowcase[] = [
 
 /* --------------------------------------------------------------------- */
 /* MESSENGER / Lead-capture defaults                                     */
+/*                                                                       */
+/* Set NEXT_PUBLIC_MESSENGER_GROUP_URL in env, or override live from     */
+/* /admin/settings (settings.messengerGroupUrl wins at request time).    */
+/* Empty string here on purpose — surfaces hide the CTA when no URL is   */
+/* configured rather than shipping a 404 link.                            */
 /* --------------------------------------------------------------------- */
 export const MESSENGER_GROUP_URL =
-  process.env.NEXT_PUBLIC_MESSENGER_GROUP_URL ||
-  'https://m.me/j/AbZAxhYBLABS_PLACEHOLDER';
+  process.env.NEXT_PUBLIC_MESSENGER_GROUP_URL || '';
 
 export function formatPHP(centavos: number) {
   return new Intl.NumberFormat('en-PH', {

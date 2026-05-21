@@ -3,30 +3,33 @@
 import { useEffect, useState } from 'react';
 
 type Props = {
-  /** ISO date the webinar starts. Falls back to +14 days from page load. */
+  /** ISO date the webinar starts. When empty, the bar hides itself. */
   startsAtIso?: string;
   message?: string;
 };
 
-function getTarget(iso?: string): Date {
-  if (iso) {
-    const d = new Date(iso);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
-  return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+/** Returns a valid future date, or null when nothing useful to count toward. */
+function getTarget(iso?: string): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  // Past dates: hide the bar rather than show a misleading "00:00:00:00".
+  if (d.getTime() <= Date.now()) return null;
+  return d;
 }
 
 function pad(n: number) {
   return n.toString().padStart(2, '0');
 }
 
-function useCountdown(target: Date) {
+function useCountdown(target: Date | null) {
   // Start at 0 to match the server render exactly — avoids hydration mismatch.
   // The first useEffect tick on the client populates the real value.
   const [remaining, setRemaining] = useState(0);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
+    if (!target) return;
     const tick = () => setRemaining(target.getTime() - Date.now());
     tick();
     const id = setInterval(tick, 1000);
@@ -49,6 +52,10 @@ export function CountdownBar({
 }: Props) {
   const [target] = useState(() => getTarget(startsAtIso));
   const { mounted, days, hours, mins, secs } = useCountdown(target);
+
+  // No date configured (or already past) → hide the bar entirely rather
+  // than show a misleading "+14 days from your page load" timer.
+  if (!target) return null;
 
   return (
     <div className="border-b border-danger-700/60 bg-gradient-to-r from-danger-700/30 via-danger-600/20 to-danger-700/30">
@@ -78,6 +85,15 @@ export function CountdownBar({
 export function CountdownDisplay({ startsAtIso }: { startsAtIso?: string }) {
   const [target] = useState(() => getTarget(startsAtIso));
   const { mounted, days, hours, mins, secs } = useCountdown(target);
+  // Without a real configured date, render a friendly "soon" pill instead
+  // of fake numbers that jump every refresh.
+  if (!target) {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-full border border-danger-500/40 bg-danger-500/[0.08] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-danger-200 sm:text-[12px]">
+        <span className="pulse-dot" /> Date locked soon — join the list
+      </div>
+    );
+  }
   return (
     <div
       suppressHydrationWarning

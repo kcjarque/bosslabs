@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isAdminLoggedIn } from '@/lib/admin-auth';
+import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 import {
   saveEmailTemplate,
   saveSmsTemplate,
@@ -11,8 +11,9 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const body = (await req.json()) as {
+  const body = (await req.json().catch(() => ({}))) as {
     kind?: 'email' | 'sms';
     template?: EmailTemplate | SmsTemplate;
   };

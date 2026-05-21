@@ -111,7 +111,8 @@ function Task({
 }
 
 /* --------------------------------------------------------------------- */
-/* 2 — StarterPackMockup                                                 */
+/* 2 — SkillsPackMockup                                                  */
+/*    Visual for the Claude Code Skills Pack lead magnet.                */
 /* --------------------------------------------------------------------- */
 
 export function StarterPackMockup() {
@@ -124,9 +125,9 @@ export function StarterPackMockup() {
         {/* Back card */}
         <PackCard
           tilt="rotate-[-6deg] translate-x-[-8%] translate-y-[6%] z-0"
-          title="50+ Prompts"
-          accent="Sales · Ops · Hiring"
-          rows={['Lead qualifier', 'Cold DM rewriter', 'Hiring filter v3', 'Founder follow-up']}
+          title="Reusable Skills"
+          accent="Sales · Ops · Hiring · Content"
+          rows={['lead-qualifier.skill', 'workflow-auditor.skill', 'hiring-screen.skill', 'founder-followup.skill']}
           dim
         />
         {/* Middle card */}
@@ -142,9 +143,9 @@ export function StarterPackMockup() {
             <div className="flex items-center gap-2">
               <Mark size={20} />
               <div>
-                <div className="font-serif text-sm text-white">The Workflow Audit</div>
+                <div className="font-serif text-sm text-white">Founder Audit</div>
                 <div className="text-[9px] uppercase tracking-[0.2em] text-cyan-300 sm:text-[10px]">
-                  PDF · printable
+                  Checklist · Community access
                 </div>
               </div>
             </div>

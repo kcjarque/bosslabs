@@ -71,10 +71,24 @@ function sha256(input: string | undefined): string | undefined {
   return createHash('sha256').update(normalized).digest('hex');
 }
 
-/** Phone numbers must be E.164 without the leading + before hashing. */
+/**
+ * Phone numbers must be in E.164 (digits-only, country-code prefixed) before
+ * hashing, otherwise PH users typing "09171234567" hash differently from
+ * "639171234567" and Meta's match rate collapses.
+ *
+ * Conventions applied (PH default — appropriate for our market):
+ *   - Strip all non-digits
+ *   - Numbers starting with `0` → drop the 0 and prepend `63`
+ *   - Numbers starting with `9` (10 digits, e.g. 9171234567) → prepend `63`
+ *   - Anything else passed through (already prefixed or non-PH)
+ */
 function normalizePhone(phone: string | undefined): string | undefined {
   if (!phone) return undefined;
-  return phone.replace(/[^0-9]/g, '');
+  const digits = phone.replace(/[^0-9]/g, '');
+  if (!digits) return undefined;
+  if (digits.startsWith('0')) return '63' + digits.slice(1);
+  if (digits.length === 10 && digits.startsWith('9')) return '63' + digits;
+  return digits;
 }
 
 function buildUserDataPayload(user: CapiUserData | undefined): Record<string, unknown> {

@@ -50,8 +50,8 @@ export function LoginForm() {
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
       <p className="text-center text-xs text-slate-500">
-        Set the password in <code>.env.local</code> as <code>ADMIN_PASSWORD</code>.
-        Default for first run: <code>bosslabs</code>.
+        Single-user admin. Password is the <code>ADMIN_PASSWORD</code> env var
+        set in your hosting provider.
       </p>
     </form>
   );

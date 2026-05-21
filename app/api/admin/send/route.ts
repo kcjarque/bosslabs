@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isAdminLoggedIn } from '@/lib/admin-auth';
+import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 import { getSignups, type Signup } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -7,10 +7,26 @@ import { getWebinarInfo } from '@/lib/webinar';
 
 export const runtime = 'nodejs';
 
+// Coarse per-admin-instance throttle so a compromised admin session can't
+// turn this route into a spam cannon. Resets per lambda warm window.
+const SEND_LOG: { ts: number }[] = [];
+const SEND_WINDOW_MS = 60 * 1000;
+const SEND_MAX = 30; // 30 sends per minute per lambda
+
+function tooMany(): boolean {
+  const now = Date.now();
+  while (SEND_LOG.length && now - SEND_LOG[0].ts > SEND_WINDOW_MS) SEND_LOG.shift();
+  if (SEND_LOG.length >= SEND_MAX) return true;
+  SEND_LOG.push({ ts: now });
+  return false;
+}
+
 export async function POST(req: Request) {
   if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (tooMany()) return NextResponse.json({ error: 'Slow down — 30/min cap' }, { status: 429 });
 
-  const body = (await req.json()) as {
+  const body = (await req.json().catch(() => ({}))) as {
     channel?: 'email' | 'sms';
     templateId?: string;
     signupId?: string;

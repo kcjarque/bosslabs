@@ -15,7 +15,7 @@ export default function TermsPage() {
 
       <Section title="What you're buying">
         <p>
-          A live 90-minute Zoom webinar conducted by Michael Manago and Kyle
+          A live 90-minute Zoom webinar conducted by Mikee Manago and Kyle
           Jarque, plus a 7-day replay, the Free Tools Stack (Claude Code Skills
           pack, Founder Workflow Audit Checklist), BOSSLABS Community access,
           and any included bonuses described on the checkout page at the time
