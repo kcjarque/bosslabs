@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
 import { getFbCookies, newEventId, trackPixelEvent } from '@/lib/meta-client';
 import { PaymentLogos } from './PaymentLogos';
@@ -15,6 +15,22 @@ export function CheckoutFlow() {
   const [bump, setBump] = useState(false);
 
   const total = OFFER.main.priceCentavos + (bump ? OFFER.oto.priceCentavos : 0);
+
+  // Fire ViewContent on mount so Meta builds the "viewed checkout but didn't
+  // buy" retargeting audience even if the buyer never clicks Pay. useRef guard
+  // stops React strict-mode + tab switches from double-firing.
+  const viewContentFired = useRef(false);
+  useEffect(() => {
+    if (viewContentFired.current) return;
+    viewContentFired.current = true;
+    trackPixelEvent('ViewContent', {
+      value: OFFER.main.priceCentavos / 100,
+      currency: 'PHP',
+      content_name: OFFER.main.name,
+      content_ids: [OFFER.main.sku],
+      content_type: 'product',
+    });
+  }, []);
 
   async function payWith(method: PayMethod, formEl: HTMLFormElement) {
     // Trigger native HTML5 validation on name/email/mobile before posting.
