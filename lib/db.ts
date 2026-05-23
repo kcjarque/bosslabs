@@ -94,7 +94,10 @@ const DEFAULT_SETTINGS: Settings = {
   resendApiKey: '',
   resendFromEmail: 'hello@bosslabs.ai',
   resendFromName: 'BOSSLABS AI',
-  onewaysmsEndpoint: 'https://gateway.onewaysms.com.ph:10443/api.aspx',
+  // HTTPS port-443 endpoint from the OneWaySMS PH dashboard. The
+  // `gateway.onewaysms.com.ph` variant some old docs cite is behind a
+  // WAF that blocks Vercel egress — do not use it.
+  onewaysmsEndpoint: 'https://sgateway.onewaysms.com/apis10.aspx',
   onewaysmsUsername: '',
   onewaysmsPassword: '',
   onewaysmsSenderId: 'BOSSLABS',

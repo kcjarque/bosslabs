@@ -20,15 +20,19 @@
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Official endpoints from the OneWaySMS PH customer dashboard (not the
+// .com.ph variant that we had in the config — that's a different service
+// behind an Incapsula WAF). Tested in order of production preference.
 const CANDIDATES = [
-  'https://gateway.onewaysms.com.ph:10443/api.aspx',
-  'https://gateway.onewaysms.com.ph/api.aspx',
-  'https://gateway.onewaysms.com.ph/api2.aspx',
-  'http://gateway.onewaysms.com.ph/api.aspx',
+  // HTTPS, port 443 — the only one that works cleanly through Vercel egress
+  'https://sgateway.onewaysms.com/apis10.aspx',
+  // Port 80 HTTP fallback — works when port 10001 is blocked
   'http://gateway80.onewaysms.ph/api2.aspx',
-  'http://gateway80.onewaysms.ph/api.aspx',
-  'https://gateway2.onewaysms.com.ph:10443/api.aspx',
-  'https://gateway2.onewaysms.com.ph/api2.aspx',
+  // Primary port 10001 endpoint (often blocked by serverless egress)
+  'http://gateway.onewaysms.ph:10001/api.aspx',
+  // Other dashboard-listed paths (credit / trx — wrong endpoint shape for
+  // MT but we probe them so an empty-body or 404 surfaces the structural issue)
+  'https://sgateway.onewaysms.com/bulktrxs10.aspx',
 ];
 
 type ProbeResult = {
