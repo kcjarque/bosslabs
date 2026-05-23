@@ -129,6 +129,7 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             />
           </Field>
         </div>
+        <TestSendPanel channel="email" placeholder="you@yourbiz.com" />
       </Section>
 
       <Section
@@ -172,6 +173,7 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             maxLength={11}
           />
         </Field>
+        <TestSendPanel channel="sms" placeholder="+639171234567" />
       </Section>
 
       <Section
@@ -277,6 +279,118 @@ function Field({
       <label className="label">{label}</label>
       {children}
       {hint && <p className="mt-1 text-[11px] text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * TestSendPanel — inline diagnostic UI under each channel section.
+ *
+ * Uses the CURRENTLY-SAVED settings (not whatever's in the dirty form
+ * inputs), so the admin should Save first if they just rotated keys.
+ * Result message persists until the admin types again or fires another
+ * test — long enough to read and screenshot if needed.
+ */
+function TestSendPanel({
+  channel,
+  placeholder,
+}: {
+  channel: 'email' | 'sms';
+  placeholder: string;
+}) {
+  const [to, setTo] = useState('');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'fail'>('idle');
+  const [detail, setDetail] = useState<string>('');
+
+  async function send() {
+    const target = to.trim();
+    if (!target) {
+      setStatus('fail');
+      setDetail('Enter a recipient first.');
+      return;
+    }
+    setStatus('sending');
+    setDetail('');
+    try {
+      const res = await fetch('/api/admin/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, to: target }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        provider?: string;
+        id?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setStatus('fail');
+        setDetail(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      setStatus('ok');
+      setDetail(
+        data.provider === 'demo'
+          ? `Demo mode (no provider configured) — saved to server logs only.`
+          : `Sent via ${data.provider}${data.id ? ` · ${data.id}` : ''}`,
+      );
+    } catch (err) {
+      setStatus('fail');
+      setDetail(err instanceof Error ? err.message : 'Network error');
+    }
+  }
+
+  const label =
+    channel === 'email' ? 'Send test email to' : 'Send test SMS to';
+
+  return (
+    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+        Diagnostic
+      </div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        <input
+          type={channel === 'email' ? 'email' : 'tel'}
+          inputMode={channel === 'email' ? 'email' : 'tel'}
+          autoComplete="off"
+          className="input flex-1"
+          aria-label={label}
+          placeholder={placeholder}
+          value={to}
+          onChange={(e) => {
+            setTo(e.target.value);
+            if (status !== 'idle') setStatus('idle');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (status !== 'sending') send();
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={status === 'sending'}
+          className="btn btn-secondary whitespace-nowrap sm:w-auto"
+        >
+          {status === 'sending' ? 'Sending…' : 'Send test'}
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Uses the currently <strong>saved</strong> credentials. If you just
+        edited the API key above, click Save settings first, then test.
+      </p>
+      {status === 'ok' && (
+        <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+          ✓ {detail}
+        </div>
+      )}
+      {status === 'fail' && (
+        <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
+          ✗ {detail}
+        </div>
+      )}
     </div>
   );
 }
