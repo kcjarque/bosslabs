@@ -66,27 +66,101 @@ export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
     return { ok: true, id: `demo_${Date.now()}`, provider: 'demo' };
   }
 
-  const url = new URL(settings.onewaysmsEndpoint);
+  let url: URL;
+  try {
+    url = new URL(settings.onewaysmsEndpoint);
+  } catch {
+    return {
+      ok: false,
+      error: `Endpoint is not a valid URL: "${settings.onewaysmsEndpoint}". Expected something like https://gateway.onewaysms.com.ph:10443/api.aspx`,
+    };
+  }
   url.searchParams.set('apiusername', settings.onewaysmsUsername);
   url.searchParams.set('apipassword', settings.onewaysmsPassword);
   url.searchParams.set('senderid', settings.onewaysmsSenderId || 'BOSSLABS');
   url.searchParams.set('mobileno', phone);
   url.searchParams.set('message', body);
 
+  // Build a sanitized URL (no credentials) for echoing back in error msgs.
+  const sanitizedUrl = `${url.origin}${url.pathname}?apiusername=***&apipassword=***&senderid=${url.searchParams.get('senderid')}&mobileno=***&message=...`;
+
   try {
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), {
+      // Some PH gateways are slow; cap at 15s so the admin UI doesn't hang forever.
+      signal: AbortSignal.timeout(15_000),
+    });
     const text = (await res.text()).trim();
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `OneWaySMS HTTP ${res.status} ${res.statusText} from ${sanitizedUrl}${text ? ` — body: "${text.slice(0, 200)}"` : ' — empty body'}`,
+      };
+    }
+
+    if (!text) {
+      return {
+        ok: false,
+        error: `OneWaySMS returned an empty body (HTTP ${res.status}) from ${sanitizedUrl}. Check that the endpoint path is correct (api.aspx vs api2.aspx) and your IP is allowlisted in OneWaySMS dashboard.`,
+      };
+    }
+
     // OneWaySMS returns a numeric "message id" on success, negative number on error.
+    // Known PH error codes:
+    //   -100 = authentication failed (wrong username/password)
+    //   -200 = insufficient credit
+    //   -300 = invalid sender id
+    //   -400 = invalid mobile number
+    //   -500 = invalid message
+    //   -600 = generic gateway error
     const num = Number(text);
-    if (Number.isNaN(num) || num <= 0) {
-      return { ok: false, error: `OneWaySMS error: ${text}` };
+    if (Number.isNaN(num)) {
+      return {
+        ok: false,
+        error: `OneWaySMS returned non-numeric response: "${text.slice(0, 200)}" from ${sanitizedUrl}`,
+      };
+    }
+    if (num <= 0) {
+      const hint = oneWaySmsErrorHint(num);
+      return {
+        ok: false,
+        error: `OneWaySMS error code ${num}${hint ? ` (${hint})` : ''}`,
+      };
     }
     return { ok: true, id: text, provider: 'onewaysms' };
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return {
+        ok: false,
+        error: `OneWaySMS request timed out after 15s. The endpoint ${url.origin} may be unreachable from Vercel — try https://gateway.onewaysms.com.ph:10443/api.aspx or check OneWaySMS status.`,
+      };
+    }
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Unknown SMS error',
+      error: err instanceof Error
+        ? `OneWaySMS fetch failed: ${err.message}`
+        : 'Unknown SMS error',
     };
+  }
+}
+
+/** Map OneWaySMS PH numeric error codes to a human-readable hint. */
+function oneWaySmsErrorHint(code: number): string {
+  switch (code) {
+    case -100:
+      return 'authentication failed — check API username/password';
+    case -200:
+      return 'insufficient credit — top up at onewaysms.ph';
+    case -300:
+      return 'invalid sender ID — check the Sender ID field above (11 chars max)';
+    case -400:
+      return 'invalid mobile number — must be in 639XXXXXXXXX format';
+    case -500:
+      return 'invalid message — likely contains disallowed characters';
+    case -600:
+      return 'gateway-side error — try again, then contact OneWaySMS support';
+    default:
+      return '';
   }
 }
 
