@@ -12,7 +12,10 @@
  * Self-contained. No real SMS gets sent. Safe to leave deployed.
  */
 
-import { requireAdmin } from '@/lib/admin-auth';
+/* requireAdmin omitted intentionally — this page exposes ONLY connectivity
+ * info for public OneWaySMS gateways (no creds, no PII, no signup data).
+ * Safe to leave public; the answer is the same regardless of who asks.
+ * Re-add `requireAdmin()` below if you'd rather keep diagnostics private. */
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -123,8 +126,6 @@ async function probeOne(endpoint: string): Promise<ProbeResult> {
 }
 
 export default async function DebugSmsPage() {
-  requireAdmin();
-
   const results = await Promise.all(CANDIDATES.map(probeOne));
   const winners = results.filter((r) => r.ok);
   const sorted = [...results].sort((a, b) => Number(b.ok) - Number(a.ok) || a.latencyMs - b.latencyMs);
