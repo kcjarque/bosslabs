@@ -132,15 +132,52 @@ export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       return {
         ok: false,
-        error: `OneWaySMS request timed out after 15s. The endpoint ${url.origin} may be unreachable from Vercel — try https://gateway.onewaysms.com.ph:10443/api.aspx or check OneWaySMS status.`,
+        error: `OneWaySMS request timed out after 15s. The endpoint ${url.origin} may be unreachable from Vercel — try https://gateway.onewaysms.com.ph/api2.aspx (no custom port) or check OneWaySMS status.`,
       };
     }
+    // undici (Node fetch) wraps the real network error inside `err.cause`.
+    // Extract the actual code so the admin can see ENOTFOUND vs ECONNREFUSED
+    // etc. instead of the useless top-level "fetch failed".
+    const cause = err instanceof Error
+      ? (err as Error & { cause?: { code?: string; message?: string } }).cause
+      : undefined;
+    const code = cause?.code ?? '';
+    const causeMsg = cause?.message ?? '';
+    const hint = networkErrorHint(code, url.port);
+    const detail = code
+      ? `${code}${causeMsg ? `: ${causeMsg}` : ''}`
+      : (err instanceof Error ? err.message : 'unknown');
     return {
       ok: false,
-      error: err instanceof Error
-        ? `OneWaySMS fetch failed: ${err.message}`
-        : 'Unknown SMS error',
+      error: `OneWaySMS network error — ${detail}${hint ? `. ${hint}` : ''}`,
     };
+  }
+}
+
+/** Suggest a fix based on the Node network error code + the port being used. */
+function networkErrorHint(code: string, port: string): string {
+  switch (code) {
+    case 'ENOTFOUND':
+      return 'Hostname does not resolve. Check the API endpoint URL above — typo in the domain?';
+    case 'ECONNREFUSED':
+      return port
+        ? `Nothing listening on port ${port} at that host. Try https://gateway.onewaysms.com.ph/api2.aspx (default HTTPS port) instead.`
+        : 'Nothing listening on the default port. Try the alternate endpoint https://gateway.onewaysms.com.ph:10443/api.aspx';
+    case 'ETIMEDOUT':
+    case 'ECONNRESET':
+      return port === '10443'
+        ? 'Port 10443 may be blocked by Vercel egress. Try the standard-port endpoint https://gateway.onewaysms.com.ph/api2.aspx instead.'
+        : 'Network path to OneWaySMS is unreachable. Try an alternate endpoint from your OneWaySMS dashboard.';
+    case 'EPROTO':
+    case 'CERT_HAS_EXPIRED':
+    case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
+      return 'TLS handshake failed. The cert on this endpoint may be misconfigured — try a different endpoint from your OneWaySMS dashboard.';
+    case 'UND_ERR_CONNECT_TIMEOUT':
+      return port === '10443'
+        ? 'Vercel egress likely blocks port 10443. Try https://gateway.onewaysms.com.ph/api2.aspx (standard HTTPS port).'
+        : 'Connection timeout. Try a different OneWaySMS endpoint.';
+    default:
+      return '';
   }
 }
 
