@@ -369,6 +369,41 @@ export async function updateSignup(id: string, patch: Partial<Signup>): Promise<
   return list[i];
 }
 
+export async function deleteSignup(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase().from('signups').delete().eq('id', id);
+    if (error) throw new Error(`Supabase deleteSignup: ${error.message}`);
+    return true;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  const next = list.filter((s) => s.id !== id);
+  if (next.length === list.length) return false;
+  await writeJson('signups.json', next);
+  return true;
+}
+
+/**
+ * Wipe every signup whose metadata.demo === true. Used by the
+ * /admin/test-thank-you QA tool to clean up after a test run so the
+ * real signups table stays uncontaminated.
+ */
+export async function deleteDemoSignups(): Promise<number> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .delete()
+      .filter('metadata->>demo', 'eq', 'true')
+      .select('id');
+    if (error) throw new Error(`Supabase deleteDemoSignups: ${error.message}`);
+    return data?.length ?? 0;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  const keep = list.filter((s) => (s.metadata as { demo?: boolean } | undefined)?.demo !== true);
+  const removed = list.length - keep.length;
+  if (removed) await writeJson('signups.json', keep);
+  return removed;
+}
+
 /* --------------------------------------------------------------------- */
 /* EMAIL TEMPLATES                                                       */
 /* --------------------------------------------------------------------- */

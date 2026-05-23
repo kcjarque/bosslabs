@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/email-templates', label: 'Email' },
   { href: '/admin/sms-templates', label: 'SMS' },
   { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin/test-thank-you', label: 'QA' },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
