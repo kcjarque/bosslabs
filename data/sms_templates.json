@@ -2,7 +2,7 @@
   {
     "id": "free_welcome",
     "name": "Free Registration Welcome",
-    "body": "Hi {{firstName}}! You're in for BOSSLABS AI. Save the date {{webinarDate}} at {{webinarTime}}. Join the Messenger group for your free gift: {{messengerGroupUrl}}"
+    "body": "BOSSLABS AI: Hi {{firstName}}! You're in for the webinar. Save the date {{webinarDate}} at {{webinarTime}}. Join the Messenger community for your Skills Pack: {{messengerGroupUrl}}"
   },
   {
     "id": "paid_confirmation",
@@ -17,11 +17,11 @@
   {
     "id": "reminder_1h",
     "name": "1-Hour Reminder",
-    "body": "BOSSLABS AI starts in 1 hour, {{firstName}}. Open Zoom: {{zoomJoinUrl}}"
+    "body": "BOSSLABS AI: Doors open in 60 min, {{firstName}}. Open Zoom now: {{zoomJoinUrl}}"
   },
   {
     "id": "replay",
     "name": "Replay Available",
-    "body": "BOSSLABS AI replay is up for 7 days. Watch this week: {{replayUrl}}"
+    "body": "BOSSLABS AI: Replay is up for 7 days. Watch this week: {{replayUrl}}"
   }
 ]

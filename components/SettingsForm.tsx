@@ -129,6 +129,18 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             />
           </Field>
         </div>
+        <Field
+          label="Reply-To email"
+          hint="A real, monitored inbox — 'no-reply' addresses tank Gmail deliverability."
+        >
+          <input
+            type="email"
+            className="input"
+            value={values.resendReplyTo}
+            onChange={(e) => update('resendReplyTo', e.target.value)}
+            placeholder="hello@conexmedia.ph"
+          />
+        </Field>
         <TestSendPanel channel="email" placeholder="you@yourbiz.com" />
       </Section>
 

@@ -47,6 +47,34 @@ export function adminPassword(): string {
   return p;
 }
 
+/**
+ * Sign + verify a one-way unsubscribe token. Embedded in transactional
+ * email footers as a link a recipient can click to opt out. HMAC-signed
+ * with ADMIN_COOKIE_SECRET so a bad actor can't unsubscribe arbitrary
+ * users by guessing URLs.
+ *
+ * Format: `<base64url(email)>.<hmac>` — passed as a single `t` query param.
+ */
+export function signUnsubscribeToken(email: string): string {
+  const e = Buffer.from(email.trim().toLowerCase(), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', secret()).update(`unsub:${e}`).digest('base64url');
+  return `${e}.${sig}`;
+}
+
+export function verifyUnsubscribeToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  const [e, sig] = token.split('.');
+  if (!e || !sig) return null;
+  const expected = crypto.createHmac('sha256', secret()).update(`unsub:${e}`).digest('base64url');
+  if (!safeEqual(sig, expected)) return null;
+  try {
+    const email = Buffer.from(e, 'base64url').toString('utf8');
+    return email && email.includes('@') ? email : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Constant-time string equality — defends against timing-attack on password + signature compares. */
 export function safeEqual(a: string, b: string): boolean {
   // Equalize lengths first; timingSafeEqual throws on unequal buffer sizes.

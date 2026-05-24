@@ -3,6 +3,15 @@
  *
  * Free tier: 3,000 emails/mo + 100/day. Cheapest reliable option for the
  * volume we'll see at ₱999 webinar scale. Swap by replacing this file.
+ *
+ * Every outbound email gets:
+ *   - reply_to: a real monitored inbox (settings.resendReplyTo) — bare
+ *     "no-reply" senders tank Gmail spam scores
+ *   - List-Unsubscribe header: RFC 2369 mailto + RFC 8058 one-click URL
+ *   - List-Unsubscribe-Post: List-Unsubscribe=One-Click (RFC 8058)
+ *   - {{unsubscribeUrl}} auto-injected into template vars so footers
+ *     can render a visible unsubscribe link without callers having to
+ *     compute the signed token
  */
 
 import {
@@ -11,6 +20,7 @@ import {
   renderTemplate,
   type EmailTemplate,
 } from './db';
+import { signUnsubscribeToken } from './admin-auth';
 
 export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'demo' }
@@ -21,6 +31,25 @@ function redactEmail(email: string): string {
   const [local, domain] = email.split('@');
   if (!domain) return '[redacted]';
   return `${local?.[0] ?? '*'}***@${domain}`;
+}
+
+/** Public base URL for the site — used to build unsubscribe links. */
+function siteUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+    'https://bosslabs.vercel.app'
+  );
+}
+
+/** Auto-inject {{unsubscribeUrl}} + any future required token defaults. */
+function withDefaultVars(
+  recipientEmail: string,
+  vars: Record<string, string | number | undefined>,
+): Record<string, string | number | undefined> {
+  const token = signUnsubscribeToken(recipientEmail);
+  const unsubscribeUrl = `${siteUrl()}/unsubscribe?t=${token}`;
+  // Don't overwrite anything a caller has explicitly set.
+  return { unsubscribeUrl, ...vars };
 }
 
 export type SendEmailArgs = {
@@ -57,8 +86,17 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   let subject = args.subject ?? '';
   let html = args.html ?? '';
 
+  // Build the unsubscribe URL once — needed both for the template var
+  // (visible footer link) and for the List-Unsubscribe headers.
+  const token = signUnsubscribeToken(args.to);
+  const unsubscribeUrl = `${siteUrl()}/api/unsubscribe?t=${token}`;
+  const unsubscribePage = `${siteUrl()}/unsubscribe?t=${token}`;
+
   if (args.templateId) {
-    const rendered = await renderEmail(args.templateId, args.vars);
+    const rendered = await renderEmail(
+      args.templateId,
+      withDefaultVars(args.to, args.vars ?? {}),
+    );
     if (!rendered) {
       return { ok: false, error: `Email template "${args.templateId}" not found` };
     }
@@ -81,6 +119,10 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     return { ok: true, id: `demo_${Date.now()}`, provider: 'demo' };
   }
 
+  // Default Reply-To: prefer explicit setting, else fall back to the From
+  // address so we still set the header (Gmail prefers it set over absent).
+  const replyTo = settings.resendReplyTo || settings.resendFromEmail;
+
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -91,8 +133,19 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       body: JSON.stringify({
         from: `${settings.resendFromName} <${settings.resendFromEmail}>`,
         to: [args.to],
+        reply_to: replyTo,
         subject,
         html,
+        // Gmail/Yahoo's bulk-sender rules (effective Feb 2024) score
+        // these headers strongly toward Inbox vs Promotions/Spam.
+        headers: {
+          'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${replyTo}?subject=Unsubscribe>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+        // Resend tags — show up in their dashboard for funnel-level analytics.
+        tags: args.templateId
+          ? [{ name: 'template', value: args.templateId }]
+          : undefined,
       }),
     });
     if (!res.ok) {
@@ -107,4 +160,8 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       error: err instanceof Error ? err.message : 'Unknown email error',
     };
   }
+  // (unsubscribePage is intentionally unused here — it's the human-facing
+  // page; the header points at the one-click API target. Kept in scope
+  // for template-side use should we ever want to swap them.)
+  void unsubscribePage;
 }

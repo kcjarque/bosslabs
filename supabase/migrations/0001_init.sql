@@ -49,6 +49,7 @@ create table if not exists settings (
   resend_api_key text default '',
   resend_from_email text default 'hello@bosslabs.ai',
   resend_from_name text default 'BOSSLABS AI',
+  resend_reply_to text default 'hello@bosslabs.ai',
   onewaysms_endpoint text default 'https://gateway.onewaysms.com.ph:10443/api.aspx',
   onewaysms_username text default '',
   onewaysms_password text default '',
@@ -68,6 +69,7 @@ alter table settings add column if not exists webinar_date text default 'To Be A
 alter table settings add column if not exists webinar_time text default '8:00 PM';
 alter table settings add column if not exists webinar_timezone text default 'PHT';
 alter table settings add column if not exists webinar_starts_at_iso text default '';
+alter table settings add column if not exists resend_reply_to text default 'hello@bosslabs.ai';
 
 -- ─── Row Level Security ───────────────────────────────────────────────────
 -- The Next.js server uses the service-role key, which bypasses RLS. We enable

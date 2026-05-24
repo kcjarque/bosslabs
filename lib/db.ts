@@ -73,6 +73,9 @@ export type Settings = {
   resendApiKey: string;
   resendFromEmail: string;
   resendFromName: string;
+  /** Reply-To header — a monitored inbox. "no-reply" addresses tank
+   *  deliverability with Gmail's spam classifier. */
+  resendReplyTo: string;
   /* SMS — OneWaySMS */
   onewaysmsEndpoint: string;
   onewaysmsUsername: string;
@@ -94,6 +97,7 @@ const DEFAULT_SETTINGS: Settings = {
   resendApiKey: '',
   resendFromEmail: 'hello@bosslabs.ai',
   resendFromName: 'BOSSLABS AI',
+  resendReplyTo: 'hello@bosslabs.ai',
   // OneWaySMS PH default endpoint. Verified reachable from Vercel egress
   // (port 10001 is open + returns proper -100 / message-id responses).
   // The `gateway.onewaysms.com.ph` variant some old docs cite is a
@@ -173,6 +177,7 @@ type SettingsRow = {
   resend_api_key: string;
   resend_from_email: string;
   resend_from_name: string;
+  resend_reply_to: string;
   onewaysms_endpoint: string;
   onewaysms_username: string;
   onewaysms_password: string;
@@ -193,6 +198,7 @@ function rowToSettings(r: SettingsRow): Settings {
     resendApiKey: r.resend_api_key ?? '',
     resendFromEmail: r.resend_from_email ?? '',
     resendFromName: r.resend_from_name ?? '',
+    resendReplyTo: r.resend_reply_to ?? '',
     onewaysmsEndpoint: r.onewaysms_endpoint ?? '',
     onewaysmsUsername: r.onewaysms_username ?? '',
     onewaysmsPassword: r.onewaysms_password ?? '',
@@ -214,6 +220,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.resendApiKey !== undefined) out.resend_api_key = s.resendApiKey;
   if (s.resendFromEmail !== undefined) out.resend_from_email = s.resendFromEmail;
   if (s.resendFromName !== undefined) out.resend_from_name = s.resendFromName;
+  if (s.resendReplyTo !== undefined) out.resend_reply_to = s.resendReplyTo;
   if (s.onewaysmsEndpoint !== undefined) out.onewaysms_endpoint = s.onewaysmsEndpoint;
   if (s.onewaysmsUsername !== undefined) out.onewaysms_username = s.onewaysmsUsername;
   if (s.onewaysmsPassword !== undefined) out.onewaysms_password = s.onewaysmsPassword;
@@ -285,6 +292,25 @@ async function writeJson<T>(file: string, data: T) {
 /* --------------------------------------------------------------------- */
 /* SIGNUPS                                                               */
 /* --------------------------------------------------------------------- */
+
+/** Find a single signup by exact (case-insensitive) email match. */
+export async function findSignupByEmail(email: string): Promise<Signup | null> {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes('@')) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .ilike('email', e)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findSignupByEmail: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return list.find((s) => s.email.toLowerCase() === e) ?? null;
+}
 
 /**
  * Find a single signup by the externalId stashed in metadata. Used by the
