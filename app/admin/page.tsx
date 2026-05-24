@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { getSettings, getSignups, type Signup } from '@/lib/db';
+import { formatPHP } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,18 +10,42 @@ export default async function AdminDashboard() {
   const [signups, settings] = await Promise.all([getSignups(), getSettings()]);
 
   const now = Date.now();
-  const within = (h: number) =>
-    signups.filter((s) => now - new Date(s.createdAt).getTime() < h * 3600_000).length;
+  const within = (h: number, predicate: (s: Signup) => boolean = () => true) =>
+    signups.filter(
+      (s) => now - new Date(s.createdAt).getTime() < h * 3600_000 && predicate(s),
+    ).length;
 
-  const stats = [
-    { label: 'Total signups', num: signups.length.toString() },
-    { label: 'Last 24 hours', num: within(24).toString() },
-    { label: 'Last 7 days', num: within(24 * 7).toString() },
-    {
-      label: 'Paid tickets',
-      num: signups.filter((s) => s.source === 'paid').length.toString(),
-    },
-  ];
+  // Status-bucketed counts (the OLD dashboard counted by source='paid' which
+  // labelled every checkout-initiator as 'Paid Tickets' even when they
+  // hadn't actually paid yet — a misleading metric we just fixed).
+  const paid = signups.filter((s) => s.status === 'paid' || s.status === 'attended');
+  const registered = signups.filter((s) => s.status === 'registered');
+  const refunded = signups.filter((s) => s.status === 'refunded');
+
+  // Revenue from confirmed-paid invoices only. amountCentavos covers main +
+  // OTO bump on a single invoice; OTO-after-checkout adds another invoice
+  // tracked via metadata.otoConfirmed (added when the BL-OTO webhook fires).
+  const revenueCentavos = paid.reduce((sum, s) => {
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+    const otoExtra =
+      meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    return sum + (s.amountCentavos ?? 0) + otoExtra;
+  }, 0);
+  const revenuePhp = revenueCentavos / 100;
+  const aovPhp = paid.length > 0 ? revenuePhp / paid.length : 0;
+
+  // Conversion rate = paid / (anyone who hit checkout = registered + paid + refunded).
+  // Excludes free-tier signups + contact-form submissions since they aren't
+  // funnel-conversion candidates.
+  const funnelEntrants = signups.filter((s) => s.source === 'paid').length;
+  const conversionRate =
+    funnelEntrants > 0 ? (paid.length / funnelEntrants) * 100 : 0;
+
+  // Last-N-hours splits — broken out by paid vs registered for actual signal.
+  const last24Paid = within(24, (s) => s.status === 'paid');
+  const last24Reg = within(24, (s) => s.status === 'registered');
+  const last7dPaid = within(24 * 7, (s) => s.status === 'paid');
+  const last7dReg = within(24 * 7, (s) => s.status === 'registered');
 
   const recent = signups.slice(0, 8);
   const channelStatus = {
@@ -45,18 +70,51 @@ export default async function AdminDashboard() {
         </Link>
       </header>
 
-      {/* Stats */}
+      {/* Revenue + headline metrics — these are the numbers that matter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        {stats.map((s) => (
-          <div key={s.label} className="card">
-            <div className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              {s.num}
-            </div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
-              {s.label}
-            </div>
-          </div>
-        ))}
+        <StatCard
+          label="Revenue"
+          value={formatPHP(revenueCentavos)}
+          sub={`${paid.length} paid · AOV ${formatPHP(Math.round(aovPhp * 100))}`}
+          tone="green"
+        />
+        <StatCard
+          label="Paid tickets"
+          value={paid.length.toString()}
+          sub={`+${last24Paid} in 24h · +${last7dPaid} in 7d`}
+          tone="green"
+        />
+        <StatCard
+          label="Conversion rate"
+          value={`${conversionRate.toFixed(1)}%`}
+          sub={`${paid.length} of ${funnelEntrants} checkout-starts`}
+        />
+        <StatCard
+          label="Stuck (unpaid)"
+          value={registered.length.toString()}
+          sub={`Started checkout, never paid · ${refunded.length} refunded`}
+          tone={registered.length > 0 ? 'amber' : undefined}
+          href={registered.length > 0 ? '/admin/pending-payments' : undefined}
+        />
+      </div>
+
+      {/* Funnel + activity row */}
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+        <StatCard
+          label="Total signups (all sources)"
+          value={signups.length.toString()}
+          sub={`${funnelEntrants} via paid funnel`}
+        />
+        <StatCard
+          label="Last 24 hours"
+          value={(last24Paid + last24Reg).toString()}
+          sub={`${last24Paid} paid · ${last24Reg} stuck`}
+        />
+        <StatCard
+          label="Last 7 days"
+          value={(last7dPaid + last7dReg).toString()}
+          sub={`${last7dPaid} paid · ${last7dReg} stuck`}
+        />
       </div>
 
       {/* Channel status */}
@@ -126,6 +184,44 @@ export default async function AdminDashboard() {
       </div>
     </div>
   );
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+  tone,
+  href,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: 'green' | 'amber';
+  href?: string;
+}) {
+  const toneClass =
+    tone === 'green'
+      ? 'border-emerald-200 bg-emerald-50/40'
+      : tone === 'amber'
+        ? 'border-amber-200 bg-amber-50/40'
+        : '';
+  const body = (
+    <div className={`card ${toneClass}`.trim()}>
+      <div className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+        {value}
+      </div>
+      <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
+        {label}
+      </div>
+      {sub && <div className="mt-2 text-[11px] text-slate-500">{sub}</div>}
+      {href && (
+        <div className="mt-2 text-[11px] text-cyan-600 underline-offset-4 hover:underline">
+          View →
+        </div>
+      )}
+    </div>
+  );
+  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 function ChannelBadge({
