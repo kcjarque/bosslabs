@@ -1,18 +1,56 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Signup, SignupSource } from '@/lib/db';
+import type { Signup, SignupStatus } from '@/lib/db';
 
-type Filter = 'all' | SignupSource;
+/**
+ * Status filter buckets — the user-facing labels we group statuses into,
+ * not the raw SignupStatus enum. "Paid" includes both paid + attended.
+ */
+type StatusFilter = 'all' | 'paid' | 'abandoned' | 'refunded' | 'unsubscribed';
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'paid', label: 'Paid' },
+  { key: 'abandoned', label: 'Abandoned' },
+  { key: 'refunded', label: 'Refunded' },
+  { key: 'unsubscribed', label: 'Unsubscribed' },
+];
+
+function inFilter(status: SignupStatus, f: StatusFilter): boolean {
+  if (f === 'all') return true;
+  if (f === 'paid') return status === 'paid' || status === 'attended';
+  if (f === 'abandoned') return status === 'registered';
+  if (f === 'refunded') return status === 'refunded';
+  if (f === 'unsubscribed') return status === 'unsubscribed';
+  return true;
+}
+
+function paymentMethodLabel(s: Signup): string {
+  const m = (s.metadata as { paymentMethodGroup?: string } | undefined)?.paymentMethodGroup;
+  if (!m || m === 'ALL') return '—';
+  if (m === 'CREDIT_CARD') return 'Card';
+  if (m === 'GCASH') return 'GCash';
+  if (m === 'BANKS') return 'Banks';
+  return m;
+}
+
+function methodPillClass(s: Signup): string {
+  const m = (s.metadata as { paymentMethodGroup?: string } | undefined)?.paymentMethodGroup;
+  if (m === 'GCASH') return 'pill pill-cyan';
+  if (m === 'CREDIT_CARD') return 'pill pill-violet';
+  if (m === 'BANKS') return 'pill pill-amber';
+  return 'pill';
+}
 
 export function SignupsTable({ initial }: { initial: Signup[] }) {
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<StatusFilter>('all');
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Signup | null>(null);
 
   const filtered = useMemo(() => {
     return initial.filter((s) => {
-      if (filter !== 'all' && s.source !== filter) return false;
+      if (!inFilter(s.status, filter)) return false;
       if (!q) return true;
       const hay = `${s.firstName} ${s.lastName ?? ''} ${s.email} ${s.phone}`.toLowerCase();
       return hay.includes(q.toLowerCase());
@@ -24,18 +62,18 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
       {/* Filters */}
       <div className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex flex-wrap gap-1">
-          {(['all', 'free', 'paid', 'contact'] as Filter[]).map((f) => (
+          {STATUS_FILTERS.map((f) => (
             <button
-              key={f}
+              key={f.key}
               type="button"
-              onClick={() => setFilter(f)}
+              onClick={() => setFilter(f.key)}
               className={`rounded-md px-3 py-1.5 text-sm transition ${
-                filter === f
+                filter === f.key
                   ? 'bg-slate-900 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {f}
+              {f.label}
             </button>
           ))}
         </div>
@@ -56,16 +94,25 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
             onClick={() => setOpen(s)}
             className="card block w-full text-left transition hover:border-slate-300"
           >
-            <div className="flex items-center justify-between">
-              <div className="min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <div className="font-medium text-slate-900">
                   {s.firstName} {s.lastName ?? ''}
                 </div>
                 <div className="truncate text-xs text-slate-500">{s.email}</div>
                 <div className="text-xs text-slate-400">{s.phone}</div>
+                {s.amountCentavos != null && (
+                  <div className="mt-1 text-xs text-slate-700">
+                    ₱{(s.amountCentavos / 100).toLocaleString()}
+                    {s.bumped && ' · bumped'}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1">
-                <SourcePill source={s.source} />
+                <StatusPill status={s.status} />
+                {paymentMethodLabel(s) !== '—' && (
+                  <span className={methodPillClass(s)}>{paymentMethodLabel(s)}</span>
+                )}
                 <span className="text-[10px] text-slate-400">
                   {formatRelative(s.createdAt)}
                 </span>
@@ -88,7 +135,8 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
-                <th>Source</th>
+                <th>Method</th>
+                <th>Amount</th>
                 <th>Status</th>
                 <th>When</th>
                 <th />
@@ -107,7 +155,27 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
                   <td>{s.email}</td>
                   <td className="text-slate-500">{s.phone}</td>
                   <td>
-                    <SourcePill source={s.source} />
+                    {paymentMethodLabel(s) === '—' ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <span className={methodPillClass(s)}>
+                        {paymentMethodLabel(s)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="tabular-nums text-slate-700">
+                    {s.amountCentavos != null ? (
+                      <>
+                        ₱{(s.amountCentavos / 100).toLocaleString()}
+                        {s.bumped && (
+                          <span className="ml-1 text-[10px] text-cyan-600">
+                            +OTO
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td>
                     <StatusPill status={s.status} />
@@ -118,7 +186,7 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
                     No signups match this filter.
                   </td>
                 </tr>
@@ -133,24 +201,23 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
   );
 }
 
-function SourcePill({ source }: { source: Signup['source'] }) {
-  const map: Record<Signup['source'], string> = {
-    free: 'pill pill-cyan',
-    paid: 'pill pill-green',
-    contact: 'pill',
-  };
-  return <span className={map[source]}>{source}</span>;
-}
+/**
+ * StatusPill — renders the FUNNEL-meaningful status label, not the raw
+ * SignupStatus enum value. "registered" → "Abandoned" because in practice
+ * a paid-funnel signup stuck on 'registered' means they started checkout
+ * but never paid. "paid"/"attended" → "Paid". Etc.
+ */
 function StatusPill({ status }: { status: Signup['status'] }) {
-  const map: Record<Signup['status'], string> = {
-    registered: 'pill pill-cyan',
-    paid: 'pill pill-green',
-    attended: 'pill pill-green',
-    'no-show': 'pill pill-amber',
-    refunded: 'pill pill-red',
-    unsubscribed: 'pill pill-red',
+  const display: Record<Signup['status'], { label: string; cls: string }> = {
+    registered: { label: 'Abandoned', cls: 'pill pill-amber' },
+    paid: { label: 'Paid', cls: 'pill pill-green' },
+    attended: { label: 'Attended', cls: 'pill pill-green' },
+    'no-show': { label: 'No-show', cls: 'pill pill-amber' },
+    refunded: { label: 'Refunded', cls: 'pill pill-red' },
+    unsubscribed: { label: 'Unsubscribed', cls: 'pill pill-red' },
   };
-  return <span className={map[status] || 'pill'}>{status}</span>;
+  const v = display[status] || { label: status, cls: 'pill' };
+  return <span className={v.cls}>{v.label}</span>;
 }
 
 function SignupDrawer({ signup, onClose }: { signup: Signup; onClose: () => void }) {
@@ -226,26 +293,48 @@ function TabButton({
 }
 
 function SignupOverview({ s }: { s: Signup }) {
+  const meta = (s.metadata as Record<string, unknown> | undefined) ?? {};
+  const retryCount = (meta.retryCount as number | undefined) ?? 0;
+  const externalId = (meta.externalId as string | undefined) ?? '';
+  const otoConfirmed = (meta.otoConfirmed as string | undefined);
   return (
     <dl className="space-y-3 text-sm">
-      <Row label="Source" value={<SourcePill source={s.source} />} />
       <Row label="Status" value={<StatusPill status={s.status} />} />
+      {paymentMethodLabel(s) !== '—' && (
+        <Row
+          label="Method"
+          value={<span className={methodPillClass(s)}>{paymentMethodLabel(s)}</span>}
+        />
+      )}
       <Row label="Created" value={new Date(s.createdAt).toLocaleString()} />
       {s.amountCentavos != null && (
         <Row
-          label="Paid"
+          label="Amount"
           value={`₱${(s.amountCentavos / 100).toLocaleString()}${
-            s.bumped ? ' (with bundle)' : ''
+            s.bumped ? ' (includes 1:1 audit bump)' : ''
           }`}
         />
       )}
+      {otoConfirmed && (
+        <Row
+          label="OTO upsell"
+          value={`Purchased ${new Date(otoConfirmed).toLocaleString()}`}
+        />
+      )}
+      {retryCount > 0 && (
+        <Row
+          label="Retries"
+          value={`${retryCount} retry attempt${retryCount === 1 ? '' : 's'} (filled form again)`}
+        />
+      )}
+      {externalId && <Row label="Order ID" value={<code className="text-xs">{externalId}</code>} />}
       {s.message && (
         <Row
           label="Message"
           value={<span className="whitespace-pre-wrap">{s.message}</span>}
         />
       )}
-      <Row label="ID" value={<code className="text-xs">{s.id}</code>} />
+      <Row label="Row ID" value={<code className="text-xs">{s.id}</code>} />
     </dl>
   );
 }
@@ -311,7 +400,7 @@ function SignupSend({ s, onSent }: { s: Signup; onSent: () => void }) {
           className="input"
           value={templateId}
           onChange={(e) => setTemplateId(e.target.value)}
-          placeholder={channel === 'email' ? 'free_welcome' : 'reminder_24h'}
+          placeholder={channel === 'email' ? 'paid_confirmation' : 'reminder_24h'}
         />
         <p className="mt-1 text-xs text-slate-500">
           See available IDs on the {channel === 'email' ? 'Email' : 'SMS'} Templates page.

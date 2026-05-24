@@ -126,6 +126,11 @@
   background: rgba(220, 38, 38, 0.06);
   color: #B91C1C;
 }
+.admin-shell .pill-violet {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.08);
+  color: #6D28D9;
+}
 
 .admin-shell table {
   width: 100%;
