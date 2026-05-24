@@ -11,6 +11,7 @@ export const metadata = { title: 'Admin · BOSSLABS AI' };
 const NAV = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/signups', label: 'Signups' },
+  { href: '/admin/pending-payments', label: 'Pending' },
   { href: '/admin/email-templates', label: 'Email' },
   { href: '/admin/sms-templates', label: 'SMS' },
   { href: '/admin/settings', label: 'Settings' },

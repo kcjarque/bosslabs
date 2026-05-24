@@ -199,6 +199,19 @@ export function CheckoutFlow() {
           />
         </div>
 
+        {/* GCash gotcha hint — the QR on Xendit's page expires fast (~60s)
+            and buyers who screenshot it then upload to GCash's scanner get
+            an "invalid QR" error. Real fix is to scan the QR live OR let the
+            deep-link open GCash directly. We can't change Xendit's flow but
+            we can tell the buyer ahead of time. Saw 5+ retries on a single
+            buyer in production before adding this. */}
+        <p className="mt-3 text-center text-[11px] leading-snug text-ink-300 sm:text-[12px]">
+          💡 <strong className="text-ink-100">Paying via GCash?</strong>{' '}
+          Don&rsquo;t screenshot the QR — it expires in 60 seconds. On phone:
+          tap above and confirm in your GCash app. On desktop: scan the QR
+          directly with your phone&rsquo;s GCash camera (don&rsquo;t take a photo).
+        </p>
+
         {/* Security + payment methods — single trust block under the Pay button */}
         <SecurePaymentStrip />
 
