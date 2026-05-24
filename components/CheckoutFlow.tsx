@@ -16,6 +16,22 @@ export function CheckoutFlow() {
 
   const total = OFFER.main.priceCentavos + (bump ? OFFER.oto.priceCentavos : 0);
 
+  // Wrap the bump setter so ticking the OTO checkbox fires Meta's
+  // AddToCart standard event. Only fires when the box gets CHECKED
+  // (not when un-checked — no AddToCart un-fire event exists).
+  const handleBumpChange = (next: boolean) => {
+    setBump(next);
+    if (next) {
+      trackPixelEvent('AddToCart', {
+        value: OFFER.oto.priceCentavos / 100,
+        currency: 'PHP',
+        content_name: OFFER.oto.name,
+        content_ids: [OFFER.oto.sku],
+        content_type: 'product',
+      });
+    }
+  };
+
   // Fire ViewContent on mount so Meta builds the "viewed checkout but didn't
   // buy" retargeting audience even if the buyer never clicks Pay. useRef guard
   // stops React strict-mode + tab switches from double-firing.
@@ -61,6 +77,17 @@ export function CheckoutFlow() {
         sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
       },
     };
+
+    // AddPaymentInfo — Meta's signal that the buyer selected a payment
+    // method. Drives the "Adds of payment info" column in Ads Manager
+    // and feeds the "started checkout but didn't pay" retargeting pool.
+    trackPixelEvent('AddPaymentInfo', {
+      value: totalPhp,
+      currency: 'PHP',
+      content_name: OFFER.main.name,
+      content_ids: [bump ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
+      payment_method: method, // GCASH / CREDIT_CARD / BANKS — custom param
+    });
 
     // Fire pixel InitiateCheckout BEFORE the server hop so it's emitted
     // even if the user closes the tab during /api/checkout latency.
@@ -129,7 +156,7 @@ export function CheckoutFlow() {
         </div>
 
         {/* Order bump card */}
-        <BumpCard checked={bump} onChange={setBump} />
+        <BumpCard checked={bump} onChange={handleBumpChange} />
 
         {error && (
           <div className="mt-5 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">

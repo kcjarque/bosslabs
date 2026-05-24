@@ -1,21 +1,20 @@
 /**
- * MetaPixel — installs the Meta Pixel snippet site-wide AND fires PageView
- * on every Next.js App Router client navigation.
+ * MetaPixel — installs the Meta Pixel snippet site-wide.
  *
- * Why this matters: Next App Router uses client-side route transitions, so
- * the inline `fbq('track','PageView')` in the snippet only fires on the
- * very first load. Without the route-change effect below, Meta sees 1
- * PageView per session — kills retargeting audiences and ViewContent rates.
+ * This is a SERVER COMPONENT so that next/script can correctly inject
+ * the inline `<script>` tag into the SSR HTML. When this was a client
+ * component (because of the route-change listener), the Script tag
+ * silently failed to render — no PageView, no ViewContent, no events
+ * reached Meta at all. The route-change listener now lives in its own
+ * client component (RouteChangePageView) which is composed in here.
  *
- * Gated on NEXT_PUBLIC_META_PIXEL_ID so dev/preview without the env var
- * renders nothing (no broken pixel calls, no console noise).
+ * Gated on NEXT_PUBLIC_META_PIXEL_ID so dev/preview without the env
+ * var renders nothing (no broken pixel calls, no console noise).
  */
 
-'use client';
-
 import Script from 'next/script';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense } from 'react';
+import { RouteChangePageView } from './RouteChangePageView';
 
 export function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
@@ -53,28 +52,4 @@ fbq('track', 'PageView');
       </Suspense>
     </>
   );
-}
-
-/**
- * Fires fbq('track','PageView') on every pathname change. Skips the very
- * first effect (initial mount) because the inline snippet above already
- * fired PageView for that load — would double-count otherwise.
- */
-function RouteChangePageView() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const firstRun = useRef(true);
-
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    if (typeof window === 'undefined') return;
-    const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
-    if (!fbq) return;
-    fbq('track', 'PageView');
-  }, [pathname, searchParams]);
-
-  return null;
 }
