@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { getSignups, type Signup } from '@/lib/db';
 import { OFFER } from '@/lib/config';
+import { SendRecoveryButton } from '@/components/SendRecoveryButton';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -171,15 +172,16 @@ function PendingRow({ group, flagged }: { group: Group; flagged: boolean }) {
             </span>
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1 text-[11px] sm:text-right">
-          <a
-            href={`mailto:${group.email}?subject=${encodeURIComponent('Your BOSSLABS payment — quick help')}&body=${encodeURIComponent(
-              `Hi ${group.firstName}! Saw you tried to pay via GCash but the QR kept showing invalid. The QR expires in under 2 minutes, and screenshots stop working — that's almost certainly what's happening.\n\nTry this: go to https://bosslabs.live/checkout, fill the form again, click "Pay via GCash" — it should auto-open your GCash app. Confirm there and you're done.\n\nIf GCash doesn't auto-open, open GCash → Scan QR → point the camera at the QR on your screen (don't screenshot it).\n\nReply to this email if you keep hitting the issue and we'll help directly.\n\n— ${process.env.NEXT_PUBLIC_SITE_URL ? 'BOSSLABS' : 'Mikee'}`,
-            )}`}
-            className="text-cyan-600 underline-offset-4 hover:underline"
-          >
-            Email recovery script ↗
-          </a>
+        <div className="flex flex-col items-end gap-2 text-[11px] sm:text-right">
+          <SendRecoveryButton
+            signupId={group.latest.id}
+            firstName={group.firstName}
+            email={group.email}
+            alreadySentAt={
+              (group.latest.metadata as { recoveryEmailSent?: string } | undefined)
+                ?.recoveryEmailSent
+            }
+          />
           {group.phone && (
             <a
               href={`https://m.me/${group.phone}`}
