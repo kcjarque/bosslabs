@@ -6,7 +6,7 @@ import {
   resolvePaymentMethods,
   type PaymentMethodGroup,
 } from '@/lib/xendit';
-import { addSignup } from '@/lib/db';
+import { addSignup, findSignupByEmail, updateSignup } from '@/lib/db';
 import { extractClientIp, extractFbCookies, sendCapiEvent } from '@/lib/meta';
 import { siteUrl } from '@/lib/site';
 
@@ -79,31 +79,67 @@ export async function POST(req: Request) {
     const icEventId = body.meta?.eventId ?? `ic_${Date.now()}`;
     const purchaseEventId = `purchase_${externalId}`;
 
-    await addSignup({
-      firstName,
-      lastName: rest.join(' ') || undefined,
-      email: body.email,
-      phone: body.mobile || '',
-      source: 'paid',
-      status: 'registered',
-      amountCentavos,
-      bumped,
-      metadata: {
-        externalId,
-        demo: invoice.demo,
-        paymentMethodGroup: group ?? 'ALL',
-        // Stash everything the Xendit webhook needs to fire a deduped CAPI
-        // Purchase event when the invoice clears. Hashed at send-time.
-        meta: {
-          fbp,
-          fbc,
-          clientIp,
-          clientUserAgent,
-          purchaseEventId,
-          sourceUrl: body.meta?.sourceUrl,
-        },
+    // Dedupe: if this email already has a row, update it instead of
+    // creating a new one. Stops the "filled the form 4 times during a
+    // failed GCash QR loop" problem from polluting the signups table.
+    //
+    // Two cases:
+    //  - Existing row is status='registered' → UPDATE it with the new
+    //    invoice's externalId, fresh meta, new amount (if they ticked
+    //    the bump this time). Same row, new payment attempt.
+    //  - Existing row is status='paid'/'attended' → still insert a new
+    //    row (rare edge case — buyer is paying a second time, e.g.
+    //    OTO after-the-fact or re-buying). Future-proof for that.
+    //  - No existing row → insert new (the original behavior).
+    const existing = await findSignupByEmail(body.email);
+    const sharedMetadata = {
+      externalId,
+      demo: invoice.demo,
+      paymentMethodGroup: group ?? 'ALL',
+      // Stash everything the Xendit webhook needs to fire a deduped CAPI
+      // Purchase event when the invoice clears. Hashed at send-time.
+      meta: {
+        fbp,
+        fbc,
+        clientIp,
+        clientUserAgent,
+        purchaseEventId,
+        sourceUrl: body.meta?.sourceUrl,
       },
-    });
+    };
+
+    if (existing && existing.status === 'registered') {
+      // Same buyer retrying — point the existing row at the new Xendit
+      // invoice. Preserve their CAPI event ID + match keys from any
+      // earlier attempt so InitiateCheckout deduplicates cleanly.
+      await updateSignup(existing.id, {
+        firstName,
+        lastName: rest.join(' ') || undefined,
+        phone: body.mobile || existing.phone,
+        amountCentavos,
+        bumped,
+        metadata: {
+          ...(existing.metadata ?? {}),
+          ...sharedMetadata,
+          retryCount: ((existing.metadata as { retryCount?: number } | undefined)?.retryCount ?? 0) + 1,
+          firstAttemptAt:
+            (existing.metadata as { firstAttemptAt?: string } | undefined)?.firstAttemptAt ??
+            existing.createdAt,
+        },
+      });
+    } else {
+      await addSignup({
+        firstName,
+        lastName: rest.join(' ') || undefined,
+        email: body.email,
+        phone: body.mobile || '',
+        source: 'paid',
+        status: 'registered',
+        amountCentavos,
+        bumped,
+        metadata: sharedMetadata,
+      });
+    }
 
     // Fire InitiateCheckout CAPI — deduped with the pixel event via icEventId.
     // Best-effort; never blocks the redirect even on failure.
