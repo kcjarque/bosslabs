@@ -1,6 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * EmailTemplatesEditor — text-form editor + live preview.
+ *
+ * The admin types a small markdown subset (see lib/email-markdown.ts) in
+ * the left textarea; the right pane is an iframe that re-renders the
+ * BOSSLABS-shelled HTML every keystroke (debounced via a server hop).
+ *
+ * Legacy templates that were authored as raw HTML (body = null) start in
+ * "HTML mode" with a banner offering a one-click conversion to markdown.
+ * Once converted, the editor stays in text mode forever and html becomes
+ * a generated artifact regenerated on every save.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
 import type { EmailTemplate } from '@/lib/db';
 
 export function EmailTemplatesEditor({ initial }: { initial: EmailTemplate[] }) {
@@ -10,7 +23,6 @@ export function EmailTemplatesEditor({ initial }: { initial: EmailTemplate[] }) 
 
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-      {/* Sidebar — list (becomes a select on mobile) */}
       <aside className="card lg:p-3">
         <h2 className="hidden text-xs uppercase tracking-[0.06em] text-slate-500 lg:block lg:px-2 lg:py-1.5">
           Templates
@@ -88,18 +100,74 @@ function Editor({
   onSave: (t: EmailTemplate) => Promise<void>;
 }) {
   const [subject, setSubject] = useState(template.subject);
+  // `body` is the markdown source — primary edit surface. When null on
+  // load, the template was authored before the text editor existed and
+  // we offer the admin a "Convert to text editor" button instead.
+  const [body, setBody] = useState<string | null>(template.body ?? null);
+  // `html` is what gets sent. In text mode it's regenerated server-side
+  // on save from `body`; in legacy HTML mode it's the source of truth.
   const [html, setHtml] = useState(template.html);
+  const [previewHtml, setPreviewHtml] = useState(template.html);
+  const [showLegacyHtml, setShowLegacyHtml] = useState(false);
+
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState(false);
   const [testTo, setTestTo] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  // Re-render the preview pane whenever the markdown body changes. Hits
+  // the server preview endpoint so the rendering logic stays single-
+  // sourced (no duplicate markdown→HTML in the browser). Debounced 200ms
+  // so a fast typist doesn't fire one request per keystroke.
+  const refreshPreview = useCallback(async (md: string) => {
+    try {
+      const res = await fetch('/api/admin/templates/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: md }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { html?: string };
+      if (data.html) setPreviewHtml(data.html);
+    } catch {
+      // Preview pane goes stale — non-fatal. The next keystroke retries.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (body == null) return;
+    const t = setTimeout(() => void refreshPreview(body), 200);
+    return () => clearTimeout(t);
+  }, [body, refreshPreview]);
+
+  async function convertHtmlToText() {
+    try {
+      const res = await fetch('/api/admin/templates/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromHtml: template.html }),
+      });
+      if (!res.ok) throw new Error('Convert failed');
+      const data = (await res.json()) as { markdown?: string; html?: string };
+      setBody(data.markdown ?? '');
+      if (data.html) setPreviewHtml(data.html);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not convert');
+    }
+  }
 
   async function save() {
     setSaving('saving');
     setError(null);
     try {
-      await onSave({ ...template, subject, html });
+      // In text mode we ship the markdown body and let the server
+      // regenerate html. In legacy mode we ship html only.
+      const next: EmailTemplate =
+        body == null
+          ? { ...template, subject, html, body: null }
+          : { ...template, subject, html: previewHtml, body };
+      await onSave(next);
+      setHtml(next.html);
       setSaving('saved');
       setTimeout(() => setSaving('idle'), 1500);
     } catch (err: unknown) {
@@ -133,6 +201,8 @@ function Editor({
     }
   }
 
+  const inTextMode = body != null;
+
   return (
     <div className="space-y-4">
       <div className="card">
@@ -159,33 +229,107 @@ function Editor({
             onChange={(e) => setSubject(e.target.value)}
           />
         </div>
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="label">HTML body</label>
+
+        {/* Legacy notice — old templates open in HTML mode until the admin
+            chooses to convert. The conversion is one-way; once you've
+            edited as markdown, the html column is regenerated on save. */}
+        {!inTextMode && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div className="font-medium">This template is in legacy HTML mode.</div>
+            <p className="mt-1 text-[13px] text-amber-900/80">
+              Switch to the text editor for a friendlier write + live preview.
+              Conversion is best-effort — review the result before saving.
+            </p>
             <button
               type="button"
-              onClick={() => setPreview((p) => !p)}
-              className="text-xs text-slate-500 hover:text-slate-900"
+              onClick={convertHtmlToText}
+              className="mt-3 rounded-full bg-amber-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-800"
             >
-              {preview ? 'Edit HTML' : 'Preview'}
+              Convert to text editor →
             </button>
           </div>
-          {preview ? (
-            <div className="overflow-hidden rounded-lg border border-slate-200">
-              <iframe
-                title="Email preview"
-                srcDoc={html}
-                className="min-h-[420px] w-full bg-white"
+        )}
+
+        {/* Editor body — text mode shows split textarea + preview iframe.
+            Legacy HTML mode shows the raw HTML textarea + preview. */}
+        {inTextMode ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <label className="label">Message (text)</label>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Type plain text. We&rsquo;ll style + add the BOSSLABS logo around it.
+              </p>
+              <textarea
+                className="input mt-2 font-mono text-[13px]"
+                style={{ minHeight: 360 }}
+                value={body ?? ''}
+                onChange={(e) => setBody(e.target.value)}
               />
+              <details className="mt-2 text-[11px] text-slate-500">
+                <summary className="cursor-pointer">Formatting cheatsheet</summary>
+                <div className="mt-2 space-y-1 rounded-md bg-slate-50 p-3 leading-relaxed">
+                  <div><code>{'^^EYEBROW^^'}</code> — small cyan uppercase label</div>
+                  <div><code>{'# Headline'}</code> — big serif headline</div>
+                  <div><code>{'## Subhead'}</code> — small uppercase subhead</div>
+                  <div><code>**bold**</code> · <code>*italic*</code></div>
+                  <div><code>[label](https://…)</code> — inline link</div>
+                  <div><code>[[Button label]](https://…)</code> — pill CTA button</div>
+                  <div><code>---</code> — horizontal divider</div>
+                  <div>Blank line = new paragraph. <code>{'{{firstName}}'}</code> variables pass through.</div>
+                </div>
+              </details>
             </div>
-          ) : (
-            <textarea
-              className="input"
-              value={html}
-              onChange={(e) => setHtml(e.target.value)}
-            />
-          )}
-        </div>
+            <div>
+              <label className="label">Live preview</label>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Updates as you type. Variables show as <code>{'{{firstName}}'}</code>{' '}
+                — replaced at send time.
+              </p>
+              <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-[#F5F7FB]">
+                <iframe
+                  title="Email preview"
+                  srcDoc={previewHtml}
+                  className="w-full bg-white"
+                  style={{ minHeight: 420 }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <label className="label">HTML body (legacy mode)</label>
+              <textarea
+                className="input mt-2 font-mono text-[12px]"
+                style={{ minHeight: 360 }}
+                value={html}
+                onChange={(e) => {
+                  setHtml(e.target.value);
+                  setPreviewHtml(e.target.value);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowLegacyHtml((p) => !p)}
+                className="mt-2 text-[11px] text-slate-500 hover:text-slate-900"
+              >
+                {showLegacyHtml ? 'Hide preview' : 'Show preview'}
+              </button>
+            </div>
+            <div>
+              <label className="label">Preview</label>
+              <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <iframe
+                  title="Email preview"
+                  srcDoc={previewHtml}
+                  className="w-full"
+                  style={{ minHeight: 420 }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

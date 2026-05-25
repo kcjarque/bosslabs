@@ -29,8 +29,11 @@ create table if not exists email_templates (
   name text not null,
   subject text not null,
   html text not null,
+  body text,
   updated_at timestamptz not null default now()
 );
+-- Existing projects: backfill the column if the table predates the body field.
+alter table email_templates add column if not exists body text;
 
 create table if not exists sms_templates (
   id text primary key,
@@ -157,6 +160,101 @@ on conflict (id) do update
       subject = excluded.subject,
       html = excluded.html,
       updated_at = now();
+
+-- ─── Backfill markdown body for the seed templates ────────────────────────
+-- The text editor opens any template whose body is non-null. We only
+-- backfill rows where body is currently null so we never clobber edits
+-- the admin has already made in the text editor.
+update email_templates set body = $$^^BOSSLABS AI · You're in^^
+
+# Welcome, {{firstName}}.
+
+Your seat for the BOSSLABS AI Webinar is locked in. Save the date and bring one workflow you want to automate.
+
+**{{webinarDate}} · {{webinarTime}} {{webinarTimezone}}**
+
+[[Join the Zoom call]]({{zoomJoinUrl}})
+
+One more step — unlock your Free Gift by joining the Messenger group:
+
+[Join the BOSSLABS Messenger Group →]({{messengerGroupUrl}})
+
+— Mikee & Kyle
+BOSSLABS AI · Built in Manila$$
+where id = 'free_welcome' and body is null;
+
+update email_templates set body = $$^^Payment received · Seat locked^^
+
+# Thanks, {{firstName}}.
+
+Your BOSSLABS AI ticket is locked in.
+
+**Live on Zoom · {{webinarDate}} · {{webinarTime}} {{webinarTimezone}}**
+
+[[Join the Zoom call]]({{zoomJoinUrl}})
+
+## What's included
+
+Claude Code Skills pack (configs, prompts, and reusable skills). Founder Workflow Audit Checklist. 7-day Zoom replay access. BOSSLABS Community access (Messenger + ongoing Q&A).
+
+Join the BOSSLABS Messenger group for reminders + post-event Q&A:
+
+[Join the Messenger Group →]({{messengerGroupUrl}})
+
+— Mikee & Kyle$$
+where id = 'paid_confirmation' and body is null;
+
+update email_templates set body = $$^^24-hour reminder^^
+
+# See you tomorrow, {{firstName}}.
+
+The webinar goes live **{{webinarDate}} at {{webinarTime}} {{webinarTimezone}}**. Show up 5 minutes early. Bring one workflow to automate.
+
+[[Join the Zoom call]]({{zoomJoinUrl}})$$
+where id = 'reminder_24h' and body is null;
+
+update email_templates set body = $$^^Starts in 1 hour^^
+
+# {{firstName}}, the doors open in 60 minutes.
+
+Grab your laptop, open Zoom, and meet us 5 minutes before {{webinarTime}}.
+
+[[Join the Zoom call]]({{zoomJoinUrl}})$$
+where id = 'reminder_1h' and body is null;
+
+update email_templates set body = $$^^Replay · 7-day window^^
+
+# Watch it again — or for the first time.
+
+Here's your replay. After 7 days it comes down, so block off some time this week.
+
+[[Watch the replay]]({{replayUrl}})$$
+where id = 'replay' and body is null;
+
+-- Recovery template that referenced from the admin recover-payment route.
+-- Seeded with body so it opens cleanly in the text editor. Inserts (not
+-- upserts) so an admin who has already created their own version isn't
+-- overwritten.
+insert into email_templates (id, name, subject, html, body) values
+('payment_recovery',
+ 'Payment Recovery (stuck buyer)',
+ 'Finish your BOSSLABS AI seat — link inside',
+ '',
+ $$^^Finish your checkout^^
+
+# Hey {{firstName}} —
+
+We noticed your BOSSLABS AI payment didn't go through. Your invoice is still live for a few hours, so you can pick up where you left off:
+
+[[Resume payment]]({{invoiceUrl}})
+
+Common gotcha: the GCash QR code on the next page expires in 60 seconds. If you're on mobile, tap the link above and confirm directly in your GCash app instead of screenshotting the QR.
+
+Stuck? Hit reply — we read every email.
+
+— Mikee & Kyle$$
+)
+on conflict (id) do nothing;
 
 -- ─── Seed SMS templates ───────────────────────────────────────────────────
 insert into sms_templates (id, name, body) values

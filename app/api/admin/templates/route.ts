@@ -6,6 +6,7 @@ import {
   type EmailTemplate,
   type SmsTemplate,
 } from '@/lib/db';
+import { renderEmailMarkdown } from '@/lib/email-markdown';
 
 export const runtime = 'nodejs';
 
@@ -24,10 +25,27 @@ export async function POST(req: Request) {
 
   if (body.kind === 'email') {
     const t = body.template as EmailTemplate;
-    if (!t.subject || !t.html) {
-      return NextResponse.json({ error: 'subject + html required' }, { status: 400 });
+    if (!t.subject) {
+      return NextResponse.json({ error: 'subject required' }, { status: 400 });
     }
-    await saveEmailTemplate(t);
+    // When the editor sends markdown body, render it server-side so the
+    // html column always matches the markdown source (no client drift).
+    // When only html is sent (legacy HTML mode), keep it as the canonical
+    // version and leave body null.
+    const md = typeof t.body === 'string' ? t.body : null;
+    let html = t.html;
+    if (md && md.trim()) {
+      html = renderEmailMarkdown(md);
+    } else if (!t.html) {
+      return NextResponse.json({ error: 'body or html required' }, { status: 400 });
+    }
+    await saveEmailTemplate({
+      id: t.id,
+      name: t.name,
+      subject: t.subject,
+      html,
+      body: md && md.trim() ? md : null,
+    });
   } else {
     const t = body.template as SmsTemplate;
     if (!t.body) {

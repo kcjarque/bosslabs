@@ -53,7 +53,12 @@ export type EmailTemplate = {
   id: string;
   name: string;
   subject: string;
+  /** Rendered HTML — what gets sent to Resend. */
   html: string;
+  /** Markdown source — when present, the editor opens in text mode and
+   *  regenerates html on save. null on legacy templates created before
+   *  the text editor. */
+  body?: string | null;
 };
 
 export type SmsTemplate = {
@@ -488,7 +493,7 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('email_templates')
-      .select('id, name, subject, html')
+      .select('id, name, subject, html, body')
       .order('id');
     if (error) throw new Error(`Supabase getEmailTemplates: ${error.message}`);
     return (data as EmailTemplate[]) ?? [];
@@ -500,7 +505,14 @@ export async function saveEmailTemplate(t: EmailTemplate) {
   if (isSupabaseConfigured()) {
     const { error } = await getSupabase()
       .from('email_templates')
-      .upsert({ ...t, updated_at: new Date().toISOString() });
+      .upsert({
+        id: t.id,
+        name: t.name,
+        subject: t.subject,
+        html: t.html,
+        body: t.body ?? null,
+        updated_at: new Date().toISOString(),
+      });
     if (error) throw new Error(`Supabase saveEmailTemplate: ${error.message}`);
     return;
   }
