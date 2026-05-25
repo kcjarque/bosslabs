@@ -4,6 +4,7 @@ import './globals.css';
 import { CountdownBar } from '@/components/CountdownBar';
 import { PageGlow } from '@/components/PageGlow';
 import { MetaPixel } from '@/components/MetaPixel';
+import { PageviewTracker } from '@/components/PageviewTracker';
 import { getWebinarInfo } from '@/lib/webinar';
 
 const inter = Inter({
@@ -52,6 +53,7 @@ export default async function RootLayout({
     >
       <body className="relative font-sans antialiased">
         <MetaPixel />
+        <PageviewTracker />
         <PageGlow />
         <div className="relative z-10">
           <CountdownBar startsAtIso={webinar.startsAtIso} />

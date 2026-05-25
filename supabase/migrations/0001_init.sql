@@ -74,6 +74,30 @@ alter table settings add column if not exists webinar_timezone text default 'PHT
 alter table settings add column if not exists webinar_starts_at_iso text default '';
 alter table settings add column if not exists resend_reply_to text default 'hello@bosslabs.ai';
 
+-- ─── Page views ───────────────────────────────────────────────────────────
+-- Lightweight homegrown traffic tracker. The PageviewTracker client
+-- component beacons one row per page mount; the admin dashboard reads
+-- aggregate counts to compute the Visits → Checkout → Paid funnel.
+--
+-- We index session_id so we can do distinct-session counts cheaply
+-- (e.g. "unique visitors to /checkout in the last 24h"). The session_id
+-- is a browser-local UUID set on first visit, so it counts unique
+-- browsers, not unique humans — good enough at our scale.
+create table if not exists page_views (
+  id bigserial primary key,
+  path text not null,
+  session_id text,
+  referrer text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+create index if not exists page_views_path_idx on page_views (path);
+create index if not exists page_views_created_at_idx on page_views (created_at desc);
+create index if not exists page_views_session_id_idx on page_views (session_id);
+
+alter table page_views enable row level security;
+-- (No anon policies — service-role bypasses RLS.)
+
 -- ─── Promo codes ──────────────────────────────────────────────────────────
 -- Discount engine for the public checkout. Codes can be:
 --   - 'free'    → full waiver of the order total (discount_value ignored)

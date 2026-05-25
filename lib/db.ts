@@ -555,6 +555,96 @@ export async function saveSmsTemplate(t: SmsTemplate) {
 }
 
 /* --------------------------------------------------------------------- */
+/* PAGE VIEWS                                                            */
+/* --------------------------------------------------------------------- */
+
+export type PageViewInsert = {
+  path: string;
+  sessionId?: string | null;
+  referrer?: string | null;
+  userAgent?: string | null;
+};
+
+/** Insert a single pageview. Fire-and-forget — beacons are non-critical. */
+export async function addPageView(v: PageViewInsert): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase().from('page_views').insert({
+      path: v.path,
+      session_id: v.sessionId ?? null,
+      referrer: v.referrer ?? null,
+      user_agent: v.userAgent ?? null,
+    });
+    if (error) throw new Error(`Supabase addPageView: ${error.message}`);
+    return;
+  }
+  // JSON fallback: append-only log file. Local dev only.
+  const list = await readJson<Array<PageViewInsert & { createdAt: string }>>('page_views.json', []);
+  list.push({ ...v, createdAt: new Date().toISOString() });
+  await writeJson('page_views.json', list);
+}
+
+export type PageViewCounts = {
+  /** Total beacons in the window. */
+  total: number;
+  /** Distinct session_ids in the window. */
+  uniqueSessions: number;
+};
+
+/**
+ * Count pageviews (total + distinct sessions) matching a path prefix
+ * inside a time window. Used by the admin funnel — Visits = unique
+ * sessions that hit /checkout in the period.
+ *
+ * pathPrefix can be a single path like "/checkout" or an array of
+ * acceptable prefixes (matches if any one prefixes the row's path).
+ * Pass null/undefined to count everything.
+ */
+export async function countPageViews(opts: {
+  sinceIso: string;
+  pathPrefix?: string | string[] | null;
+}): Promise<PageViewCounts> {
+  if (isSupabaseConfigured()) {
+    const sb = getSupabase();
+    const prefixes = Array.isArray(opts.pathPrefix)
+      ? opts.pathPrefix
+      : opts.pathPrefix
+        ? [opts.pathPrefix]
+        : null;
+    // Build a query with path-prefix OR-of-likes when filtering.
+    let q = sb.from('page_views').select('path, session_id', { count: 'exact' }).gte('created_at', opts.sinceIso);
+    if (prefixes && prefixes.length > 0) {
+      const orClause = prefixes.map((p) => `path.ilike.${p}%`).join(',');
+      q = q.or(orClause);
+    }
+    const { data, error, count } = await q;
+    if (error) throw new Error(`Supabase countPageViews: ${error.message}`);
+    const sessions = new Set<string>();
+    for (const row of (data as Array<{ session_id: string | null }>) ?? []) {
+      if (row.session_id) sessions.add(row.session_id);
+    }
+    return { total: count ?? 0, uniqueSessions: sessions.size };
+  }
+  // JSON fallback for local dev.
+  const list = await readJson<Array<PageViewInsert & { createdAt: string }>>('page_views.json', []);
+  const since = new Date(opts.sinceIso).getTime();
+  const prefixes = Array.isArray(opts.pathPrefix)
+    ? opts.pathPrefix
+    : opts.pathPrefix
+      ? [opts.pathPrefix]
+      : null;
+  const filtered = list.filter((v) => {
+    if (new Date(v.createdAt).getTime() < since) return false;
+    if (!prefixes) return true;
+    return prefixes.some((p) => v.path.startsWith(p));
+  });
+  const sessions = new Set<string>();
+  for (const v of filtered) {
+    if (v.sessionId) sessions.add(v.sessionId);
+  }
+  return { total: filtered.length, uniqueSessions: sessions.size };
+}
+
+/* --------------------------------------------------------------------- */
 /* PROMO CODES                                                           */
 /* --------------------------------------------------------------------- */
 

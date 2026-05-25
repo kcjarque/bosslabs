@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { getSettings, getSignups, type Signup } from '@/lib/db';
+import { countPageViews, getSettings, getSignups, type Signup } from '@/lib/db';
 import { formatPHP, OFFER } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +73,15 @@ function formatDuration(sec: number | null): string {
 
 export default async function AdminDashboard() {
   requireAdmin();
-  const [signups, settings] = await Promise.all([getSignups(), getSettings()]);
+  const since7dIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const [signups, settings, viewsAll, viewsCheckout] = await Promise.all([
+    getSignups(),
+    getSettings(),
+    // Top of funnel = anyone who landed on any public page.
+    countPageViews({ sinceIso: since7dIso }),
+    // Mid-funnel hint = sessions that made it to /checkout.
+    countPageViews({ sinceIso: since7dIso, pathPrefix: '/checkout' }),
+  ]);
 
   const now = Date.now();
   const within = (h: number, predicate: (s: Signup) => boolean = () => true) =>
@@ -149,6 +157,27 @@ export default async function AdminDashboard() {
   // Median time-to-pay across paid signups.
   const ttpSec = medianTimeToPaySeconds(paid);
 
+  // 7-day funnel: Visits → Checkout Started → Paid.
+  // "Visits" = unique browsers that hit any public page in the window.
+  // "Checkout Started" = signups created in the window with paid source
+  // (i.e. they filled the form + clicked a Pay button → invoice issued).
+  // "Paid" = those that completed payment.
+  const last7dStarts = signups.filter(
+    (s) => now - new Date(s.createdAt).getTime() < 7 * 24 * 3600_000 && s.source === 'paid',
+  ).length;
+  const last7dPaidAll = last7dPaid; // paid in last 7d (computed above)
+  const visitToCheckoutPct =
+    viewsAll.uniqueSessions > 0 ? (last7dStarts / viewsAll.uniqueSessions) * 100 : 0;
+  const checkoutToPaidPct =
+    last7dStarts > 0 ? (last7dPaidAll / last7dStarts) * 100 : 0;
+  const visitToPaidPct =
+    viewsAll.uniqueSessions > 0 ? (last7dPaidAll / viewsAll.uniqueSessions) * 100 : 0;
+  // For the first few days after the tracker ships, signups in the
+  // window outnumber visits (the signups existed before page_views did),
+  // so the % comes out > 100%. Render "—" in that case so the dashboard
+  // doesn't display nonsense rates while traffic data backfills.
+  const fmtRate = (pct: number) => (pct > 100 || !Number.isFinite(pct) ? '—' : `${pct.toFixed(1)}%`);
+
   const recent = signups.slice(0, 8);
   const channelStatus = {
     email: !!settings.resendApiKey,
@@ -218,6 +247,65 @@ export default async function AdminDashboard() {
           sub={`${last7dPaid} paid · ${last7dReg} stuck`}
         />
       </div>
+
+      {/* FUNNEL — 7-day Visits → Checkout Started → Paid with step rates */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">7-day funnel</h2>
+            <p className="mt-0.5 text-[12px] text-slate-500">
+              Unique browser sessions. Tracked since the PageviewTracker shipped —
+              older history isn&rsquo;t in the table.
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+              Visits → Paid
+            </div>
+            <div className="font-serif text-2xl text-slate-900">
+              {fmtRate(visitToPaidPct)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <FunnelStage
+            label="Visits"
+            value={viewsAll.uniqueSessions}
+            sub={`${viewsAll.total} total beacons`}
+            tone="cyan"
+            widthPct={100}
+          />
+          <FunnelStage
+            label="Checkout started"
+            value={last7dStarts}
+            sub={`${fmtRate(visitToCheckoutPct)} of visits`}
+            tone="amber"
+            widthPct={Math.max(20, Math.min(100, visitToCheckoutPct))}
+          />
+          <FunnelStage
+            label="Paid"
+            value={last7dPaidAll}
+            sub={`${fmtRate(checkoutToPaidPct)} of checkouts`}
+            tone="emerald"
+            widthPct={Math.max(20, Math.min(100, checkoutToPaidPct))}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+          <span>
+            Sessions that hit /checkout: <strong className="text-slate-700">{viewsCheckout.uniqueSessions}</strong>
+          </span>
+          <span>·</span>
+          <span>
+            Browse → intent: <strong className="text-slate-700">{fmtRate(visitToCheckoutPct)}</strong>
+          </span>
+          <span>·</span>
+          <span>
+            Intent → close: <strong className="text-slate-700">{fmtRate(checkoutToPaidPct)}</strong>
+          </span>
+        </div>
+      </section>
 
       {/* ABANDONED CART SPOTLIGHT — visible revenue at risk + one-click recovery */}
       {registered.length > 0 && (
@@ -489,6 +577,47 @@ function StatCard({
     </div>
   );
   return href ? <Link href={href}>{body}</Link> : body;
+}
+
+/**
+ * FunnelStage — one bar in the 3-step funnel. The widthPct controls how
+ * filled the bar is relative to the previous stage, so visual length
+ * communicates drop-off at a glance. Tone keys the bar to the funnel
+ * progression: cyan (top, broad), amber (middle, narrowing), emerald
+ * (bottom, conversion).
+ */
+function FunnelStage({
+  label,
+  value,
+  sub,
+  tone,
+  widthPct,
+}: {
+  label: string;
+  value: number;
+  sub: string;
+  tone: 'cyan' | 'amber' | 'emerald';
+  widthPct: number;
+}) {
+  const palette = {
+    cyan: { fill: 'bg-cyan-500', track: 'bg-cyan-100', text: 'text-cyan-700' },
+    amber: { fill: 'bg-amber-500', track: 'bg-amber-100', text: 'text-amber-700' },
+    emerald: { fill: 'bg-emerald-500', track: 'bg-emerald-100', text: 'text-emerald-700' },
+  }[tone];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+      <div className={`text-[10px] font-semibold uppercase tracking-wider ${palette.text}`}>
+        {label}
+      </div>
+      <div className="mt-2 font-serif text-3xl tracking-tight text-slate-900 sm:text-4xl">
+        {value.toLocaleString()}
+      </div>
+      <div className={`mt-3 h-1.5 w-full overflow-hidden rounded-full ${palette.track}`}>
+        <div className={`h-full ${palette.fill} transition-all`} style={{ width: `${widthPct}%` }} />
+      </div>
+      <div className="mt-2 text-[11px] text-slate-500">{sub}</div>
+    </div>
+  );
 }
 
 /**
