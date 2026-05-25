@@ -78,12 +78,23 @@ export default async function CapiStatusPage({
 
   // Fire a noop test event to confirm Meta actually accepts our payload.
   // Uses a generic ViewContent so we don't pollute Purchase data.
+  //
+  // Meta requires "sufficient customer information" on every CAPI event
+  // (error_subcode 2804050) — country alone isn't enough anymore. We send
+  // a stable synthetic identity for the health check: a fixed email +
+  // external_id derived from "capi-health@bosslabs.ai" so the same
+  // ping always hashes to the same shadow user. Doesn't pollute real
+  // attribution because there's no fbp/fbc/IP attached.
   let liveCheck: { ok: boolean; detail: string } | null = null;
   if (isConfigured) {
     const r = await sendCapiEvent({
       eventName: 'ViewContent',
       eventId: `capi_health_${Date.now()}`,
-      userData: { country: 'ph' },
+      userData: {
+        email: 'capi-health@bosslabs.ai',
+        country: 'ph',
+        externalId: 'capi-health-check',
+      },
       customData: { value: 0, currency: 'PHP', contentName: 'capi-health-check' },
     });
     liveCheck = r.ok
