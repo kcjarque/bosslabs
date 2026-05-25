@@ -3,9 +3,16 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OTOActions } from '@/components/OTOActions';
+import { PurchasePixel } from '@/components/PurchasePixel';
 import { OFFER, formatPHP } from '@/lib/config';
+import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 
-export default function OtoPage({
+// Xendit's successRedirectUrl points here, not /thank-you — so /oto is the
+// first page the buyer sees post-payment. Force-dynamic so the signup
+// lookup (used for the Pixel Purchase value) hits the live DB.
+export const dynamic = 'force-dynamic';
+
+export default async function OtoPage({
   searchParams,
 }: {
   searchParams: { order?: string; bumped?: string };
@@ -13,8 +20,25 @@ export default function OtoPage({
   const orderId = searchParams.order ?? '';
   const bumped = searchParams.bumped === '1';
 
-  if (bumped) return <BumpedConfirmation orderId={orderId} />;
-  return <LastChance orderId={orderId} />;
+  // Resolve the purchase amount from the actual signup row so the Pixel
+  // Purchase event reports the real ₱ paid (₱999 base, ₱2,996 if bumped
+  // at checkout). The eventID dedupes with the same event re-fired on
+  // /thank-you and the CAPI Purchase event from the Xendit webhook —
+  // Meta counts them as one Purchase.
+  const purchase = await resolvePurchaseAmount(orderId, undefined);
+
+  return (
+    <>
+      {orderId && (
+        <PurchasePixel
+          orderId={orderId}
+          value={purchase.value}
+          bumped={purchase.bumped}
+        />
+      )}
+      {bumped ? <BumpedConfirmation orderId={orderId} /> : <LastChance orderId={orderId} />}
+    </>
+  );
 }
 
 /* --------------------------------------------------------------------- */
