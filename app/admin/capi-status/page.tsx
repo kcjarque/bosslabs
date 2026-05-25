@@ -4,6 +4,11 @@
  * make it to Meta (e.g. webhook-chain breakage during the early launch).
  *
  * No tokens are exposed — only a configured/missing/value-shape check.
+ *
+ * Deploy stamp: 2026-05-25 — META_CAPI_TEST_EVENT_CODE removed in Vercel,
+ * Purchase events now flow to real attribution instead of the Test Events
+ * tab. The Configuration block on this page reflects whichever env state
+ * the running deployment has — refresh after any Vercel redeploy.
  */
 
 import Link from 'next/link';
