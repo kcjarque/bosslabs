@@ -7,61 +7,13 @@
  */
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/admin-auth';
 import { getSignups, type Signup } from '@/lib/db';
 import { sendCapiEvent } from '@/lib/meta';
-import { OFFER } from '@/lib/config';
+import { refireCapiForAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
-
-/** Server action — re-fire a Purchase CAPI event for the signup. */
-async function refireCapiForAction(formData: FormData): Promise<void> {
-  'use server';
-  requireAdmin();
-  const id = String(formData.get('id') || '');
-  if (!id) redirect('/admin/capi-status?refire=missing-id');
-
-  const all = await getSignups();
-  const s = all.find((x) => x.id === id);
-  if (!s) redirect('/admin/capi-status?refire=not-found');
-
-  const meta = (s!.metadata as { meta?: Record<string, string> } | undefined)?.meta ?? {};
-  const ext = (s!.metadata as { externalId?: string } | undefined)?.externalId ?? id;
-  const bumped = Boolean(s!.bumped);
-  const amountPhp = (s!.amountCentavos ?? 0) / 100;
-
-  const result = await sendCapiEvent({
-    eventName: 'Purchase',
-    eventId: meta.purchaseEventId ?? `purchase_${ext}_refire_${Date.now()}`,
-    eventSourceUrl: meta.sourceUrl,
-    userData: {
-      email: s!.email,
-      phone: s!.phone,
-      firstName: s!.firstName,
-      lastName: s!.lastName,
-      fbp: meta.fbp,
-      fbc: meta.fbc,
-      clientIp: meta.clientIp,
-      clientUserAgent: meta.clientUserAgent,
-      country: 'ph',
-      externalId: ext,
-    },
-    customData: {
-      value: amountPhp,
-      currency: 'PHP',
-      contentName: bumped ? `${OFFER.main.name} + ${OFFER.oto.name}` : OFFER.main.name,
-      contentIds: [bumped ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
-      numItems: bumped ? 2 : 1,
-    },
-  });
-
-  const status = result.ok
-    ? `ok-${('eventsReceived' in result && result.eventsReceived) ?? '?'}-${result.provider}`
-    : `fail-${encodeURIComponent(result.error.slice(0, 60))}`;
-  redirect(`/admin/capi-status?refireId=${encodeURIComponent(id)}&refireStatus=${status}`);
-}
 
 export default async function CapiStatusPage({
   searchParams,
@@ -206,7 +158,7 @@ export default async function CapiStatusPage({
           </div>
         ) : (
           paid.map((s) => (
-            <PaidRow key={s.id} signup={s} refireCapiForAction={refireCapiForAction} />
+            <PaidRow key={s.id} signup={s} />
           ))
         )}
       </section>
@@ -248,13 +200,7 @@ function Badge({ ok, warn }: { ok: boolean; warn?: boolean }) {
   );
 }
 
-function PaidRow({
-  signup,
-  refireCapiForAction,
-}: {
-  signup: Signup;
-  refireCapiForAction: (fd: FormData) => Promise<void>;
-}) {
+function PaidRow({ signup }: { signup: Signup }) {
   const meta = (signup.metadata as Record<string, unknown> | undefined) ?? {};
   const metaMeta = (meta.meta as Record<string, string> | undefined) ?? {};
   const ext = (meta.externalId as string) ?? '';
