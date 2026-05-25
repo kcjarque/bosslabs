@@ -177,9 +177,25 @@ function PendingRow({ group, flagged }: { group: Group; flagged: boolean }) {
             signupId={group.latest.id}
             firstName={group.firstName}
             email={group.email}
+            phone={group.phone}
             alreadySentAt={
               (group.latest.metadata as { recoveryEmailSent?: string } | undefined)
                 ?.recoveryEmailSent
+            }
+            smsSentAt={
+              (group.latest.metadata as { recoverySmsSent?: string } | undefined)
+                ?.recoverySmsSent
+            }
+            emailStatus={
+              (group.latest.metadata as {
+                recoveryEmailStatus?:
+                  | 'sent'
+                  | 'delivered'
+                  | 'opened'
+                  | 'clicked'
+                  | 'bounced'
+                  | 'complained';
+              } | undefined)?.recoveryEmailStatus
             }
           />
           {group.phone && (

@@ -71,6 +71,48 @@ alter table settings add column if not exists webinar_timezone text default 'PHT
 alter table settings add column if not exists webinar_starts_at_iso text default '';
 alter table settings add column if not exists resend_reply_to text default 'hello@bosslabs.ai';
 
+-- ─── Promo codes ──────────────────────────────────────────────────────────
+-- Discount engine for the public checkout. Codes can be:
+--   - 'free'    → full waiver of the order total (discount_value ignored)
+--   - 'percent' → discount_value is 1-100 (e.g. 20 = 20% off the total)
+--   - 'fixed'   → discount_value is centavos (e.g. 50000 = ₱500 off)
+-- A code is redeemable when: active = true, expires_at IS NULL OR > now(),
+-- and (max_uses IS NULL OR uses_count < max_uses). Redemption increments
+-- uses_count atomically via the redeem_promo_code() function below so two
+-- concurrent buyers can't both burn the last seat of a 1-use code.
+create table if not exists promo_codes (
+  code text primary key,
+  discount_type text not null check (discount_type in ('free', 'percent', 'fixed')),
+  discount_value integer not null default 0,
+  max_uses integer,
+  uses_count integer not null default 0,
+  expires_at timestamptz,
+  active boolean not null default true,
+  note text,
+  created_at timestamptz not null default now()
+);
+create index if not exists promo_codes_active_idx on promo_codes (active);
+
+alter table promo_codes enable row level security;
+-- (No anon policies — service-role bypasses RLS.)
+
+-- Atomic redemption. Returns the row when the redemption succeeded
+-- (uses_count incremented by 1). Returns no rows when the code is
+-- missing/expired/exhausted/disabled — the caller treats that as
+-- "invalid code, refuse the redemption".
+create or replace function redeem_promo_code(p_code text)
+returns setof promo_codes
+language sql
+as $$
+  update promo_codes
+     set uses_count = uses_count + 1
+   where code = p_code
+     and active = true
+     and (expires_at is null or expires_at > now())
+     and (max_uses is null or uses_count < max_uses)
+   returning *;
+$$;
+
 -- ─── Row Level Security ───────────────────────────────────────────────────
 -- The Next.js server uses the service-role key, which bypasses RLS. We enable
 -- RLS so the anon key (if ever leaked) has zero read/write access.

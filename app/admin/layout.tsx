@@ -12,8 +12,8 @@ const NAV = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/signups', label: 'Signups' },
   { href: '/admin/pending-payments', label: 'Pending' },
-  { href: '/admin/email-templates', label: 'Email' },
-  { href: '/admin/sms-templates', label: 'SMS' },
+  { href: '/admin/templates', label: 'Templates' },
+  { href: '/admin/promo-codes', label: 'Promo' },
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/test-thank-you', label: 'QA' },
 ];

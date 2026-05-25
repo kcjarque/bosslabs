@@ -4,6 +4,7 @@ node_modules
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+.claude/
 # Mini-backend storage (signups + tokens). Local-only by design.
 /data/signups.json
 /data/settings.json

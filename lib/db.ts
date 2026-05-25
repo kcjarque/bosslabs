@@ -62,6 +62,24 @@ export type SmsTemplate = {
   body: string;
 };
 
+export type PromoDiscountType = 'free' | 'percent' | 'fixed';
+
+export type PromoCode = {
+  code: string;
+  /** 'free' = 100% off; 'percent' = N%; 'fixed' = N centavos off. */
+  discountType: PromoDiscountType;
+  /** Ignored when discountType='free'. */
+  discountValue: number;
+  /** null = unlimited. */
+  maxUses?: number | null;
+  usesCount: number;
+  /** ISO timestamp. null = never expires. */
+  expiresAt?: string | null;
+  active: boolean;
+  note?: string | null;
+  createdAt: string;
+};
+
 export type Settings = {
   /* Webinar (edit live from /admin/settings — falls back to env vars on cold start) */
   webinarName: string;
@@ -335,6 +353,32 @@ export async function findSignupByExternalId(externalId: string): Promise<Signup
   );
 }
 
+/**
+ * Find a signup by the Resend message id stored in
+ * metadata.recoveryEmailMessageId. Used by the Resend webhook to map
+ * delivery/bounce/complaint events back to the signup we sent.
+ */
+export async function findSignupByRecoveryMessageId(messageId: string): Promise<Signup | null> {
+  if (!messageId) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .filter('metadata->>recoveryEmailMessageId', 'eq', messageId)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findSignupByRecoveryMessageId: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return (
+    list.find(
+      (s) =>
+        (s.metadata as { recoveryEmailMessageId?: string } | undefined)
+          ?.recoveryEmailMessageId === messageId,
+    ) ?? null
+  );
+}
+
 export async function getSignups(): Promise<Signup[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
@@ -496,6 +540,171 @@ export async function saveSmsTemplate(t: SmsTemplate) {
   if (i === -1) list.push(t);
   else list[i] = t;
   await writeJson('sms_templates.json', list);
+}
+
+/* --------------------------------------------------------------------- */
+/* PROMO CODES                                                           */
+/* --------------------------------------------------------------------- */
+
+type PromoCodeRow = {
+  code: string;
+  discount_type: PromoDiscountType;
+  discount_value: number;
+  max_uses: number | null;
+  uses_count: number;
+  expires_at: string | null;
+  active: boolean;
+  note: string | null;
+  created_at: string;
+};
+
+function rowToPromo(r: PromoCodeRow): PromoCode {
+  return {
+    code: r.code,
+    discountType: r.discount_type,
+    discountValue: r.discount_value,
+    maxUses: r.max_uses,
+    usesCount: r.uses_count,
+    expiresAt: r.expires_at,
+    active: r.active,
+    note: r.note,
+    createdAt: r.created_at,
+  };
+}
+
+export async function getPromoCodes(): Promise<PromoCode[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('promo_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`Supabase getPromoCodes: ${error.message}`);
+    return (data as PromoCodeRow[]).map(rowToPromo);
+  }
+  return readJson<PromoCode[]>('promo_codes.json', []);
+}
+
+/** Find a promo by exact (case-insensitive) code match. */
+export async function findPromoCode(code: string): Promise<PromoCode | null> {
+  const c = code.trim().toUpperCase();
+  if (!c) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('promo_codes')
+      .select('*')
+      .ilike('code', c)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findPromoCode: ${error.message}`);
+    return data ? rowToPromo(data as PromoCodeRow) : null;
+  }
+  const list = await readJson<PromoCode[]>('promo_codes.json', []);
+  return list.find((p) => p.code.toUpperCase() === c) ?? null;
+}
+
+export async function savePromoCode(p: PromoCode): Promise<PromoCode> {
+  const normalized: PromoCode = { ...p, code: p.code.trim().toUpperCase() };
+  if (isSupabaseConfigured()) {
+    const row: PromoCodeRow = {
+      code: normalized.code,
+      discount_type: normalized.discountType,
+      discount_value: normalized.discountValue,
+      max_uses: normalized.maxUses ?? null,
+      uses_count: normalized.usesCount,
+      expires_at: normalized.expiresAt ?? null,
+      active: normalized.active,
+      note: normalized.note ?? null,
+      created_at: normalized.createdAt,
+    };
+    const { error } = await getSupabase().from('promo_codes').upsert(row);
+    if (error) throw new Error(`Supabase savePromoCode: ${error.message}`);
+    return normalized;
+  }
+  const list = await readJson<PromoCode[]>('promo_codes.json', []);
+  const i = list.findIndex((x) => x.code.toUpperCase() === normalized.code);
+  if (i === -1) list.unshift(normalized);
+  else list[i] = normalized;
+  await writeJson('promo_codes.json', list);
+  return normalized;
+}
+
+export async function deletePromoCode(code: string): Promise<boolean> {
+  const c = code.trim().toUpperCase();
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase().from('promo_codes').delete().eq('code', c);
+    if (error) throw new Error(`Supabase deletePromoCode: ${error.message}`);
+    return true;
+  }
+  const list = await readJson<PromoCode[]>('promo_codes.json', []);
+  const next = list.filter((p) => p.code.toUpperCase() !== c);
+  if (next.length === list.length) return false;
+  await writeJson('promo_codes.json', next);
+  return true;
+}
+
+/**
+ * Atomically redeem a promo code: bumps uses_count by 1 and returns the
+ * updated row only when the code is currently valid (active, unexpired,
+ * not exhausted). Returns null when the redemption was refused — caller
+ * must reject the checkout.
+ *
+ * Supabase path uses the `redeem_promo_code` SQL function from the
+ * migration so two simultaneous buyers can't both burn the last seat
+ * of a 1-use code. JSON-file path is single-process, so a vanilla
+ * read-modify-write is safe enough for local dev.
+ */
+export async function redeemPromoCode(code: string): Promise<PromoCode | null> {
+  const c = code.trim().toUpperCase();
+  if (!c) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase().rpc('redeem_promo_code', {
+      p_code: c,
+    });
+    if (error) throw new Error(`Supabase redeemPromoCode: ${error.message}`);
+    const rows = (data as PromoCodeRow[] | null) ?? [];
+    return rows.length > 0 ? rowToPromo(rows[0]) : null;
+  }
+  const list = await readJson<PromoCode[]>('promo_codes.json', []);
+  const i = list.findIndex((p) => p.code.toUpperCase() === c);
+  if (i === -1) return null;
+  const p = list[i];
+  if (!p.active) return null;
+  if (p.expiresAt && new Date(p.expiresAt).getTime() <= Date.now()) return null;
+  if (p.maxUses != null && p.usesCount >= p.maxUses) return null;
+  const next: PromoCode = { ...p, usesCount: p.usesCount + 1 };
+  list[i] = next;
+  await writeJson('promo_codes.json', list);
+  return next;
+}
+
+/**
+ * Compute the discount in centavos for a given promo against an order
+ * total, capping the discount at the total (we never refund money out
+ * via a promo — at most the order becomes free).
+ *
+ * Returns the discount AMOUNT (positive centavos). Subtract from total
+ * to get what the buyer pays.
+ */
+export function computeDiscountCentavos(
+  promo: Pick<PromoCode, 'discountType' | 'discountValue'>,
+  totalCentavos: number,
+): number {
+  if (totalCentavos <= 0) return 0;
+  let raw: number;
+  switch (promo.discountType) {
+    case 'free':
+      raw = totalCentavos;
+      break;
+    case 'percent':
+      // Round to nearest centavo — keep PHP whole-centavo arithmetic clean.
+      raw = Math.round((totalCentavos * Math.max(0, Math.min(100, promo.discountValue))) / 100);
+      break;
+    case 'fixed':
+      raw = Math.max(0, promo.discountValue);
+      break;
+    default:
+      raw = 0;
+  }
+  return Math.min(raw, totalCentavos);
 }
 
 /* --------------------------------------------------------------------- */
