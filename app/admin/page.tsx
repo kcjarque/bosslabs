@@ -71,16 +71,38 @@ function formatDuration(sec: number | null): string {
   return `${(sec / 86400).toFixed(1)}d`;
 }
 
-export default async function AdminDashboard() {
+/** Selectable funnel date ranges. Hours-based so we can compute sinceIso
+ *  from a single number. Keep this list short — too many options dilute
+ *  the dashboard's at-a-glance value. */
+const FUNNEL_RANGES = [
+  { key: '24h', label: '24h', hours: 24 },
+  { key: '7d', label: '7d', hours: 24 * 7 },
+  { key: '30d', label: '30d', hours: 24 * 30 },
+  { key: '90d', label: '90d', hours: 24 * 90 },
+] as const;
+type FunnelRangeKey = (typeof FUNNEL_RANGES)[number]['key'];
+
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: { fr?: string };
+}) {
   requireAdmin();
-  const since7dIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+
+  const frParam = searchParams?.fr;
+  const funnelRange =
+    FUNNEL_RANGES.find((r) => r.key === frParam) ??
+    FUNNEL_RANGES.find((r) => r.key === '7d')!;
+  const funnelSinceMs = Date.now() - funnelRange.hours * 3600 * 1000;
+  const funnelSinceIso = new Date(funnelSinceMs).toISOString();
+
   const [signups, settings, viewsAll, viewsCheckout] = await Promise.all([
     getSignups(),
     getSettings(),
     // Top of funnel = anyone who landed on any public page.
-    countPageViews({ sinceIso: since7dIso }),
+    countPageViews({ sinceIso: funnelSinceIso }),
     // Mid-funnel hint = sessions that made it to /checkout.
-    countPageViews({ sinceIso: since7dIso, pathPrefix: '/checkout' }),
+    countPageViews({ sinceIso: funnelSinceIso, pathPrefix: '/checkout' }),
   ]);
 
   const now = Date.now();
@@ -157,21 +179,25 @@ export default async function AdminDashboard() {
   // Median time-to-pay across paid signups.
   const ttpSec = medianTimeToPaySeconds(paid);
 
-  // 7-day funnel: Visits → Checkout Started → Paid.
+  // Funnel: Visits → Checkout Started → Paid, scoped to the selected range.
   // "Visits" = unique browsers that hit any public page in the window.
   // "Checkout Started" = signups created in the window with paid source
-  // (i.e. they filled the form + clicked a Pay button → invoice issued).
+  // (filled the form + clicked a Pay button → invoice issued).
   // "Paid" = those that completed payment.
-  const last7dStarts = signups.filter(
-    (s) => now - new Date(s.createdAt).getTime() < 7 * 24 * 3600_000 && s.source === 'paid',
+  const funnelStarts = signups.filter(
+    (s) => new Date(s.createdAt).getTime() >= funnelSinceMs && s.source === 'paid',
   ).length;
-  const last7dPaidAll = last7dPaid; // paid in last 7d (computed above)
+  const funnelPaid = signups.filter(
+    (s) =>
+      new Date(s.createdAt).getTime() >= funnelSinceMs &&
+      (s.status === 'paid' || s.status === 'attended'),
+  ).length;
   const visitToCheckoutPct =
-    viewsAll.uniqueSessions > 0 ? (last7dStarts / viewsAll.uniqueSessions) * 100 : 0;
+    viewsAll.uniqueSessions > 0 ? (funnelStarts / viewsAll.uniqueSessions) * 100 : 0;
   const checkoutToPaidPct =
-    last7dStarts > 0 ? (last7dPaidAll / last7dStarts) * 100 : 0;
+    funnelStarts > 0 ? (funnelPaid / funnelStarts) * 100 : 0;
   const visitToPaidPct =
-    viewsAll.uniqueSessions > 0 ? (last7dPaidAll / viewsAll.uniqueSessions) * 100 : 0;
+    viewsAll.uniqueSessions > 0 ? (funnelPaid / viewsAll.uniqueSessions) * 100 : 0;
   // For the first few days after the tracker ships, signups in the
   // window outnumber visits (the signups existed before page_views did),
   // so the % comes out > 100%. Render "—" in that case so the dashboard
@@ -248,21 +274,24 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      {/* FUNNEL — 7-day Visits → Checkout Started → Paid with step rates */}
+      {/* FUNNEL — Visits → Checkout Started → Paid, range-filterable */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">7-day funnel</h2>
-            <p className="mt-0.5 text-[12px] text-slate-500">
-              Unique browser sessions. Tracked since the PageviewTracker shipped —
-              older history isn&rsquo;t in the table.
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-base font-semibold text-slate-900">Funnel</h2>
+              <FunnelDateFilter activeKey={funnelRange.key} />
+            </div>
+            <p className="mt-1 text-[12px] text-slate-500">
+              Unique browser sessions over the last {funnelRange.label}. Tracked
+              since the PageviewTracker shipped — older history isn&rsquo;t in the table.
             </p>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+          <div className="sm:text-right">
+            <div className="text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
               Visits → Paid
             </div>
-            <div className="font-serif text-2xl text-slate-900">
+            <div className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               {fmtRate(visitToPaidPct)}
             </div>
           </div>
@@ -278,14 +307,14 @@ export default async function AdminDashboard() {
           />
           <FunnelStage
             label="Checkout started"
-            value={last7dStarts}
+            value={funnelStarts}
             sub={`${fmtRate(visitToCheckoutPct)} of visits`}
             tone="amber"
             widthPct={Math.max(20, Math.min(100, visitToCheckoutPct))}
           />
           <FunnelStage
             label="Paid"
-            value={last7dPaidAll}
+            value={funnelPaid}
             sub={`${fmtRate(checkoutToPaidPct)} of checkouts`}
             tone="emerald"
             widthPct={Math.max(20, Math.min(100, checkoutToPaidPct))}
@@ -580,6 +609,40 @@ function StatCard({
 }
 
 /**
+ * FunnelDateFilter — server-rendered pill row. Each pill is a Link that
+ * sets ?fr=<key> on the dashboard. No client JS needed — the dashboard
+ * re-renders server-side with the new range. Matches the rest of the
+ * dashboard which is also pure RSC.
+ */
+function FunnelDateFilter({ activeKey }: { activeKey: FunnelRangeKey }) {
+  return (
+    <div
+      role="group"
+      aria-label="Funnel date range"
+      className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5"
+    >
+      {FUNNEL_RANGES.map((r) => {
+        const active = r.key === activeKey;
+        return (
+          <Link
+            key={r.key}
+            href={`/admin?fr=${r.key}`}
+            scroll={false}
+            className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
+              active
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+            }`}
+          >
+            {r.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * FunnelStage — one bar in the 3-step funnel. The widthPct controls how
  * filled the bar is relative to the previous stage, so visual length
  * communicates drop-off at a glance. Tone keys the bar to the funnel
@@ -606,10 +669,10 @@ function FunnelStage({
   }[tone];
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-      <div className={`text-[10px] font-semibold uppercase tracking-wider ${palette.text}`}>
+      <div className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${palette.text} sm:text-xs`}>
         {label}
       </div>
-      <div className="mt-2 font-serif text-3xl tracking-tight text-slate-900 sm:text-4xl">
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
         {value.toLocaleString()}
       </div>
       <div className={`mt-3 h-1.5 w-full overflow-hidden rounded-full ${palette.track}`}>
