@@ -109,6 +109,8 @@ export type Settings = {
   zoomJoinUrl: string;
   replayUrl: string;
   messengerGroupUrl: string;
+  /* Session recording */
+  recordingEnabled: boolean;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -135,6 +137,7 @@ const DEFAULT_SETTINGS: Settings = {
   zoomJoinUrl: '',
   replayUrl: '',
   messengerGroupUrl: '',
+  recordingEnabled: false,
 };
 
 /* --------------------------------------------------------------------- */
@@ -209,6 +212,7 @@ type SettingsRow = {
   zoom_join_url: string;
   replay_url: string;
   messenger_group_url: string;
+  recording_enabled: boolean;
 };
 
 function rowToSettings(r: SettingsRow): Settings {
@@ -230,6 +234,7 @@ function rowToSettings(r: SettingsRow): Settings {
     zoomJoinUrl: r.zoom_join_url ?? '',
     replayUrl: r.replay_url ?? '',
     messengerGroupUrl: r.messenger_group_url ?? '',
+    recordingEnabled: r.recording_enabled ?? false,
   };
 }
 
@@ -252,6 +257,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.zoomJoinUrl !== undefined) out.zoom_join_url = s.zoomJoinUrl;
   if (s.replayUrl !== undefined) out.replay_url = s.replayUrl;
   if (s.messengerGroupUrl !== undefined) out.messenger_group_url = s.messengerGroupUrl;
+  if (s.recordingEnabled !== undefined) out.recording_enabled = s.recordingEnabled;
   return out;
 }
 
@@ -891,7 +897,7 @@ export async function getSettingsForAdmin(): Promise<Settings> {
   const s = await getSettings();
   const out: Settings = { ...s };
   for (const k of SECRET_FIELDS) {
-    if (out[k]) (out as Record<string, string>)[k as string] = '';
+    if (out[k]) (out as unknown as Record<string, string>)[k as string] = '';
   }
   return out;
 }
@@ -929,4 +935,145 @@ export function renderTemplate(
     const v = vars[key];
     return v === undefined || v === null ? '' : String(v);
   });
+}
+
+/* --------------------------------------------------------------------- */
+/* Session recordings (rrweb)                                            */
+/* --------------------------------------------------------------------- */
+
+export type SessionRecording = {
+  id: string;
+  sessionId: string;
+  page: string;
+  events: unknown[];
+  sizeBytes: number;
+  createdAt: string;
+};
+
+type RecordingRow = {
+  id: string;
+  session_id: string;
+  page: string;
+  events: unknown[];
+  size_bytes: number;
+  created_at: string;
+};
+
+function rowToRecording(r: RecordingRow): SessionRecording {
+  return {
+    id: r.id,
+    sessionId: r.session_id,
+    page: r.page,
+    events: r.events,
+    sizeBytes: r.size_bytes,
+    createdAt: r.created_at,
+  };
+}
+
+export async function saveRecording(data: {
+  sessionId: string;
+  page: string;
+  events: unknown[];
+}): Promise<string> {
+  const json = JSON.stringify(data.events);
+  const sizeBytes = Buffer.byteLength(json, 'utf8');
+  if (isSupabaseConfigured()) {
+    const { data: row, error } = await getSupabase()
+      .from('session_recordings')
+      .insert({
+        session_id: data.sessionId,
+        page: data.page,
+        events: data.events,
+        size_bytes: sizeBytes,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`saveRecording: ${error.message}`);
+    return row.id;
+  }
+  const id = crypto.randomUUID();
+  const recordings = await readJson<RecordingRow[]>('recordings.json', []);
+  recordings.push({
+    id,
+    session_id: data.sessionId,
+    page: data.page,
+    events: data.events,
+    size_bytes: sizeBytes,
+    created_at: new Date().toISOString(),
+  });
+  await writeJson('recordings.json', recordings);
+  return id;
+}
+
+export async function getRecordings(): Promise<Omit<SessionRecording, 'events'>[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('session_recordings')
+      .select('id, session_id, page, size_bytes, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) throw new Error(`getRecordings: ${error.message}`);
+    return (data as RecordingRow[]).map((r) => {
+      const { events: _, ...rest } = rowToRecording({ ...r, events: [] } as RecordingRow);
+      return rest;
+    });
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  return rows
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map((r) => {
+      const { events: _, ...rest } = rowToRecording(r);
+      return rest;
+    });
+}
+
+export async function getRecording(id: string): Promise<SessionRecording | null> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('session_recordings')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error) return null;
+    return rowToRecording(data as RecordingRow);
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  const row = rows.find((r) => r.id === id);
+  return row ? rowToRecording(row) : null;
+}
+
+export async function deleteRecording(id: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase()
+      .from('session_recordings')
+      .delete()
+      .eq('id', id);
+    if (error) throw new Error(`deleteRecording: ${error.message}`);
+    return;
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  await writeJson('recordings.json', rows.filter((r) => r.id !== id));
+}
+
+export async function deleteAllRecordings(): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase()
+      .from('session_recordings')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw new Error(`deleteAllRecordings: ${error.message}`);
+    return;
+  }
+  await writeJson('recordings.json', []);
+}
+
+export async function getRecordingsStorageBytes(): Promise<number> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .rpc('sum_recording_bytes');
+    if (error) return 0;
+    return (data as number) ?? 0;
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  return rows.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }

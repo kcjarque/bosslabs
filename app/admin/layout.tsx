@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/pending-payments', label: 'Pending' },
   { href: '/admin/templates', label: 'Templates' },
   { href: '/admin/promo-codes', label: 'Promo' },
+  { href: '/admin/recordings', label: 'Recordings' },
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/test-thank-you', label: 'QA' },
 ];

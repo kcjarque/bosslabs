@@ -437,3 +437,22 @@ on conflict (id) do update
   set name = excluded.name,
       body = excluded.body,
       updated_at = now();
+
+-- ─── Session recordings (rrweb) ──────────────────────────────────────────
+alter table settings add column if not exists recording_enabled boolean default false;
+
+create table if not exists session_recordings (
+  id uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  page text not null,
+  events jsonb not null default '[]'::jsonb,
+  size_bytes integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_recordings_created on session_recordings (created_at desc);
+alter table session_recordings enable row level security;
+
+create or replace function sum_recording_bytes()
+returns bigint language sql stable as $$
+  select coalesce(sum(size_bytes), 0) from session_recordings;
+$$;
