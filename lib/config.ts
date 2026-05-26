@@ -6,7 +6,7 @@ export const BRAND = {
 
 export const FOUNDERS = [
   {
-    name: 'Mikee Manago',
+    name: 'Mikey Manago',
     role: 'Co-Founder · Operator',
     bio: 'Ex-employee turned serial entrepreneur. Owns businesses in car detailing, real estate, healthcare, and more — every one built from zero with real customers, real cash, real outcomes. Came to AI for one reason: lower the cost of running a business so the operator wins. Lives in sales, relationships, and value creation.',
     shipped: ['Multi-business operator', 'Sales + relationships', 'Real PH revenue'],
@@ -147,8 +147,8 @@ export const PILLARS = [
 /* MEET YOUR HOST                                                        */
 /* --------------------------------------------------------------------- */
 export const HOST = {
-  name: 'Mikee Manago & Kyle Jarque',
-  shortName: 'Mikee & Kyle',
+  name: 'Mikey Manago & Kyle Jarque',
+  shortName: 'Mikey & Kyle',
   story:
     'Two Filipino operators who got tired of getting quoted ₱500K and 6-month timelines for apps we could ship ourselves. We taught ourselves Claude Code, built our entire stack — CRM, HR portal, AI agents — one night per tool, then started teaching what we learned. Today, 3,000+ Filipino business owners have followed the same playbook.',
   credentials: [
@@ -260,9 +260,9 @@ export const OFFER = {
     label: '₱1,997',
     crossed: '₱4,997',
     promise:
-      'A private 45-minute call with Mikee or Kyle. We audit your business, find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps to build. You walk away with a custom integration plan — not a course.',
+      'A private 45-minute call with Mikey or Kyle. We audit your business, find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps to build. You walk away with a custom integration plan — not a course.',
     inclusions: [
-      'Live 45-min 1:1 call (Zoom) with Mikee or Kyle',
+      'Live 45-min 1:1 call (Zoom) with Mikey or Kyle',
       'Custom AI Integration Map — top 3 apps for YOUR business',
       'Workflow leak audit — exact ₱amount you can reclaim',
       'Implementation roadmap (priority order, week-by-week)',

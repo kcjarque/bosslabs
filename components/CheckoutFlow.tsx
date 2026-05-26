@@ -517,7 +517,7 @@ function BumpCard({
             YES — Add a One-on-One AI Integration Audit
           </h3>
           <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-100 sm:text-[14px]">
-            A private 45-minute call with Mikee or Kyle. We audit your business,
+            A private 45-minute call with Mikey or Kyle. We audit your business,
             find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps
             to build. You walk away with a custom integration plan — not a course.
             Add it now at half the regular price, this page only.

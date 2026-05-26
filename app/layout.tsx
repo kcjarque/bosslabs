@@ -32,7 +32,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: 'BOSSLABS AI — Install an AI Command Center in Your Business',
   description:
-    'A live webinar by Mikee Manago & Kyle Jarque. We help operators install AI Command Centers that compound — without hiring an army.',
+    'A live webinar by Mikey Manago & Kyle Jarque. We help operators install AI Command Centers that compound — without hiring an army.',
   openGraph: {
     title: 'BOSSLABS AI — The Webinar',
     description:

@@ -213,12 +213,12 @@ insert into email_templates (id, name, subject, html) values
 ('free_welcome',
  'Free Registration Welcome',
  'You''re in, {{firstName}} — your Zoom link is below',
- '<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0B0D12"><p style="font-size:14px;letter-spacing:0.18em;text-transform:uppercase;color:#0093B8;margin:0 0 12px">BOSSLABS AI · You''re in</p><h1 style="font-family:Georgia,serif;font-weight:400;font-size:36px;line-height:1.1;margin:0 0 16px">Welcome, {{firstName}}.</h1><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Your seat for the BOSSLABS AI Webinar is locked in. Save the date and bring one workflow you want to automate.</p><p style="font-size:16px;line-height:1.55;margin:0 0 24px"><strong>{{webinarDate}} · {{webinarTime}} {{webinarTimezone}}</strong></p><p style="margin:0 0 24px"><a href="{{zoomJoinUrl}}" style="background:#00B8E6;color:#06070A;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Join the Zoom call</a></p><p style="font-size:14px;line-height:1.5;color:#454A57;margin:0 0 8px">One more step — unlock your Free Gift by joining the Messenger group:</p><p style="margin:0 0 32px"><a href="{{messengerGroupUrl}}" style="color:#0093B8">Join the BOSSLABS Messenger Group →</a></p><p style="font-size:12px;color:#6B6F7C">— Mikee &amp; Kyle<br>BOSSLABS AI · Built in Manila</p></div>'
+ '<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0B0D12"><p style="font-size:14px;letter-spacing:0.18em;text-transform:uppercase;color:#0093B8;margin:0 0 12px">BOSSLABS AI · You''re in</p><h1 style="font-family:Georgia,serif;font-weight:400;font-size:36px;line-height:1.1;margin:0 0 16px">Welcome, {{firstName}}.</h1><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Your seat for the BOSSLABS AI Webinar is locked in. Save the date and bring one workflow you want to automate.</p><p style="font-size:16px;line-height:1.55;margin:0 0 24px"><strong>{{webinarDate}} · {{webinarTime}} {{webinarTimezone}}</strong></p><p style="margin:0 0 24px"><a href="{{zoomJoinUrl}}" style="background:#00B8E6;color:#06070A;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Join the Zoom call</a></p><p style="font-size:14px;line-height:1.5;color:#454A57;margin:0 0 8px">One more step — unlock your Free Gift by joining the Messenger group:</p><p style="margin:0 0 32px"><a href="{{messengerGroupUrl}}" style="color:#0093B8">Join the BOSSLABS Messenger Group →</a></p><p style="font-size:12px;color:#6B6F7C">— Mikey &amp; Kyle<br>BOSSLABS AI · Built in Manila</p></div>'
 ),
 ('paid_confirmation',
  'Paid Ticket Confirmation',
  'Ticket confirmed — see you on {{webinarDate}}',
- '<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0B0D12"><p style="font-size:14px;letter-spacing:0.18em;text-transform:uppercase;color:#0093B8;margin:0 0 12px">Payment received · Seat locked</p><h1 style="font-family:Georgia,serif;font-weight:400;font-size:36px;line-height:1.1;margin:0 0 16px">Thanks, {{firstName}}.</h1><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Your BOSSLABS AI ticket is locked in.</p><p style="font-size:16px;line-height:1.55;margin:0 0 24px"><strong>Live on Zoom · {{webinarDate}} · {{webinarTime}} {{webinarTimezone}}</strong></p><p style="margin:0 0 24px"><a href="{{zoomJoinUrl}}" style="background:#00B8E6;color:#06070A;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Join the Zoom call</a></p><p style="font-size:14px;line-height:1.55;margin:0 0 8px"><strong>What''s included</strong></p><ul style="font-size:14px;line-height:1.7;margin:0 0 24px;padding-left:20px"><li>Claude Code Skills pack (configs, prompts, and reusable skills)</li><li>Founder Workflow Audit Checklist</li><li>7-day Zoom replay access</li><li>BOSSLABS Community access (Messenger + ongoing Q&amp;A)</li></ul><p style="font-size:14px;line-height:1.55;color:#454A57;margin:0 0 8px">Join the BOSSLABS Messenger group for reminders + post-event Q&amp;A:</p><p style="margin:0 0 32px"><a href="{{messengerGroupUrl}}" style="color:#0093B8">Join the Messenger Group →</a></p><p style="font-size:12px;color:#6B6F7C">— Mikee &amp; Kyle</p></div>'
+ '<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0B0D12"><p style="font-size:14px;letter-spacing:0.18em;text-transform:uppercase;color:#0093B8;margin:0 0 12px">Payment received · Seat locked</p><h1 style="font-family:Georgia,serif;font-weight:400;font-size:36px;line-height:1.1;margin:0 0 16px">Thanks, {{firstName}}.</h1><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Your BOSSLABS AI ticket is locked in.</p><p style="font-size:16px;line-height:1.55;margin:0 0 24px"><strong>Live on Zoom · {{webinarDate}} · {{webinarTime}} {{webinarTimezone}}</strong></p><p style="margin:0 0 24px"><a href="{{zoomJoinUrl}}" style="background:#00B8E6;color:#06070A;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Join the Zoom call</a></p><p style="font-size:14px;line-height:1.55;margin:0 0 8px"><strong>What''s included</strong></p><ul style="font-size:14px;line-height:1.7;margin:0 0 24px;padding-left:20px"><li>Claude Code Skills pack (configs, prompts, and reusable skills)</li><li>Founder Workflow Audit Checklist</li><li>7-day Zoom replay access</li><li>BOSSLABS Community access (Messenger + ongoing Q&amp;A)</li></ul><p style="font-size:14px;line-height:1.55;color:#454A57;margin:0 0 8px">Join the BOSSLABS Messenger group for reminders + post-event Q&amp;A:</p><p style="margin:0 0 32px"><a href="{{messengerGroupUrl}}" style="color:#0093B8">Join the Messenger Group →</a></p><p style="font-size:12px;color:#6B6F7C">— Mikey &amp; Kyle</p></div>'
 ),
 ('reminder_24h',
  '24-Hour Reminder',
@@ -259,7 +259,7 @@ One more step — unlock your Free Gift by joining the Messenger group:
 
 [Join the BOSSLABS Messenger Group →]({{messengerGroupUrl}})
 
-— Mikee & Kyle
+— Mikey & Kyle
 BOSSLABS AI · Built in Manila$$
 where id = 'free_welcome' and body is null;
 
@@ -281,7 +281,7 @@ Join the BOSSLABS Messenger group for reminders + post-event Q&A:
 
 [Join the Messenger Group →]({{messengerGroupUrl}})
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 where id = 'paid_confirmation' and body is null;
 
 update email_templates set body = $$^^24-hour reminder^^
@@ -332,7 +332,7 @@ Common gotcha: the GCash QR code on the next page expires in 60 seconds. If you'
 
 Stuck? Hit reply — we read every email.
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 )
 on conflict (id) do nothing;
 
@@ -356,7 +356,7 @@ Bring one workflow you want AI to automate — that&rsquo;s what we&rsquo;ll bui
 
 [[Add to calendar / Open Zoom]]({{zoomJoinUrl}})
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 ),
 ('reminder_48h',
  '48-hour reminder',
@@ -374,7 +374,7 @@ Want extra context before the call? Browse the Messenger group:
 
 [Join the BOSSLABS Messenger Group →]({{messengerGroupUrl}})
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 ),
 ('reminder_36h',
  '36-hour reminder',
@@ -393,7 +393,7 @@ Quick prep:
 
 [[Join the Zoom call]]({{zoomJoinUrl}})
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 ),
 ('reminder_12h',
  '12-hour reminder',
@@ -407,7 +407,7 @@ Final stretch. Webinar goes live **{{webinarDate}} at {{webinarTime}} {{webinarT
 
 [[Open the Zoom call]]({{zoomJoinUrl}})
 
-— Mikee & Kyle$$
+— Mikey & Kyle$$
 )
 on conflict (id) do nothing;
 
