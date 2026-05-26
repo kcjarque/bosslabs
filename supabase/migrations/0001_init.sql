@@ -336,6 +336,81 @@ Stuck? Hit reply — we read every email.
 )
 on conflict (id) do nothing;
 
+-- ─── Reminder sequence templates (60h / 48h / 36h / 12h) ─────────────────
+-- The 24h and 1h templates already exist above. These 4 fill out the
+-- six-step pre-webinar sequence fired by /api/cron/send-reminders.
+-- on conflict do nothing so admin edits in the markdown editor survive
+-- re-runs of this migration.
+insert into email_templates (id, name, subject, html, body) values
+('reminder_60h',
+ '60-hour reminder',
+ 'Your BOSSLABS AI seat — 2.5 days out',
+ '',
+ $$^^60-hour reminder^^
+
+# See you in 2.5 days, {{firstName}}.
+
+We&rsquo;re live **{{webinarDate}} at {{webinarTime}} {{webinarTimezone}}**. Drop it on your calendar so nothing pushes it.
+
+Bring one workflow you want AI to automate — that&rsquo;s what we&rsquo;ll build during the call.
+
+[[Add to calendar / Open Zoom]]({{zoomJoinUrl}})
+
+— Mikee & Kyle$$
+),
+('reminder_48h',
+ '48-hour reminder',
+ '2 days to BOSSLABS AI — block your calendar',
+ '',
+ $$^^48-hour reminder^^
+
+# 2 days out, {{firstName}}.
+
+Webinar lands **{{webinarDate}} at {{webinarTime}} {{webinarTimezone}}**. If you haven&rsquo;t added it to your calendar yet, do it now — meetings have a way of stacking on the day-of.
+
+[[Open the Zoom link]]({{zoomJoinUrl}})
+
+Want extra context before the call? Browse the Messenger group:
+
+[Join the BOSSLABS Messenger Group →]({{messengerGroupUrl}})
+
+— Mikee & Kyle$$
+),
+('reminder_36h',
+ '36-hour reminder',
+ 'Day after tomorrow — see you on Zoom',
+ '',
+ $$^^36-hour reminder^^
+
+# Day after tomorrow, {{firstName}}.
+
+Almost game time. The webinar goes live **{{webinarDate}} at {{webinarTime}} {{webinarTimezone}}**.
+
+Quick prep:
+- One workflow you&rsquo;d love AI to take off your plate
+- A laptop (not just a phone — we&rsquo;re live-building)
+- 5 minutes early so we start on time
+
+[[Join the Zoom call]]({{zoomJoinUrl}})
+
+— Mikee & Kyle$$
+),
+('reminder_12h',
+ '12-hour reminder',
+ '12 hours out — final prep',
+ '',
+ $$^^12-hour reminder^^
+
+# {{firstName}}, the doors open in 12 hours.
+
+Final stretch. Webinar goes live **{{webinarDate}} at {{webinarTime}} {{webinarTimezone}}** — that&rsquo;s tonight (or first thing tomorrow depending on your timezone).
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+— Mikee & Kyle$$
+)
+on conflict (id) do nothing;
+
 -- ─── Seed SMS templates ───────────────────────────────────────────────────
 insert into sms_templates (id, name, body) values
 ('free_welcome',

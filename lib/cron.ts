@@ -27,7 +27,7 @@ export function verifyCronAuth(req: Request): CronAuthResult {
  * Reminder state lives in `signup.metadata.reminders.<key>` so we never
  * double-send. Each value is the ISO timestamp it was sent.
  */
-export type ReminderKey = 'h24' | 'h1' | 'replay';
+export type ReminderKey = 'h60' | 'h48' | 'h36' | 'h24' | 'h12' | 'h1' | 'replay';
 
 export function hasReminderSent(
   metadata: Record<string, unknown> | undefined,

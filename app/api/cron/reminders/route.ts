@@ -1,12 +1,16 @@
 /**
  * Reminder cron — runs every 10 minutes (see vercel.json).
  *
- * For each signup with status registered/paid/attended:
- *   • T-24h ± 15min  → send `reminder_24h` (email + SMS)
- *   • T-1h  ± 15min  → send `reminder_1h`  (email + SMS)
+ * Six-step sequence fired for every paid/registered seat:
+ *   T-60h → email only   (reminder_60h)
+ *   T-48h → email only   (reminder_48h)
+ *   T-36h → email only   (reminder_36h)
+ *   T-24h → email + SMS  (reminder_24h)
+ *   T-12h → email only   (reminder_12h)
+ *   T-1h  → email + SMS  (reminder_1h)
  *
- * State is tracked in signup.metadata.reminders.{h24|h1} so we never
- * double-send. Returns a JSON summary for the Vercel Cron log.
+ * Each window is ±15 min wide so a 10-min cron can't miss it.
+ * State tracked in signup.metadata.reminders.{h60|h48|h36|h24|h12|h1}.
  */
 
 import { NextResponse } from 'next/server';
@@ -27,13 +31,25 @@ export const runtime = 'nodejs';
 // (Vercel Pro lets us go to 300s; 60s is plenty for our scale).
 export const maxDuration = 60;
 
-type Window = { key: ReminderKey; minLo: number; minHi: number; templateId: string; label: string };
+type Window = {
+  key: ReminderKey;
+  minLo: number;
+  minHi: number;
+  emailTemplate: string;
+  smsTemplate: string | null; // null = email only
+  label: string;
+};
+
+const H = 60; // minutes per hour shorthand
+const PAD = 15; // ±15 min window so a 10-min cron can't miss any slot
 
 const WINDOWS: Window[] = [
-  // T-24h reminder: fires when we're between 23h45m and 24h15m out.
-  { key: 'h24', minLo: 24 * 60 - 15, minHi: 24 * 60 + 15, templateId: 'reminder_24h', label: '24h' },
-  // T-1h reminder: fires when we're between 45m and 1h15m out.
-  { key: 'h1', minLo: 60 - 15, minHi: 60 + 15, templateId: 'reminder_1h', label: '1h' },
+  { key: 'h60', minLo: 60 * H - PAD, minHi: 60 * H + PAD, emailTemplate: 'reminder_60h', smsTemplate: null,        label: '60h' },
+  { key: 'h48', minLo: 48 * H - PAD, minHi: 48 * H + PAD, emailTemplate: 'reminder_48h', smsTemplate: null,        label: '48h' },
+  { key: 'h36', minLo: 36 * H - PAD, minHi: 36 * H + PAD, emailTemplate: 'reminder_36h', smsTemplate: null,        label: '36h' },
+  { key: 'h24', minLo: 24 * H - PAD, minHi: 24 * H + PAD, emailTemplate: 'reminder_24h', smsTemplate: 'reminder_24h', label: '24h' },
+  { key: 'h12', minLo: 12 * H - PAD, minHi: 12 * H + PAD, emailTemplate: 'reminder_12h', smsTemplate: null,        label: '12h' },
+  { key: 'h1',  minLo:  1 * H - PAD, minHi:  1 * H + PAD, emailTemplate: 'reminder_1h',  smsTemplate: 'reminder_1h',  label: '1h'  },
 ];
 
 function templateVars(signup: Signup, webinar: Awaited<ReturnType<typeof getWebinarInfo>>) {
@@ -87,13 +103,13 @@ export async function GET(req: Request) {
     const vars = templateVars(signup, webinar);
 
     // Email — best effort, never throws.
-    const emailRes = await sendEmail({ to: signup.email, templateId: active.templateId, vars });
+    const emailRes = await sendEmail({ to: signup.email, templateId: active.emailTemplate, vars });
     if (emailRes.ok) sent.email += 1;
     else sent.failed += 1;
 
-    // SMS — only if phone present.
-    if (signup.phone) {
-      const smsRes = await sendSms({ to: signup.phone, templateId: active.templateId, vars });
+    // SMS — only for 24h and 1h windows, and only if phone on file.
+    if (active.smsTemplate && signup.phone) {
+      const smsRes = await sendSms({ to: signup.phone, templateId: active.smsTemplate, vars });
       if (smsRes.ok) sent.sms += 1;
     }
 
