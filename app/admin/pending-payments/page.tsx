@@ -197,6 +197,10 @@ function PendingRow({ group, flagged }: { group: Group; flagged: boolean }) {
                   | 'complained';
               } | undefined)?.recoveryEmailStatus
             }
+            emailStatusAt={
+              (group.latest.metadata as { recoveryEmailStatusAt?: string } | undefined)
+                ?.recoveryEmailStatusAt
+            }
           />
           {group.phone && (
             <a

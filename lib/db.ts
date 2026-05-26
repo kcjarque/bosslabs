@@ -359,6 +359,53 @@ export async function findSignupByExternalId(externalId: string): Promise<Signup
 }
 
 /**
+ * Race-safe atomic update of the recovery email status. Delegates to the
+ * `upgrade_recovery_email_status` SQL function (see migration), which
+ * checks the new status's rank > current rank INSIDE the WHERE clause
+ * — preventing two concurrent webhook events (email.sent and
+ * email.delivered) from clobbering each other under Vercel's parallel
+ * function instances. Idempotent on replays.
+ *
+ * JSON-file fallback (local dev only) does a vanilla read-modify-write
+ * because there's only one process.
+ */
+export async function upgradeRecoveryEmailStatus(args: {
+  signupId: string;
+  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained';
+  statusAt: string;
+  bounceMessage?: string | null;
+}): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase().rpc('upgrade_recovery_email_status', {
+      p_signup_id: args.signupId,
+      p_new_status: args.status,
+      p_new_status_at: args.statusAt,
+      p_bounce_message: args.bounceMessage ?? null,
+    });
+    if (error) throw new Error(`Supabase upgradeRecoveryEmailStatus: ${error.message}`);
+    return;
+  }
+  const RANK: Record<string, number> = { sent: 1, delivered: 2, opened: 3, clicked: 4, bounced: 10, complained: 10 };
+  const list = await readJson<Signup[]>('signups.json', []);
+  const i = list.findIndex((s) => s.id === args.signupId);
+  if (i === -1) return;
+  const meta = (list[i].metadata ?? {}) as Record<string, unknown>;
+  const currentRank = RANK[(meta.recoveryEmailStatus as string) ?? ''] ?? 0;
+  const newRank = RANK[args.status] ?? 0;
+  if (newRank <= currentRank) return;
+  list[i] = {
+    ...list[i],
+    metadata: {
+      ...meta,
+      recoveryEmailStatus: args.status,
+      recoveryEmailStatusAt: args.statusAt,
+      ...(args.bounceMessage ? { recoveryEmailBounce: args.bounceMessage } : {}),
+    },
+  };
+  await writeJson('signups.json', list);
+}
+
+/**
  * Find a signup by the Resend message id stored in
  * metadata.recoveryEmailMessageId. Used by the Resend webhook to map
  * delivery/bounce/complaint events back to the signup we sent.

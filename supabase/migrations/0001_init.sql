@@ -74,6 +74,62 @@ alter table settings add column if not exists webinar_timezone text default 'PHT
 alter table settings add column if not exists webinar_starts_at_iso text default '';
 alter table settings add column if not exists resend_reply_to text default 'hello@bosslabs.ai';
 
+-- ─── Recovery email status upgrade (race-safe) ────────────────────────────
+-- Resend fires email.sent and email.delivered for the same email within
+-- milliseconds. The webhook handler used to do a read-modify-write that
+-- raced under Vercel's concurrent function instances — two events could
+-- both read currentStatus=null, both pass the rank check, and whichever
+-- wrote LAST won (often leaving status='sent' even when 'delivered' had
+-- arrived).
+--
+-- This function does the check + update atomically: the rank comparison
+-- lives inside the WHERE clause, so Postgres's row-level locking
+-- prevents the second update from seeing stale state. Idempotent —
+-- replays of the same event are no-ops because new_rank > current_rank
+-- is false the second time.
+create or replace function upgrade_recovery_email_status(
+  p_signup_id text,
+  p_new_status text,
+  p_new_status_at timestamptz,
+  p_bounce_message text default null
+) returns void
+language plpgsql
+as $$
+declare
+  v_new_rank int;
+begin
+  v_new_rank := case p_new_status
+    when 'sent' then 1
+    when 'delivered' then 2
+    when 'opened' then 3
+    when 'clicked' then 4
+    when 'bounced' then 10
+    when 'complained' then 10
+    else 0
+  end;
+
+  update signups
+  set metadata = metadata
+    || jsonb_build_object(
+      'recoveryEmailStatus', p_new_status,
+      'recoveryEmailStatusAt', p_new_status_at
+    )
+    || (case when p_bounce_message is not null
+        then jsonb_build_object('recoveryEmailBounce', p_bounce_message)
+        else '{}'::jsonb end)
+  where id = p_signup_id
+  and v_new_rank > (case coalesce(metadata->>'recoveryEmailStatus', '')
+      when 'sent' then 1
+      when 'delivered' then 2
+      when 'opened' then 3
+      when 'clicked' then 4
+      when 'bounced' then 10
+      when 'complained' then 10
+      else 0
+    end);
+end;
+$$;
+
 -- ─── Page views ───────────────────────────────────────────────────────────
 -- Lightweight homegrown traffic tracker. The PageviewTracker client
 -- component beacons one row per page mount; the admin dashboard reads

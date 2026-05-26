@@ -29,8 +29,18 @@ function timeSince(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-/** Map a Resend webhook status to a compact label + tailwind palette. */
-function emailStatusBadge(status: EmailStatus): { label: string; cls: string } {
+/**
+ * Map a Resend webhook status to a compact label + tailwind palette.
+ *
+ * Special case for 'sent' without a confirmed webhook update: the row
+ * was either sent before the Resend webhook was configured, OR is in
+ * flight and we haven't received email.delivered yet. The caller passes
+ * hasWebhookEvent=true to distinguish.
+ */
+function emailStatusBadge(
+  status: EmailStatus,
+  hasWebhookEvent: boolean,
+): { label: string; cls: string } {
   switch (status) {
     case 'delivered':
       return { label: 'Delivered', cls: 'bg-emerald-100 text-emerald-800' };
@@ -44,7 +54,9 @@ function emailStatusBadge(status: EmailStatus): { label: string; cls: string } {
       return { label: 'Spam ✗', cls: 'bg-red-100 text-red-800' };
     case 'sent':
     default:
-      return { label: 'Accepted (no delivery event yet)', cls: 'bg-amber-100 text-amber-800' };
+      return hasWebhookEvent
+        ? { label: 'Accepted (no delivery event yet)', cls: 'bg-amber-100 text-amber-800' }
+        : { label: 'Sent (no tracking)', cls: 'bg-slate-100 text-slate-600' };
   }
 }
 
@@ -56,6 +68,7 @@ export function SendRecoveryButton({
   alreadySentAt,
   smsSentAt,
   emailStatus,
+  emailStatusAt,
 }: {
   signupId: string;
   firstName: string;
@@ -64,6 +77,10 @@ export function SendRecoveryButton({
   alreadySentAt?: string;
   smsSentAt?: string;
   emailStatus?: EmailStatus;
+  /** When the Resend webhook last touched this row. Null/undefined for
+   *  rows sent before the webhook was configured — those get a distinct
+   *  "Sent (no tracking)" pill instead of "Accepted (no delivery yet)". */
+  emailStatusAt?: string;
 }) {
   const [emailSentAt, setEmailSentAt] = useState<string | null>(alreadySentAt ?? null);
   const [smsAt, setSmsAt] = useState<string | null>(smsSentAt ?? null);
@@ -131,7 +148,11 @@ export function SendRecoveryButton({
     }
   }
 
-  const emailBadge = status ? emailStatusBadge(status) : null;
+  // If we have a recoveryEmailStatusAt timestamp, the Resend webhook has
+  // touched this row at least once — so a stalled "sent" status really
+  // means "still in flight". Otherwise, this row predates the webhook
+  // config and "sent" is the final state we'll ever see.
+  const emailBadge = status ? emailStatusBadge(status, Boolean(emailStatusAt)) : null;
 
   return (
     <div className="flex flex-col items-end gap-1.5">

@@ -21,7 +21,7 @@
 
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { findSignupByRecoveryMessageId, updateSignup } from '@/lib/db';
+import { findSignupByRecoveryMessageId, upgradeRecoveryEmailStatus } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -98,15 +98,9 @@ function statusFromEvent(type: string | undefined): string | null {
 
 // Status ordering — never downgrade. A 'delivered' event arriving after an
 // 'opened' (out-of-order webhook delivery is allowed by Resend) shouldn't
-// blow away the richer signal.
-const STATUS_RANK: Record<string, number> = {
-  sent: 1,
-  delivered: 2,
-  opened: 3,
-  clicked: 4,
-  bounced: 10,
-  complained: 10,
-};
+// blow away the richer signal. The rank check now lives in the Postgres
+// function `upgrade_recovery_email_status` so it's atomic with the write —
+// see lib/db.ts upgradeRecoveryEmailStatus.
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -136,23 +130,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, matched: false });
   }
 
-  const meta = (signup.metadata ?? {}) as Record<string, unknown>;
-  const currentStatus = (meta.recoveryEmailStatus as string | undefined) ?? null;
-  const currentRank = currentStatus ? STATUS_RANK[currentStatus] ?? 0 : 0;
-  const newRank = STATUS_RANK[newStatus] ?? 0;
-  if (newRank < currentRank) {
-    return NextResponse.json({ ok: true, skipped: 'downgrade' });
-  }
-
-  await updateSignup(signup.id, {
-    metadata: {
-      ...meta,
-      recoveryEmailStatus: newStatus,
-      recoveryEmailStatusAt: event.created_at || new Date().toISOString(),
-      ...(newStatus === 'bounced'
-        ? { recoveryEmailBounce: event.data?.bounce?.message || event.data?.bounce?.type || 'bounced' }
-        : {}),
-    },
+  // Atomic upgrade — the rank check + write happen inside Postgres so
+  // concurrent events (email.sent + email.delivered fire ms apart) can't
+  // clobber each other. See upgradeRecoveryEmailStatus / the SQL function
+  // for the race-safety guarantee.
+  await upgradeRecoveryEmailStatus({
+    signupId: signup.id,
+    status: newStatus as 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained',
+    statusAt: event.created_at || new Date().toISOString(),
+    bounceMessage:
+      newStatus === 'bounced'
+        ? event.data?.bounce?.message || event.data?.bounce?.type || 'bounced'
+        : null,
   });
 
   return NextResponse.json({ ok: true, status: newStatus });
