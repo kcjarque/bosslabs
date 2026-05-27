@@ -82,6 +82,69 @@ export function SignupsTable({
   const [bulkTemplateId, setBulkTemplateId] = useState('');
   const [isPending, startTransition] = useTransition();
 
+  // Progressive bulk-send state — keeps the UI responsive instead of
+  // blocking on a single long server action. The user can keep scrolling,
+  // opening profiles, etc. while emails go out batch-by-batch.
+  type BulkSendProgress = {
+    total: number;
+    done: number;
+    sent: number;
+    failed: number;
+    noPhone: number;
+    channel: 'email' | 'sms';
+    templateId: string;
+    status: 'sending' | 'done';
+  };
+  const [bulkSendProgress, setBulkSendProgress] =
+    useState<BulkSendProgress | null>(null);
+
+  async function startBulkSend(
+    ids: string[],
+    channel: 'email' | 'sms',
+    templateId: string,
+  ) {
+    if (!onBulkSend) return;
+    const BATCH = 5; // server still does N sequentially internally; smaller
+    // batches mean snappier progress updates + faster failover.
+    setBulkSendProgress({
+      total: ids.length,
+      done: 0,
+      sent: 0,
+      failed: 0,
+      noPhone: 0,
+      channel,
+      templateId,
+      status: 'sending',
+    });
+
+    let done = 0;
+    let sent = 0;
+    let failed = 0;
+    let noPhone = 0;
+
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH);
+      try {
+        const res = await onBulkSend(batch, channel, templateId);
+        sent += res.sent;
+        failed += res.failed;
+        noPhone += res.noPhone;
+      } catch (err) {
+        // Treat whole batch as failed if the server call itself rejected.
+        failed += batch.length;
+      }
+      done += batch.length;
+      // setState inside the loop is fine — React batches DOM updates and
+      // each chunk is awaited so we don't fire setState faster than render.
+      setBulkSendProgress((prev) =>
+        prev ? { ...prev, done, sent, failed, noPhone } : prev,
+      );
+    }
+
+    setBulkSendProgress((prev) => (prev ? { ...prev, status: 'done' } : prev));
+    router.refresh();
+  }
+
   function openCustomer(id: string) {
     router.push(`/admin/customers/${id}`);
   }
@@ -210,7 +273,13 @@ export function SignupsTable({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={!bulkTemplateId || isPending}
+                // Disable only while another bulk send is actively running.
+                // The user can still browse / select / etc. — the toast
+                // keeps progress visible at the corner of the screen.
+                disabled={
+                  !bulkTemplateId ||
+                  bulkSendProgress?.status === 'sending'
+                }
                 onClick={() => {
                   const ids = Array.from(selectedIds);
                   const channel = bulkChannel;
@@ -222,19 +291,12 @@ export function SignupsTable({
                     )
                   )
                     return;
-                  startTransition(async () => {
-                    const res = await onBulkSend(ids, channel, tid);
-                    const lines = [
-                      `Sent ${res.sent} ${channel}${res.sent === 1 ? '' : 's'}.`,
-                    ];
-                    if (res.failed > 0) lines.push(`Failed: ${res.failed}.`);
-                    if (res.noPhone > 0)
-                      lines.push(`Skipped (no phone): ${res.noPhone}.`);
-                    alert(lines.join('\n'));
-                    setBulkTemplateId('');
-                    clearSelection();
-                    router.refresh();
-                  });
+                  // Clear the selection + template picker right away so the
+                  // user can keep doing other things. The send runs in the
+                  // background and shows progress in the floating toast.
+                  setBulkTemplateId('');
+                  clearSelection();
+                  void startBulkSend(ids, channel, tid);
                 }}
               >
                 Send
@@ -475,6 +537,82 @@ export function SignupsTable({
         </div>
       </div>
 
+      {/* Floating progress toast for the non-blocking bulk send.
+          Sits bottom-right so it doesn't cover the table content the
+          user is still trying to interact with. */}
+      {bulkSendProgress && (
+        <div className="fixed bottom-4 right-4 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-900">
+                {bulkSendProgress.status === 'sending'
+                  ? `Sending ${bulkSendProgress.channel}…`
+                  : 'Done.'}
+              </div>
+              <div className="mt-0.5 text-[11px] text-slate-500">
+                Template: {bulkSendProgress.templateId}
+              </div>
+            </div>
+            {bulkSendProgress.status === 'done' && (
+              <button
+                type="button"
+                onClick={() => setBulkSendProgress(null)}
+                aria-label="Dismiss"
+                className="text-slate-400 hover:text-slate-700"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3">
+            <div className="flex justify-between text-[11px] text-slate-500">
+              <span>
+                {bulkSendProgress.done} / {bulkSendProgress.total}
+              </span>
+              <span>
+                {Math.round(
+                  (bulkSendProgress.done / bulkSendProgress.total) * 100,
+                )}
+                %
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  bulkSendProgress.status === 'done'
+                    ? 'bg-emerald-500'
+                    : 'bg-cyan-500'
+                }`}
+                style={{
+                  width: `${(bulkSendProgress.done / bulkSendProgress.total) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+            <div className="rounded-md bg-emerald-50 px-2 py-1">
+              <div className="font-semibold text-emerald-700">
+                {bulkSendProgress.sent}
+              </div>
+              <div className="text-emerald-600">Sent</div>
+            </div>
+            <div className="rounded-md bg-red-50 px-2 py-1">
+              <div className="font-semibold text-red-700">
+                {bulkSendProgress.failed}
+              </div>
+              <div className="text-red-600">Failed</div>
+            </div>
+            <div className="rounded-md bg-slate-100 px-2 py-1">
+              <div className="font-semibold text-slate-700">
+                {bulkSendProgress.noPhone}
+              </div>
+              <div className="text-slate-500">No phone</div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
