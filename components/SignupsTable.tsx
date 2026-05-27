@@ -58,7 +58,7 @@ export function SignupsTable({
   onBulkSubscribe?: (
     signupIds: string[],
     sequenceId: string,
-  ) => Promise<{ count: number }>;
+  ) => Promise<{ subscribed: number; skipped: number }>;
   onBulkDelete?: (signupIds: string[]) => Promise<{ count: number }>;
 }) {
   const router = useRouter();
@@ -167,7 +167,16 @@ export function SignupsTable({
                     const sid = bulkSeqId;
                     startTransition(async () => {
                       const res = await onBulkSubscribe(ids, sid);
-                      alert(`Subscribed ${res.count} customer${res.count === 1 ? '' : 's'}.`);
+                      const lines: string[] = [];
+                      lines.push(
+                        `Subscribed ${res.subscribed} customer${res.subscribed === 1 ? '' : 's'}.`,
+                      );
+                      if (res.skipped > 0) {
+                        lines.push(
+                          `Skipped ${res.skipped} already subscribed (via list or manual).`,
+                        );
+                      }
+                      alert(lines.join('\n'));
                       setBulkSeqId('');
                       clearSelection();
                       router.refresh();

@@ -1985,22 +1985,124 @@ export async function subscribeToSequence(
   return rowToSubscription(data as SequenceSubscriptionRow);
 }
 
-/** Bulk subscribe many customers to one sequence in a single round-trip. */
+/**
+ * Bulk subscribe many customers to one sequence. Filters out anyone
+ * already in the sequence — either via the sequence's list filter OR
+ * via an existing manual subscription. Returns counts for UI feedback.
+ *
+ * Why filter? A manual subscription overrides the list-driven anchor
+ * with subscribed_at, which would silently restart the schedule for
+ * customers who were already getting the right cadence via the list.
+ * The cron's union also already covers them, so a second subscription
+ * is pure noise.
+ */
 export async function subscribeManyToSequence(
   sequenceId: string,
   signupIds: string[],
-): Promise<number> {
-  if (signupIds.length === 0) return 0;
-  if (!isSupabaseConfigured()) throw new Error('subscribeManyToSequence: Supabase not configured');
+): Promise<{ subscribed: number; skipped: number }> {
+  if (signupIds.length === 0) return { subscribed: 0, skipped: 0 };
+  if (!isSupabaseConfigured())
+    throw new Error('subscribeManyToSequence: Supabase not configured');
+
+  // Resolve who's already covered, in either way.
+  const sequence = await getSequence(sequenceId);
+  const alreadyIn = new Set<string>();
+  if (sequence) {
+    const list = await getList(sequence.listId);
+    if (list) {
+      const members = await computeListMembers(list);
+      for (const m of members) alreadyIn.add(m.id);
+    }
+  }
+  const existingSubs = await getSequenceSubscriptions(sequenceId);
+  for (const s of existingSubs) alreadyIn.add(s.signupId);
+
+  const fresh = signupIds.filter((id) => !alreadyIn.has(id));
+  const skipped = signupIds.length - fresh.length;
+
+  if (fresh.length === 0) return { subscribed: 0, skipped };
+
   const { data, error } = await getSupabase()
     .from('sequence_subscriptions')
     .upsert(
-      signupIds.map((sid) => ({ sequence_id: sequenceId, signup_id: sid })),
+      fresh.map((sid) => ({ sequence_id: sequenceId, signup_id: sid })),
       { onConflict: 'sequence_id,signup_id', ignoreDuplicates: false },
     )
     .select('id');
   if (error) throw new Error(`subscribeManyToSequence: ${error.message}`);
-  return data?.length ?? signupIds.length;
+  return { subscribed: data?.length ?? fresh.length, skipped };
+}
+
+/**
+ * Find every manual subscription that's redundant — i.e. the customer
+ * is already in the sequence via the list filter — and remove it.
+ * Used both as a one-time cleanup and called eagerly so a dropping-into-
+ * the-list event (e.g. someone newly marked paid) self-heals duplicates.
+ *
+ * Returns how many redundant rows were deleted, plus a per-sequence
+ * breakdown for diagnostics.
+ */
+export async function cleanupRedundantSubscriptions(): Promise<{
+  deleted: number;
+  byCustomer: Array<{ signupId: string; sequenceId: string; sequenceName: string }>;
+}> {
+  if (!isSupabaseConfigured()) return { deleted: 0, byCustomer: [] };
+
+  const sb = getSupabase();
+  // Pull all manual subs.
+  const subsResult = await sb.from('sequence_subscriptions').select('id, sequence_id, signup_id');
+  if (subsResult.error) {
+    if (isMissingTableError(subsResult.error.message)) return { deleted: 0, byCustomer: [] };
+    throw new Error(`cleanupRedundantSubscriptions subs: ${subsResult.error.message}`);
+  }
+  const allSubs = (subsResult.data ?? []) as Array<{
+    id: string;
+    sequence_id: string;
+    signup_id: string;
+  }>;
+  if (allSubs.length === 0) return { deleted: 0, byCustomer: [] };
+
+  // Group by sequence to amortize the list-resolution.
+  const bySequence = new Map<string, Array<{ id: string; signupId: string }>>();
+  for (const s of allSubs) {
+    const arr = bySequence.get(s.sequence_id) ?? [];
+    arr.push({ id: s.id, signupId: s.signup_id });
+    bySequence.set(s.sequence_id, arr);
+  }
+
+  const toDelete: string[] = [];
+  const breakdown: Array<{ signupId: string; sequenceId: string; sequenceName: string }> = [];
+
+  for (const [sequenceId, members] of bySequence.entries()) {
+    const sequence = await getSequence(sequenceId);
+    if (!sequence) continue;
+    const list = await getList(sequence.listId);
+    if (!list) continue;
+    const listMembers = await computeListMembers(list);
+    const listMemberIds = new Set(listMembers.map((m) => m.id));
+
+    for (const sub of members) {
+      if (listMemberIds.has(sub.signupId)) {
+        toDelete.push(sub.id);
+        breakdown.push({
+          signupId: sub.signupId,
+          sequenceId,
+          sequenceName: sequence.name,
+        });
+      }
+    }
+  }
+
+  if (toDelete.length === 0) return { deleted: 0, byCustomer: [] };
+
+  const del = await sb
+    .from('sequence_subscriptions')
+    .delete()
+    .in('id', toDelete)
+    .select('id');
+  if (del.error) throw new Error(`cleanupRedundantSubscriptions delete: ${del.error.message}`);
+
+  return { deleted: del.data?.length ?? toDelete.length, byCustomer: breakdown };
 }
 
 export async function unsubscribeFromSequence(

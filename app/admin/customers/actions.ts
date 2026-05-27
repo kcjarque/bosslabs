@@ -5,20 +5,21 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { deleteSignups, subscribeManyToSequence } from '@/lib/db';
 
 /**
- * Bulk-subscribe the given customers to a sequence. Idempotent — anyone
- * already subscribed keeps their original subscribed_at (Supabase upsert
- * with onConflict: do nothing).
+ * Bulk-subscribe the given customers to a sequence. Server-side filter
+ * skips anyone already covered by the sequence's list filter OR by an
+ * existing manual subscription, so accidentally bulk-subscribing a list
+ * that already feeds the sequence is a no-op rather than a noisy dupe.
  */
 export async function bulkSubscribeAction(
   signupIds: string[],
   sequenceId: string,
-): Promise<{ count: number }> {
+): Promise<{ subscribed: number; skipped: number }> {
   requireAdmin();
   if (!sequenceId) throw new Error('sequenceId required');
   if (signupIds.length === 0) throw new Error('No customers selected');
-  const count = await subscribeManyToSequence(sequenceId, signupIds);
+  const result = await subscribeManyToSequence(sequenceId, signupIds);
   revalidatePath('/admin/customers');
-  return { count };
+  return result;
 }
 
 /**
