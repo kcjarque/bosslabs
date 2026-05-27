@@ -9,14 +9,52 @@
  */
 
 /**
+ * Common timezone abbreviations the admin might type or that come from
+ * legacy seed data (the original `settings.webinar_timezone` defaulted
+ * to 'PHT'). Intl.DateTimeFormat doesn't recognize these, so we map them
+ * to canonical IANA names BEFORE asking for the offset. Without this
+ * mapping, getOffsetInTimezone silently returns +00:00 and the stored
+ * ISO ends up 8 hours off — sequences fire at the wrong wall-clock time.
+ */
+const TIMEZONE_ALIASES: Record<string, string> = {
+  PHT: 'Asia/Manila',
+  PHST: 'Asia/Manila',
+  SGT: 'Asia/Singapore',
+  HKT: 'Asia/Hong_Kong',
+  JST: 'Asia/Tokyo',
+  KST: 'Asia/Seoul',
+  WIB: 'Asia/Jakarta',
+  AEST: 'Australia/Sydney',
+  PST: 'America/Los_Angeles',
+  PDT: 'America/Los_Angeles',
+  EST: 'America/New_York',
+  EDT: 'America/New_York',
+  CST: 'America/Chicago',
+  CDT: 'America/Chicago',
+  MST: 'America/Denver',
+  MDT: 'America/Denver',
+  GMT: 'Etc/GMT',
+  BST: 'Europe/London',
+  CET: 'Europe/Berlin',
+  CEST: 'Europe/Berlin',
+};
+
+export function resolveTimezone(input: string): string {
+  if (!input) return 'UTC';
+  return TIMEZONE_ALIASES[input.toUpperCase()] ?? input;
+}
+
+/**
  * Get the offset of an IANA timezone at a given instant, formatted as
  * "+HH:MM" or "-HH:MM". Falls back to "+00:00" if the timezone is
- * unparseable.
+ * unparseable — but ONLY after running through resolveTimezone so common
+ * abbreviations (PHT, SGT, etc.) get mapped to IANA first.
  */
 function getOffsetInTimezone(instant: Date, timezone: string): string {
+  const tz = resolveTimezone(timezone);
   try {
     const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
+      timeZone: tz,
       timeZoneName: 'longOffset',
       hour: 'numeric',
     });
