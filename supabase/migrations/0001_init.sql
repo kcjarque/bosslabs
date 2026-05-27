@@ -600,6 +600,22 @@ where not exists (
   where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid
 );
 
+-- ─── Manual sequence subscriptions ────────────────────────────────────
+-- Beyond the list-driven audience for each sequence, an admin can also
+-- subscribe a specific customer to a sequence directly from their profile.
+-- The cron treats the union of (list members ∪ manual subs) as the audience.
+-- For after_subscribe schedules, subscribed_at is used as the anchor.
+
+create table if not exists sequence_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  sequence_id uuid not null references sequences(id) on delete cascade,
+  signup_id text not null references signups(id) on delete cascade,
+  subscribed_at timestamptz not null default now(),
+  unique (sequence_id, signup_id)
+);
+create index if not exists sequence_subscriptions_signup_idx on sequence_subscriptions (signup_id);
+create index if not exists sequence_subscriptions_seq_idx on sequence_subscriptions (sequence_id);
+
 -- ─── Link signups + lists to events ───────────────────────────────────
 -- Signups get tagged with an event_id at registration time. This is what
 -- lets a list be scoped to a specific event ("attendees of June workshop"

@@ -1921,3 +1921,101 @@ export async function getSequenceStepSendCounts(
   }
   return counts;
 }
+
+/* ─── Manual sequence subscriptions ───────────────────────────────────── */
+
+export type SequenceSubscription = {
+  id: string;
+  sequenceId: string;
+  signupId: string;
+  subscribedAt: string;
+};
+
+type SequenceSubscriptionRow = {
+  id: string;
+  sequence_id: string;
+  signup_id: string;
+  subscribed_at: string;
+};
+
+function rowToSubscription(r: SequenceSubscriptionRow): SequenceSubscription {
+  return {
+    id: r.id,
+    sequenceId: r.sequence_id,
+    signupId: r.signup_id,
+    subscribedAt: r.subscribed_at,
+  };
+}
+
+/** Subscribe a customer to a sequence manually. Idempotent. */
+export async function subscribeToSequence(
+  sequenceId: string,
+  signupId: string,
+): Promise<SequenceSubscription> {
+  if (!isSupabaseConfigured()) throw new Error('subscribeToSequence: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('sequence_subscriptions')
+    .upsert(
+      { sequence_id: sequenceId, signup_id: signupId },
+      { onConflict: 'sequence_id,signup_id', ignoreDuplicates: false },
+    )
+    .select('*')
+    .single();
+  if (error) throw new Error(`subscribeToSequence: ${error.message}`);
+  return rowToSubscription(data as SequenceSubscriptionRow);
+}
+
+export async function unsubscribeFromSequence(
+  sequenceId: string,
+  signupId: string,
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('sequence_subscriptions')
+    .delete()
+    .eq('sequence_id', sequenceId)
+    .eq('signup_id', signupId);
+  if (error) throw new Error(`unsubscribeFromSequence: ${error.message}`);
+}
+
+/**
+ * Treat a "relation does not exist" error as an empty result so the
+ * customer profile / cron keep working before the migration is applied
+ * on a given Supabase. Any other error is re-thrown.
+ */
+function isMissingTableError(msg: string): boolean {
+  return /does not exist|schema cache|PGRST205/i.test(msg);
+}
+
+/** All manual subscriptions for one customer. */
+export async function getCustomerSubscriptions(
+  signupId: string,
+): Promise<SequenceSubscription[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('sequence_subscriptions')
+    .select('*')
+    .eq('signup_id', signupId);
+  if (error) {
+    if (isMissingTableError(error.message)) return [];
+    throw new Error(`getCustomerSubscriptions: ${error.message}`);
+  }
+  return (data as SequenceSubscriptionRow[]).map(rowToSubscription);
+}
+
+/** All manual subscriptions for one sequence — used by the cron to merge
+ *  into the list-driven audience. */
+export async function getSequenceSubscriptions(
+  sequenceId: string,
+): Promise<SequenceSubscription[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('sequence_subscriptions')
+    .select('*')
+    .eq('sequence_id', sequenceId);
+  if (error) {
+    if (isMissingTableError(error.message)) return [];
+    throw new Error(`getSequenceSubscriptions: ${error.message}`);
+  }
+  return (data as SequenceSubscriptionRow[]).map(rowToSubscription);
+}

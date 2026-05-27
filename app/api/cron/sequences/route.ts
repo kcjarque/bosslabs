@@ -34,6 +34,8 @@ import {
   getEvent,
   computeListMembers,
   getSequenceSendRecipients,
+  getSequenceSubscriptions,
+  getSignupById,
   recordSequenceSend,
   type Signup,
   type SequenceStep,
@@ -120,9 +122,31 @@ export async function GET(req: Request) {
 
     const event = sequence.eventId ? await getEvent(sequence.eventId) : null;
     const steps = await getSequenceSteps(sequence.id);
-    // Pass the full list (not just filterTypes) so event scoping kicks in:
-    // a list with event_id set only matches signups tagged with that event.
-    const members = await computeListMembers(list);
+    // Audience = list members (dynamic filter) ∪ manual subscriptions.
+    // For each customer we remember their effective "subscribed_at" anchor:
+    //   - list-only members → their signup.createdAt
+    //   - manually subscribed → sequence_subscriptions.subscribed_at
+    // After_subscribe schedules use this anchor; before/after_event ignore it.
+    const audience = new Map<string, { signup: Signup; subscribedAt: string }>();
+    const listMembers = await computeListMembers(list);
+    for (const m of listMembers) {
+      audience.set(m.id, { signup: m, subscribedAt: m.createdAt });
+    }
+    const manualSubs = await getSequenceSubscriptions(sequence.id);
+    for (const sub of manualSubs) {
+      // If already in via list, override with manual subscribed_at so the
+      // sequence effectively restarts "from now" for that customer.
+      const existing = audience.get(sub.signupId);
+      if (existing) {
+        audience.set(sub.signupId, {
+          signup: existing.signup,
+          subscribedAt: sub.subscribedAt,
+        });
+      } else {
+        const s = await getSignupById(sub.signupId);
+        if (s) audience.set(sub.signupId, { signup: s, subscribedAt: sub.subscribedAt });
+      }
+    }
 
     for (const step of steps) {
       if (!step.active) continue;
@@ -134,19 +158,21 @@ export async function GET(req: Request) {
       if (step.scheduleType === 'before_event' || step.scheduleType === 'after_event') {
         const target = eventTargetTime(step, event?.startsAtIso ?? null);
         if (target === null) continue;
-        // Same target for everyone in the list.
+        // Same target for everyone in the audience.
         const delta = Math.abs(now - target);
         if (delta > TOLERANCE_MS) continue;
-        targets.push(...members);
+        for (const { signup } of audience.values()) targets.push(signup);
       } else {
-        // after_subscribe — per-recipient target based on signup createdAt.
+        // after_subscribe — per-recipient target based on each member's
+        // own anchor (signup.createdAt for list-only, subscribed_at for
+        // manual subs). This lets manual subscription restart the sequence.
         const offsetMs = step.hoursOffset * 60 * 60 * 1000;
-        for (const m of members) {
-          const created = Date.parse(m.createdAt);
-          if (Number.isNaN(created)) continue;
-          const target = created + offsetMs;
+        for (const { signup, subscribedAt } of audience.values()) {
+          const anchor = Date.parse(subscribedAt);
+          if (Number.isNaN(anchor)) continue;
+          const target = anchor + offsetMs;
           if (Math.abs(now - target) <= TOLERANCE_MS) {
-            targets.push(m);
+            targets.push(signup);
           }
         }
         if (targets.length === 0) continue;

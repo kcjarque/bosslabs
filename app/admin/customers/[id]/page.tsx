@@ -5,14 +5,22 @@ import {
   getSignupById,
   getEvents,
   getLists,
+  getSequences,
+  getCustomerSubscriptions,
   getCustomerSequenceSends,
   computeListMembers,
   type Signup,
   type CustomerSequenceSend,
   type ListModel,
+  type SequenceModel,
 } from '@/lib/db';
 import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
+import { CustomerSequences } from '@/components/CustomerSequences';
+import {
+  subscribeCustomerAction,
+  unsubscribeCustomerAction,
+} from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,10 +139,19 @@ export default async function CustomerProfilePage({
 }) {
   requireAdmin();
 
-  const [customer, events, lists, sequenceSends] = await Promise.all([
+  const [
+    customer,
+    events,
+    lists,
+    sequences,
+    customerSubscriptions,
+    sequenceSends,
+  ] = await Promise.all([
     getSignupById(params.id),
     getEvents(),
     getLists(),
+    getSequences(),
+    getCustomerSubscriptions(params.id),
     getCustomerSequenceSends(params.id),
   ]);
   if (!customer) notFound();
@@ -144,11 +161,30 @@ export default async function CustomerProfilePage({
   // current signups table — N+1 here is fine because typical N is small
   // (5–10 lists) and each computeListMembers is a single getSignups+filter.
   const memberLists: ListModel[] = [];
+  const memberListIds = new Set<string>();
   for (const list of lists) {
     const members = await computeListMembers(list);
     if (members.some((m) => m.id === customer.id)) {
       memberLists.push(list);
+      memberListIds.add(list.id);
     }
+  }
+
+  // Sequences the customer is in via their list memberships.
+  const sequencesViaList: Array<{ sequence: SequenceModel; listName: string }> = [];
+  for (const seq of sequences) {
+    if (!seq.active) continue;
+    if (memberListIds.has(seq.listId)) {
+      const listName = memberLists.find((l) => l.id === seq.listId)?.name ?? '(list)';
+      sequencesViaList.push({ sequence: seq, listName });
+    }
+  }
+
+  // Manual subscriptions (joined with their sequence row for the name).
+  const sequencesManual: Array<{ sequence: SequenceModel; subscribedAt: string }> = [];
+  for (const sub of customerSubscriptions) {
+    const seq = sequences.find((s) => s.id === sub.sequenceId);
+    if (seq) sequencesManual.push({ sequence: seq, subscribedAt: sub.subscribedAt });
   }
 
   const meta = (customer.metadata as Record<string, unknown> | undefined) ?? {};
@@ -275,8 +311,17 @@ export default async function CustomerProfilePage({
           </dl>
         </section>
 
-        {/* Send + comms (right) */}
+        {/* Send + sequences + comms (right) */}
         <div className="space-y-6 lg:col-span-2">
+          <CustomerSequences
+            signupId={customer.id}
+            allSequences={sequences}
+            viaList={sequencesViaList}
+            manual={sequencesManual}
+            onSubscribe={subscribeCustomerAction}
+            onUnsubscribe={unsubscribeCustomerAction}
+          />
+
           <section className="card">
             <h2 className="text-base font-semibold text-slate-900">Send a message</h2>
             <p className="mt-1 text-xs text-slate-500">
