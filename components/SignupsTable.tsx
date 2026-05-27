@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Signup, SignupStatus } from '@/lib/db';
+import { EventPill } from './EventPill';
 
 /**
  * Status filter buckets — the user-facing labels we group statuses into,
@@ -163,7 +164,7 @@ export function SignupsTable({
                   <td className="text-slate-500">{s.phone}</td>
                   <td>
                     {s.eventId && eventNameById[s.eventId] ? (
-                      <span className="pill pill-violet">{eventNameById[s.eventId]}</span>
+                      <EventPill name={eventNameById[s.eventId]} />
                     ) : (
                       <span className="text-xs text-slate-300">—</span>
                     )}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import type { ListModel, ListFilterType, EventModel } from '@/lib/db';
+import { EventPill } from './EventPill';
 
 const FILTER_OPTIONS: { value: ListFilterType; label: string; hint: string }[] = [
   { value: 'all_registered', label: 'All Webinar Attendees', hint: 'Paid source + status registered or paid' },
@@ -241,7 +242,7 @@ function ListRow({
         </td>
         <td>
           {eventName ? (
-            <span className="pill pill-violet">{eventName}</span>
+            <EventPill name={eventName} />
           ) : (
             <span className="text-xs text-slate-400">All events</span>
           )}
