@@ -4,9 +4,12 @@ import { requireAdmin } from '@/lib/admin-auth';
 import {
   getSignupById,
   getEvents,
+  getLists,
   getCustomerSequenceSends,
+  computeListMembers,
   type Signup,
   type CustomerSequenceSend,
+  type ListModel,
 } from '@/lib/db';
 import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
@@ -128,12 +131,25 @@ export default async function CustomerProfilePage({
 }) {
   requireAdmin();
 
-  const [customer, events, sequenceSends] = await Promise.all([
+  const [customer, events, lists, sequenceSends] = await Promise.all([
     getSignupById(params.id),
     getEvents(),
+    getLists(),
     getCustomerSequenceSends(params.id),
   ]);
   if (!customer) notFound();
+
+  // Resolve every list this customer currently belongs to. Lists are
+  // dynamic filters so membership is a live computation against the
+  // current signups table — N+1 here is fine because typical N is small
+  // (5–10 lists) and each computeListMembers is a single getSignups+filter.
+  const memberLists: ListModel[] = [];
+  for (const list of lists) {
+    const members = await computeListMembers(list);
+    if (members.some((m) => m.id === customer.id)) {
+      memberLists.push(list);
+    }
+  }
 
   const meta = (customer.metadata as Record<string, unknown> | undefined) ?? {};
   const externalId = (meta.externalId as string | undefined) ?? '';
@@ -179,6 +195,41 @@ export default async function CustomerProfilePage({
           <h2 className="text-base font-semibold text-slate-900">Profile</h2>
           <dl className="mt-4 space-y-3 text-sm">
             <Field label="Status" value={<StatusBadge status={customer.status} />} />
+            <Field
+              label="Event"
+              value={
+                customer.eventId && eventName ? (
+                  <Link
+                    href="/admin/events"
+                    className="inline-block rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 hover:bg-violet-100"
+                  >
+                    {eventName}
+                  </Link>
+                ) : (
+                  <span className="text-slate-400">— No event tag —</span>
+                )
+              }
+            />
+            <Field
+              label="Lists"
+              value={
+                memberLists.length === 0 ? (
+                  <span className="text-slate-400">Not in any list</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {memberLists.map((l) => (
+                      <Link
+                        key={l.id}
+                        href={`/admin/lists/${l.id}`}
+                        className="inline-block rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 hover:bg-cyan-100"
+                      >
+                        {l.name}
+                      </Link>
+                    ))}
+                  </div>
+                )
+              }
+            />
             <Field label="Source" value={customer.source} />
             <Field
               label="Method"
