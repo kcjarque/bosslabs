@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { countPageViews, getSettings, getSignups, type Signup } from '@/lib/db';
 import { formatPHP, OFFER } from '@/lib/config';
+import { CustomDateRange } from '@/components/CustomDateRange';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,21 +10,33 @@ export const dynamic = 'force-dynamic';
 /* Analytics helpers                                                     */
 /* --------------------------------------------------------------------- */
 
+const TZ = 'Asia/Manila';
+
+/** Format a Date as YYYY-MM-DD in Asia/Manila. */
+function manilaDate(d: Date): string {
+  return d.toLocaleDateString('sv-SE', { timeZone: TZ }); // sv-SE → YYYY-MM-DD
+}
+
+/** "Today" in Manila as YYYY-MM-DD. */
+function manilaToday(): string {
+  return manilaDate(new Date());
+}
+
 const ABANDONMENT_PRICE_CENTAVOS = OFFER.main.priceCentavos;
 
-/** Bucket signups into the last 30 days (YYYY-MM-DD keys). */
-function bucketDaily(signups: Signup[], days = 30) {
+/** Bucket signups into day columns between startDate and endDate (inclusive, YYYY-MM-DD, Manila). */
+function bucketDaily(signups: Signup[], startDate: string, endDate: string) {
   const buckets = new Map<string, { date: string; total: number; paid: number; revenuePhp: number }>();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+  // Build date range by walking from start to end in day increments.
+  const cur = new Date(startDate + 'T00:00:00+08:00');
+  const last = new Date(endDate + 'T00:00:00+08:00');
+  while (cur <= last) {
+    const key = manilaDate(cur);
     buckets.set(key, { date: key, total: 0, paid: 0, revenuePhp: 0 });
+    cur.setDate(cur.getDate() + 1);
   }
   for (const s of signups) {
-    const key = s.createdAt.slice(0, 10);
+    const key = manilaDate(new Date(s.createdAt));
     const b = buckets.get(key);
     if (!b) continue;
     b.total += 1;
@@ -35,6 +48,29 @@ function bucketDaily(signups: Signup[], days = 30) {
     }
   }
   return Array.from(buckets.values());
+}
+
+/* --------------------------------------------------------------------- */
+/* Chart date range presets                                              */
+/* --------------------------------------------------------------------- */
+
+type ChartRange = { key: string; label: string; start: string; end: string };
+
+function chartRanges(): ChartRange[] {
+  const todayStr = manilaToday();
+  const todayD = new Date(todayStr + 'T00:00:00+08:00');
+  const yesterday = new Date(todayD);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = manilaDate(yesterday);
+  const mtdStart = todayStr.slice(0, 8) + '01'; // first of current month
+  const d30 = new Date(todayD);
+  d30.setDate(d30.getDate() - 29);
+  return [
+    { key: 'today', label: 'Today', start: todayStr, end: todayStr },
+    { key: 'yesterday', label: 'Yesterday', start: yesterdayStr, end: yesterdayStr },
+    { key: 'mtd', label: 'MTD', start: mtdStart, end: todayStr },
+    { key: '30d', label: '30 days', start: manilaDate(d30), end: todayStr },
+  ];
 }
 
 /** Count distinct buyers by paymentMethodGroup for paid signups. */
@@ -85,7 +121,7 @@ type FunnelRangeKey = (typeof FUNNEL_RANGES)[number]['key'];
 export default async function AdminDashboard({
   searchParams,
 }: {
-  searchParams: { fr?: string };
+  searchParams: { fr?: string; cr?: string; cs?: string; ce?: string };
 }) {
   requireAdmin();
 
@@ -161,8 +197,18 @@ export default async function AdminDashboard({
     return min === null || age > min ? age : min;
   }, null);
 
-  // 30-day daily activity for the chart.
-  const daily = bucketDaily(signups, 30);
+  // Chart date range — defaults to 30 days.
+  const ranges = chartRanges();
+  const crParam = searchParams?.cr;
+  const csParam = searchParams?.cs;
+  const ceParam = searchParams?.ce;
+  let chartRange: ChartRange;
+  if (crParam === 'custom' && csParam && ceParam) {
+    chartRange = { key: 'custom', label: 'Custom', start: csParam, end: ceParam };
+  } else {
+    chartRange = ranges.find((r) => r.key === crParam) ?? ranges.find((r) => r.key === '30d')!;
+  }
+  const daily = bucketDaily(signups, chartRange.start, chartRange.end);
   const dailyMax = Math.max(1, ...daily.map((d) => d.total));
 
   // Channel mix on PAID signups (not stuck) — which method works best.
@@ -395,12 +441,29 @@ export default async function AdminDashboard({
         </Link>
       )}
 
-      {/* 30-DAY ACTIVITY CHART */}
+      {/* ACTIVITY CHART */}
       <div className="card">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">
-            Last 30 days · signups vs paid
-          </h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-base font-semibold text-slate-900">
+                {chartRange.key === 'today'
+                  ? 'Today'
+                  : chartRange.key === 'yesterday'
+                    ? 'Yesterday'
+                    : chartRange.key === 'mtd'
+                      ? 'Month to date'
+                      : chartRange.key === 'custom'
+                        ? `${chartRange.start} → ${chartRange.end}`
+                        : 'Last 30 days'}{' '}
+                · signups vs paid
+              </h2>
+              <ChartDateFilter activeKey={chartRange.key} ranges={ranges} />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              All times Asia/Manila (PHT, UTC+8)
+            </p>
+          </div>
           <div className="flex items-center gap-3 text-[11px] text-slate-500">
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2 w-3 rounded-sm bg-slate-300" />
@@ -609,6 +672,47 @@ function StatCard({
 }
 
 /**
+ * ChartDateFilter — server-rendered pill row for the daily chart.
+ * Presets: Today, Yesterday, MTD, 30d. Custom opens date inputs.
+ */
+function ChartDateFilter({
+  activeKey,
+  ranges,
+}: {
+  activeKey: string;
+  ranges: ChartRange[];
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Chart date range"
+      className="inline-flex flex-wrap items-center gap-1"
+    >
+      <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+        {ranges.map((r) => {
+          const active = r.key === activeKey;
+          return (
+            <Link
+              key={r.key}
+              href={`/admin?cr=${r.key}`}
+              scroll={false}
+              className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
+                active
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-white hover:text-slate-900'
+              }`}
+            >
+              {r.label}
+            </Link>
+          );
+        })}
+      </div>
+      <CustomDateRange active={activeKey === 'custom'} />
+    </div>
+  );
+}
+
+/**
  * FunnelDateFilter — server-rendered pill row. Each pill is a Link that
  * sets ?fr=<key> on the dashboard. No client JS needed — the dashboard
  * re-renders server-side with the new range. Matches the rest of the
@@ -731,9 +835,10 @@ function DailyChart({
           const paidH = (d.paid / max) * innerH;
           const totalY = padY + innerH - totalH;
           const paidY = padY + innerH - paidH;
-          const dateLabel = new Date(d.date + 'T00:00').toLocaleDateString('en-PH', {
+          const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
             month: 'short',
             day: 'numeric',
+            timeZone: 'Asia/Manila',
           });
           return (
             <g key={d.date}>
@@ -771,23 +876,27 @@ function DailyChart({
           fill="#94A3B8"
           textAnchor="start"
         >
-          {new Date(data[0]?.date + 'T00:00').toLocaleDateString('en-PH', {
+          {new Date(data[0]?.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
             month: 'short',
             day: 'numeric',
+            timeZone: 'Asia/Manila',
           })}
         </text>
-        <text
-          x={W / 2}
-          y={H - 4}
-          fontSize="9"
-          fill="#94A3B8"
-          textAnchor="middle"
-        >
-          {new Date(data[Math.floor(data.length / 2)]?.date + 'T00:00').toLocaleDateString('en-PH', {
-            month: 'short',
-            day: 'numeric',
-          })}
-        </text>
+        {data.length > 2 && (
+          <text
+            x={W / 2}
+            y={H - 4}
+            fontSize="9"
+            fill="#94A3B8"
+            textAnchor="middle"
+          >
+            {new Date(data[Math.floor(data.length / 2)]?.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'Asia/Manila',
+            })}
+          </text>
+        )}
         <text
           x={W - padX}
           y={H - 4}
@@ -795,11 +904,17 @@ function DailyChart({
           fill="#94A3B8"
           textAnchor="end"
         >
-          Today
+          {data.length === 1
+            ? new Date(data[0]?.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'Asia/Manila',
+              })
+            : 'Today'}
         </text>
       </svg>
       <div className="mt-2 flex justify-between text-[11px] text-slate-500">
-        <span>{data.length} days · hover bars for daily detail</span>
+        <span>{data.length} day{data.length === 1 ? '' : 's'} · hover bars for daily detail</span>
         <span>
           <strong className="text-slate-700">{totalPaid}</strong> paid ·{' '}
           <strong className="text-slate-700">
