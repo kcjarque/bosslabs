@@ -2,7 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
-import { deleteSignups, subscribeManyToSequence } from '@/lib/db';
+import {
+  deleteSignups,
+  getSignupById,
+  subscribeManyToSequence,
+} from '@/lib/db';
+import { sendEmail } from '@/lib/email';
+import { sendSms } from '@/lib/sms';
+import { getWebinarInfo } from '@/lib/webinar';
 
 /**
  * Bulk-subscribe the given customers to a sequence. Server-side filter
@@ -35,4 +42,68 @@ export async function bulkDeleteAction(
   const count = await deleteSignups(signupIds);
   revalidatePath('/admin/customers');
   return { count };
+}
+
+/**
+ * Bulk-send a templated email or SMS to every selected customer.
+ *
+ * Sends are awaited sequentially — Resend's free-tier rate limit is
+ * 2/sec which makes parallel sends risky on a larger selection, and
+ * Vercel functions have plenty of headroom (60s default) for the
+ * typical webinar audience size. SMS sends are skipped (counted as
+ * 'noPhone') for any customer without a phone on file.
+ *
+ * Returns sent/failed/noPhone counts so the UI can show what happened.
+ */
+export async function bulkSendAction(
+  signupIds: string[],
+  channel: 'email' | 'sms',
+  templateId: string,
+): Promise<{ sent: number; failed: number; noPhone: number }> {
+  requireAdmin();
+  if (signupIds.length === 0) throw new Error('No customers selected');
+  if (!templateId) throw new Error('Pick a template');
+
+  const webinar = await getWebinarInfo();
+
+  let sent = 0;
+  let failed = 0;
+  let noPhone = 0;
+
+  for (const id of signupIds) {
+    const signup = await getSignupById(id);
+    if (!signup) {
+      failed++;
+      continue;
+    }
+    const vars: Record<string, string> = {
+      firstName: signup.firstName,
+      lastName: signup.lastName ?? '',
+      email: signup.email,
+      phone: signup.phone,
+      webinarName: webinar.name,
+      webinarDate: webinar.date,
+      webinarTime: webinar.time,
+      webinarTimezone: webinar.timezone,
+      zoomRegisterUrl: webinar.zoomRegisterUrl,
+      zoomJoinUrl: webinar.zoomJoinUrl,
+      replayUrl: webinar.replayUrl,
+      messengerGroupUrl: webinar.messengerGroupUrl,
+    };
+    if (channel === 'email') {
+      const res = await sendEmail({ to: signup.email, templateId, vars });
+      if (res.ok) sent++;
+      else failed++;
+    } else {
+      if (!signup.phone) {
+        noPhone++;
+        continue;
+      }
+      const res = await sendSms({ to: signup.phone, templateId, vars });
+      if (res.ok) sent++;
+      else failed++;
+    }
+  }
+
+  return { sent, failed, noPhone };
 }

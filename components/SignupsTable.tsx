@@ -45,27 +45,41 @@ function methodPillClass(s: Signup): string {
   return 'pill';
 }
 
+type TemplateRef = { id: string; name: string };
+
 export function SignupsTable({
   initial,
   eventNameById = {},
   sequences = [],
+  emailTemplates = [],
+  smsTemplates = [],
   onBulkSubscribe,
   onBulkDelete,
+  onBulkSend,
 }: {
   initial: Signup[];
   eventNameById?: Record<string, string>;
   sequences?: SequenceModel[];
+  emailTemplates?: TemplateRef[];
+  smsTemplates?: TemplateRef[];
   onBulkSubscribe?: (
     signupIds: string[],
     sequenceId: string,
   ) => Promise<{ subscribed: number; skipped: number }>;
   onBulkDelete?: (signupIds: string[]) => Promise<{ count: number }>;
+  onBulkSend?: (
+    signupIds: string[],
+    channel: 'email' | 'sms',
+    templateId: string,
+  ) => Promise<{ sent: number; failed: number; noPhone: number }>;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [q, setQ] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSeqId, setBulkSeqId] = useState('');
+  const [bulkChannel, setBulkChannel] = useState<'email' | 'sms'>('email');
+  const [bulkTemplateId, setBulkTemplateId] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function openCustomer(id: string) {
@@ -106,8 +120,9 @@ export function SignupsTable({
   const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
   const allFilteredSelected =
     filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
-  const bulkSupported = Boolean(onBulkSubscribe || onBulkDelete);
+  const bulkSupported = Boolean(onBulkSubscribe || onBulkDelete || onBulkSend);
   const activeSequences = sequences.filter((s) => s.active);
+  const bulkTemplates = bulkChannel === 'email' ? emailTemplates : smsTemplates;
 
   return (
     <>
@@ -139,15 +154,100 @@ export function SignupsTable({
 
       {/* Bulk action bar — sticky at top once selections exist. */}
       {bulkSupported && selectedIds.size > 0 && (
-        <div className="sticky top-0 z-30 card flex flex-col gap-3 border-cyan-200 bg-cyan-50/60 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-medium text-slate-900">
-            {selectedIds.size} selected
+        <div className="sticky top-0 z-30 card space-y-3 border-cyan-200 bg-cyan-50/60">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-medium text-slate-900">
+              {selectedIds.size} selected
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={clearSelection}
+              disabled={isPending}
+            >
+              Clear
+            </button>
           </div>
+
+          {/* Send row — channel + template + send button. */}
+          {onBulkSend && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex gap-1">
+                {(['email', 'sms'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setBulkChannel(c);
+                      setBulkTemplateId('');
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-sm capitalize transition ${
+                      bulkChannel === c
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              <select
+                className="select sm:flex-1"
+                value={bulkTemplateId}
+                onChange={(e) => setBulkTemplateId(e.target.value)}
+              >
+                <option value="">
+                  {bulkTemplates.length === 0
+                    ? `No ${bulkChannel} templates yet`
+                    : `Pick a ${bulkChannel} template…`}
+                </option>
+                {bulkTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!bulkTemplateId || isPending}
+                onClick={() => {
+                  const ids = Array.from(selectedIds);
+                  const channel = bulkChannel;
+                  const tid = bulkTemplateId;
+                  const n = ids.length;
+                  if (
+                    !confirm(
+                      `Send ${channel} to ${n} customer${n === 1 ? '' : 's'} using template "${tid}"?`,
+                    )
+                  )
+                    return;
+                  startTransition(async () => {
+                    const res = await onBulkSend(ids, channel, tid);
+                    const lines = [
+                      `Sent ${res.sent} ${channel}${res.sent === 1 ? '' : 's'}.`,
+                    ];
+                    if (res.failed > 0) lines.push(`Failed: ${res.failed}.`);
+                    if (res.noPhone > 0)
+                      lines.push(`Skipped (no phone): ${res.noPhone}.`);
+                    alert(lines.join('\n'));
+                    setBulkTemplateId('');
+                    clearSelection();
+                    router.refresh();
+                  });
+                }}
+              >
+                Send
+              </button>
+            </div>
+          )}
+
+          {/* Subscribe + delete row. */}
           <div className="flex flex-wrap items-center gap-2">
             {onBulkSubscribe && activeSequences.length > 0 && (
               <>
                 <select
-                  className="select sm:w-auto"
+                  className="select sm:w-auto sm:flex-1"
                   value={bulkSeqId}
                   onChange={(e) => setBulkSeqId(e.target.value)}
                 >
@@ -160,7 +260,7 @@ export function SignupsTable({
                 </select>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                   disabled={!bulkSeqId || isPending}
                   onClick={() => {
                     const ids = Array.from(selectedIds);
@@ -212,14 +312,6 @@ export function SignupsTable({
                 Delete
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={clearSelection}
-              disabled={isPending}
-            >
-              Clear
-            </button>
           </div>
         </div>
       )}

@@ -9,6 +9,8 @@ import {
   getCustomerSubscriptions,
   getCustomerSequenceSends,
   computeListMembers,
+  getEmailTemplates,
+  getSmsTemplates,
   type Signup,
   type CustomerSequenceSend,
   type ListModel,
@@ -146,6 +148,8 @@ export default async function CustomerProfilePage({
     sequences,
     customerSubscriptions,
     sequenceSends,
+    emailTemplates,
+    smsTemplates,
   ] = await Promise.all([
     getSignupById(params.id),
     getEvents(),
@@ -153,6 +157,8 @@ export default async function CustomerProfilePage({
     getSequences(),
     getCustomerSubscriptions(params.id),
     getCustomerSequenceSends(params.id),
+    getEmailTemplates(),
+    getSmsTemplates(),
   ]);
   if (!customer) notFound();
 
@@ -328,7 +334,12 @@ export default async function CustomerProfilePage({
               Pick a template + channel. Templates pull from /admin/templates.
             </p>
             <div className="mt-4">
-              <CustomerSendForm signupId={customer.id} hasPhone={Boolean(customer.phone)} />
+              <CustomerSendForm
+                signupId={customer.id}
+                hasPhone={Boolean(customer.phone)}
+                emailTemplates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))}
+                smsTemplates={smsTemplates.map((t) => ({ id: t.id, name: t.name }))}
+              />
             </div>
           </section>
 
