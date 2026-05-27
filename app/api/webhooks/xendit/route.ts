@@ -160,9 +160,12 @@ async function handleMainPaid(event: XenditEvent) {
     },
   });
 
-  // Best-effort Telegram notification — never blocks the webhook response.
+  // Telegram notification — AWAITED, not void. In a Vercel serverless
+  // function, void promises can be killed mid-flight when the response
+  // returns. The ~200ms latency cost is fine — Xendit doesn't care about
+  // webhook response time as long as we return 200.
   const amtFmt = `₱${amountPhp.toLocaleString()}`;
-  void sendTelegram(
+  await sendTelegram(
     `💰 <b>New payment!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
@@ -245,8 +248,8 @@ async function handleOtoPaid(event: XenditEvent) {
     },
   });
 
-  // Best-effort TG notification for standalone OTO.
-  void sendTelegram(
+  // AWAITED — see note in handleMainPaid.
+  await sendTelegram(
     `💰 <b>OTO upsell paid!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +

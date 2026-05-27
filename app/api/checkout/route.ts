@@ -217,7 +217,8 @@ export async function POST(req: Request) {
       });
 
       // TG notification — free-seat promo purchase (already marked paid).
-      void sendTelegram(
+      // Awaited to guarantee delivery before the serverless function exits.
+      await sendTelegram(
         `💰 <b>Free promo purchase!</b>\n\n` +
         `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
         `${esc(body.email)}\n` +
