@@ -113,20 +113,41 @@ const LOGO_SVG = `<svg width="56" height="44" viewBox="0 0 100 78" fill="none" x
   <circle cx="86" cy="64" r="9" stroke="#0B0D12" stroke-width="3" fill="#FFFFFF" />
 </svg>`;
 
-/** Render the wrapped <body> shell with the logomark header + footer. */
+/**
+ * Render the wrapped <body> shell.
+ *
+ * Layout note: everything is inline-styled because Gmail strips `<style>`
+ * blocks and most CSS classes. The structure is intentionally minimal —
+ * outer light-gray plate, white rounded card with a thin cyan accent bar
+ * at the top, generous padding (~40-44px), and a soft gray footer with a
+ * proper signature + unsubscribe block.
+ *
+ * Spacing is deliberately wider than the previous shell after admin
+ * feedback that emails 'looked bare'. Real editorial feel comes from
+ * breathing room, not from images that get spam-flagged.
+ */
 function renderShell(innerHtml: string): string {
   return [
-    '<div style="background:#F5F7FB;padding:24px 0;font-family:Inter,system-ui,sans-serif">',
-    '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden">',
-    // Header
-    '<div style="padding:24px 24px 0;text-align:left">',
+    // Outer plate — light gray, generous outside padding so the card
+    // floats nicely on Apple Mail / Gmail's white inbox background.
+    '<div style="background:#F5F7FB;padding:32px 16px;font-family:Inter,-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#0B0D12">',
+    // Card
+    '<div style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:20px;overflow:hidden;border:1px solid #E5E9F2;box-shadow:0 1px 2px rgba(11,13,18,0.04)">',
+    // Top accent bar — subtle brand cue without slowing the email down.
+    '<div style="height:4px;background:linear-gradient(90deg,#00B8E6 0%,#0093B8 100%)"></div>',
+    // Header — logo only, left-aligned, generous top breathing room.
+    '<div style="padding:36px 44px 4px;text-align:left">',
     LOGO_SVG,
     '</div>',
     // Body
-    `<div style="padding:20px 28px 28px;color:#0B0D12">${innerHtml}</div>`,
-    // Footer band
-    '<div style="border-top:1px solid #E5E9F2;padding:16px 28px;color:#6B6F7C;font-size:11px">',
-    'BOSSLABS AI · Built in Manila',
+    `<div style="padding:24px 44px 40px;color:#0B0D12">${innerHtml}</div>`,
+    // Signature + footer band
+    '<div style="border-top:1px solid #E5E9F2;padding:28px 44px;background:#F8FAFC">',
+    '<p style="font-size:14px;color:#454A57;margin:0 0 12px;font-weight:500;line-height:1.5">— Mikey &amp; Kyle</p>',
+    '<p style="font-size:11px;color:#9BA1AC;margin:0;line-height:1.7">',
+    'BOSSLABS AI · Built in Manila<br>',
+    'Want fewer emails? <a href="{{unsubscribeUrl}}" style="color:#9BA1AC;text-decoration:underline">Unsubscribe</a>',
+    '</p>',
     '</div>',
     '</div>',
     '</div>',
@@ -143,8 +164,10 @@ export function renderEmailMarkdown(markdown: string): string {
     if (paragraph.length === 0) return;
     const joined = paragraph.join(' ').trim();
     if (joined) {
+      // 17px body + 1.7 line-height + 22px paragraph gap. Looks editorial,
+      // not crammed. Color is a soft near-black so it doesn't yell.
       blocks.push(
-        `<p style="font-size:16px;line-height:1.55;margin:0 0 16px">${renderInline(joined)}</p>`,
+        `<p style="font-size:17px;line-height:1.7;margin:0 0 22px;color:#1F2330">${renderInline(joined)}</p>`,
       );
     }
     paragraph = [];
@@ -158,49 +181,51 @@ export function renderEmailMarkdown(markdown: string): string {
       continue;
     }
 
-    // Eyebrow: ^^TEXT^^
+    // Eyebrow: ^^TEXT^^ — small uppercase cyan tag above the headline.
     const eyebrow = /^\^\^(.+?)\^\^$/.exec(line);
     if (eyebrow) {
       flushParagraph();
       blocks.push(
-        `<p style="font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#0093B8;margin:0 0 12px;font-weight:600">${renderInline(eyebrow[1])}</p>`,
+        `<p style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#0093B8;margin:0 0 18px;font-weight:700">${renderInline(eyebrow[1])}</p>`,
       );
       continue;
     }
 
-    // Horizontal rule: ---
+    // Horizontal rule: --- (more breathing room around it now)
     if (line === '---') {
       flushParagraph();
       blocks.push(
-        '<hr style="border:none;border-top:1px solid #E5E9F2;margin:24px 0" />',
+        '<hr style="border:none;border-top:1px solid #E5E9F2;margin:36px 0" />',
       );
       continue;
     }
 
-    // ## subhead
+    // ## subhead — wider tracking, more space above for section breaks.
     if (line.startsWith('## ')) {
       flushParagraph();
       blocks.push(
-        `<p style="font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:#454A57;margin:24px 0 8px;font-weight:600">${renderInline(line.slice(3))}</p>`,
+        `<p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#454A57;margin:36px 0 12px;font-weight:700">${renderInline(line.slice(3))}</p>`,
       );
       continue;
     }
 
-    // # headline
+    // # headline — bumped from 34px to 40px for editorial impact, tighter
+    // line-height now that the type is bigger, more gap below.
     if (line.startsWith('# ')) {
       flushParagraph();
       blocks.push(
-        `<h1 style="font-family:Georgia,serif;font-weight:400;font-size:34px;line-height:1.1;margin:0 0 16px;color:#0B0D12">${renderInline(line.slice(2))}</h1>`,
+        `<h1 style="font-family:Georgia,serif;font-weight:400;font-size:40px;line-height:1.12;margin:0 0 24px;color:#0B0D12;letter-spacing:-0.5px">${renderInline(line.slice(2))}</h1>`,
       );
       continue;
     }
 
-    // Standalone button line: [[Label]](url) on its own line → centered button block
+    // Standalone button line — fatter pill, more outside spacing so it
+    // reads as a clear call-to-action instead of inline text.
     const standaloneButton = /^\[\[([^\]]+?)\]\]\(([^)]+?)\)$/.exec(line);
     if (standaloneButton) {
       flushParagraph();
       blocks.push(
-        `<p style="margin:8px 0 24px"><a href="${escapeHtml(safeHref(standaloneButton[2]))}" style="background:#00B8E6;color:#06070A;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">${escapeHtml(standaloneButton[1])}</a></p>`,
+        `<p style="margin:24px 0 28px"><a href="${escapeHtml(safeHref(standaloneButton[2]))}" style="background:#00B8E6;color:#06070A;padding:16px 32px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block;font-size:15px;letter-spacing:-0.01em;box-shadow:0 1px 2px rgba(0,184,230,0.25)">${escapeHtml(standaloneButton[1])}</a></p>`,
       );
       continue;
     }
