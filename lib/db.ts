@@ -47,6 +47,10 @@ export type Signup = {
   message?: string;
   createdAt: string;
   metadata?: Record<string, unknown>;
+  /** Which event this signup registered for. Set at registration time from
+   *  settings.active_event_id. Null on rows that predate the multi-event
+   *  migration (those get tagged with the seeded event during backfill). */
+  eventId?: string | null;
 };
 
 export type EmailTemplate = {
@@ -114,6 +118,10 @@ export type Settings = {
   /* Telegram bot */
   telegramBotToken: string;
   telegramChatId: string;
+  /* Multi-event */
+  /** Which event new signups attach to. Null = no active event (signups
+   *  not tagged with an event). Settable from /admin/settings. */
+  activeEventId: string | null;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -143,6 +151,7 @@ const DEFAULT_SETTINGS: Settings = {
   recordingEnabled: false,
   telegramBotToken: '',
   telegramChatId: '',
+  activeEventId: null,
 };
 
 /* --------------------------------------------------------------------- */
@@ -162,6 +171,7 @@ type SignupRow = {
   message: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+  event_id: string | null;
 };
 
 function rowToSignup(r: SignupRow): Signup {
@@ -178,6 +188,7 @@ function rowToSignup(r: SignupRow): Signup {
     message: r.message ?? undefined,
     metadata: r.metadata ?? undefined,
     createdAt: r.created_at,
+    eventId: r.event_id,
   };
 }
 
@@ -195,6 +206,7 @@ function signupToRow(s: Signup): SignupRow {
     message: s.message ?? null,
     metadata: s.metadata ?? null,
     created_at: s.createdAt,
+    event_id: s.eventId ?? null,
   };
 }
 
@@ -220,6 +232,7 @@ type SettingsRow = {
   recording_enabled: boolean;
   telegram_bot_token: string;
   telegram_chat_id: string;
+  active_event_id: string | null;
 };
 
 function rowToSettings(r: SettingsRow): Settings {
@@ -244,6 +257,7 @@ function rowToSettings(r: SettingsRow): Settings {
     recordingEnabled: r.recording_enabled ?? false,
     telegramBotToken: r.telegram_bot_token ?? '',
     telegramChatId: r.telegram_chat_id ?? '',
+    activeEventId: r.active_event_id ?? null,
   };
 }
 
@@ -269,6 +283,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.recordingEnabled !== undefined) out.recording_enabled = s.recordingEnabled;
   if (s.telegramBotToken !== undefined) out.telegram_bot_token = s.telegramBotToken;
   if (s.telegramChatId !== undefined) out.telegram_chat_id = s.telegramChatId;
+  if (s.activeEventId !== undefined) out.active_event_id = s.activeEventId;
   return out;
 }
 
@@ -464,11 +479,27 @@ export async function getSignups(): Promise<Signup[]> {
 export async function addSignup(
   data: Omit<Signup, 'id' | 'createdAt' | 'status'> & { status?: SignupStatus },
 ): Promise<Signup> {
+  // Auto-tag with the currently-active event when the caller doesn't
+  // specify one. The checkout + registration routes typically just let
+  // this default kick in. Settings.activeEventId can be null (no active
+  // event) — in that case the signup remains untagged, which is fine
+  // for non-event flows like contact-form leads.
+  let eventId: string | null | undefined = data.eventId;
+  if (eventId === undefined) {
+    try {
+      const settings = await getSettings();
+      eventId = settings.activeEventId;
+    } catch {
+      eventId = null;
+    }
+  }
+
   const signup: Signup = {
     id: `sig_${crypto.randomBytes(6).toString('hex')}`,
     createdAt: new Date().toISOString(),
     status: data.status ?? 'registered',
     ...data,
+    eventId,
   };
 
   if (isSupabaseConfigured()) {
@@ -1136,6 +1167,9 @@ export type ListModel = {
   description: string | null;
   /** UNION of all selected filter types — members are anyone matching at least one. */
   filterTypes: ListFilterType[];
+  /** Optional: if set, list only includes signups tagged with this event.
+   *  Null = include all events. */
+  eventId: string | null;
   createdAt: string;
 };
 
@@ -1146,6 +1180,7 @@ type ListRow = {
   /** Legacy single-value column (nullable). Kept readable for back-compat. */
   filter_type: ListFilterType | null;
   filter_types: ListFilterType[] | null;
+  event_id: string | null;
   created_at: string;
 };
 
@@ -1163,6 +1198,7 @@ function rowToList(r: ListRow): ListModel {
     name: r.name,
     description: r.description,
     filterTypes: types,
+    eventId: r.event_id ?? null,
     createdAt: r.created_at,
   };
 }
@@ -1339,6 +1375,7 @@ export async function addList(input: {
   name: string;
   description?: string | null;
   filterTypes: ListFilterType[];
+  eventId?: string | null;
 }): Promise<ListModel> {
   if (!isSupabaseConfigured()) throw new Error('addList: Supabase not configured');
   if (!input.filterTypes.length) {
@@ -1352,6 +1389,7 @@ export async function addList(input: {
       // Legacy column for back-compat with old readers; keep in sync with the array.
       filter_type: input.filterTypes[0],
       filter_types: input.filterTypes,
+      event_id: input.eventId ?? null,
     })
     .select('*')
     .single();
@@ -1361,12 +1399,13 @@ export async function addList(input: {
 
 export async function updateList(
   id: string,
-  patch: Partial<Pick<ListModel, 'name' | 'description' | 'filterTypes'>>,
+  patch: Partial<Pick<ListModel, 'name' | 'description' | 'filterTypes' | 'eventId'>>,
 ): Promise<ListModel | null> {
   if (!isSupabaseConfigured()) return null;
   const row: Partial<ListRow> = {};
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.description !== undefined) row.description = patch.description;
+  if (patch.eventId !== undefined) row.event_id = patch.eventId;
   if (patch.filterTypes !== undefined) {
     if (!patch.filterTypes.length) {
       throw new Error('updateList: at least one filter type is required');
@@ -1417,21 +1456,34 @@ function filterPredicate(filterType: ListFilterType): (s: Signup) => boolean {
  * the UNION of matches across all selected filter types (deduped by id).
  * Live snapshot — no caching, called once per cron run.
  *
- * Accepts a single filter type OR an array, so existing callers that
- * still pass `filterType` work unchanged.
+ * Accepts a single filter type, an array, OR a full ListModel (preferred,
+ * since that picks up the event_id scope automatically). Older single-arg
+ * callers still work.
  */
 export async function computeListMembers(
-  filterTypes: ListFilterType | ListFilterType[],
+  input: ListFilterType | ListFilterType[] | ListModel,
 ): Promise<Signup[]> {
-  const types = Array.isArray(filterTypes) ? filterTypes : [filterTypes];
+  let types: ListFilterType[];
+  let eventId: string | null = null;
+  if (typeof input === 'string') {
+    types = [input];
+  } else if (Array.isArray(input)) {
+    types = input;
+  } else {
+    types = input.filterTypes;
+    eventId = input.eventId;
+  }
   if (types.length === 0) return [];
   const all = await getSignups();
   const predicates = types.map(filterPredicate);
-  // Unsubscribed seats never receive anything, regardless of which filter
-  // included them. This safety net mirrors the old all_signups behavior.
-  return all.filter(
-    (s) => s.status !== 'unsubscribed' && predicates.some((p) => p(s)),
-  );
+  return all.filter((s) => {
+    // Unsubscribed seats never receive anything regardless of filter.
+    if (s.status === 'unsubscribed') return false;
+    // Event scoping: if the list is tied to an event, signups must match.
+    // Null eventId on the list = include all events.
+    if (eventId && s.eventId !== eventId) return false;
+    return predicates.some((p) => p(s));
+  });
 }
 
 /* ─── Sequences ───────────────────────────────────────────────────────── */

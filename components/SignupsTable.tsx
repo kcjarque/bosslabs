@@ -43,7 +43,13 @@ function methodPillClass(s: Signup): string {
   return 'pill';
 }
 
-export function SignupsTable({ initial }: { initial: Signup[] }) {
+export function SignupsTable({
+  initial,
+  eventNameById = {},
+}: {
+  initial: Signup[];
+  eventNameById?: Record<string, string>;
+}) {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Signup | null>(null);
@@ -135,6 +141,7 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
+                <th>Event</th>
                 <th>Method</th>
                 <th>Amount</th>
                 <th>Status</th>
@@ -154,6 +161,13 @@ export function SignupsTable({ initial }: { initial: Signup[] }) {
                   </td>
                   <td>{s.email}</td>
                   <td className="text-slate-500">{s.phone}</td>
+                  <td>
+                    {s.eventId && eventNameById[s.eventId] ? (
+                      <span className="pill pill-violet">{eventNameById[s.eventId]}</span>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
                   <td>
                     {paymentMethodLabel(s) === '—' ? (
                       <span className="text-slate-300">—</span>

@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/admin-auth';
-import { getLists, computeListMembers } from '@/lib/db';
+import { getLists, getEvents, computeListMembers } from '@/lib/db';
 import { ListsEditor } from '@/components/ListsEditor';
 import { createListAction, updateListAction, deleteListAction } from './actions';
 
@@ -7,13 +7,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function ListsPage() {
   requireAdmin();
-  const lists = await getLists();
+  const [lists, events] = await Promise.all([getLists(), getEvents()]);
 
   // Compute member counts (live) once per list. For 5-ish lists this is fine;
   // if we ever grow to many lists, batch into a single sql with grouping.
   const counts: Record<string, number> = {};
   for (const list of lists) {
-    counts[list.id] = (await computeListMembers(list.filterTypes)).length;
+    counts[list.id] = (await computeListMembers(list)).length;
   }
 
   return (
@@ -30,6 +30,7 @@ export default async function ListsPage() {
       </header>
       <ListsEditor
         initial={lists}
+        events={events}
         memberCounts={counts}
         onCreate={createListAction}
         onUpdate={updateListAction}

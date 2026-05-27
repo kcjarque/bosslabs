@@ -600,6 +600,33 @@ where not exists (
   where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid
 );
 
+-- ─── Link signups + lists to events ───────────────────────────────────
+-- Signups get tagged with an event_id at registration time. This is what
+-- lets a list be scoped to a specific event ("attendees of June workshop"
+-- vs "attendees of May webinar"). Settings.active_event_id determines
+-- which event new signups attach to.
+
+alter table signups add column if not exists event_id uuid references events(id) on delete set null;
+create index if not exists signups_event_idx on signups (event_id);
+
+alter table lists add column if not exists event_id uuid references events(id) on delete set null;
+create index if not exists lists_event_idx on lists (event_id);
+
+alter table settings add column if not exists active_event_id uuid references events(id) on delete set null;
+
+-- Backfill: tag existing signups + default list + settings against the seeded event.
+update settings
+  set active_event_id = '11111111-1111-1111-1111-111111111111'::uuid
+where id = 1 and active_event_id is null;
+
+update signups
+  set event_id = '11111111-1111-1111-1111-111111111111'::uuid
+where event_id is null;
+
+update lists
+  set event_id = '11111111-1111-1111-1111-111111111111'::uuid
+where id = '22222222-2222-2222-2222-222222222222'::uuid and event_id is null;
+
 -- ─── Backfill: convert metadata.reminders.{h60..h1} into sequence_sends ──
 -- Existing signups already received some reminders. Insert sequence_sends
 -- rows for each (signup, step) pair that's already been sent, so the new

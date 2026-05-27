@@ -120,7 +120,9 @@ export async function GET(req: Request) {
 
     const event = sequence.eventId ? await getEvent(sequence.eventId) : null;
     const steps = await getSequenceSteps(sequence.id);
-    const members = await computeListMembers(list.filterTypes);
+    // Pass the full list (not just filterTypes) so event scoping kicks in:
+    // a list with event_id set only matches signups tagged with that event.
+    const members = await computeListMembers(list);
 
     for (const step of steps) {
       if (!step.active) continue;

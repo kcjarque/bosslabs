@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import type { ListModel, ListFilterType } from '@/lib/db';
+import type { ListModel, ListFilterType, EventModel } from '@/lib/db';
 
 const FILTER_OPTIONS: { value: ListFilterType; label: string; hint: string }[] = [
   { value: 'all_registered', label: 'All Webinar Attendees', hint: 'Paid source + status registered or paid' },
@@ -13,12 +13,14 @@ const FILTER_OPTIONS: { value: ListFilterType; label: string; hint: string }[] =
 
 export function ListsEditor({
   initial,
+  events,
   memberCounts,
   onCreate,
   onUpdate,
   onDelete,
 }: {
   initial: ListModel[];
+  events: EventModel[];
   memberCounts: Record<string, number>;
   onCreate: (fd: FormData) => Promise<void>;
   onUpdate: (
@@ -27,6 +29,7 @@ export function ListsEditor({
       name?: string;
       description?: string | null;
       filterTypes?: ListFilterType[];
+      eventId?: string | null;
     },
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -51,6 +54,7 @@ export function ListsEditor({
 
         {creating && (
           <CreateListForm
+            events={events}
             onCreate={async (fd) => {
               await onCreate(fd);
               setCreating(false);
@@ -69,6 +73,7 @@ export function ListsEditor({
               <tr>
                 <th>Name</th>
                 <th>Filters</th>
+                <th>Event</th>
                 <th className="text-right">Members</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -78,6 +83,7 @@ export function ListsEditor({
                 <ListRow
                   key={list.id}
                   list={list}
+                  events={events}
                   memberCount={memberCounts[list.id] ?? 0}
                   editing={editingId === list.id}
                   onEdit={() => setEditingId(list.id === editingId ? null : list.id)}
@@ -107,9 +113,11 @@ export function ListsEditor({
 }
 
 function CreateListForm({
+  events,
   onCreate,
   isPending,
 }: {
+  events: EventModel[];
   onCreate: (fd: FormData) => Promise<void>;
   isPending: boolean;
 }) {
@@ -131,6 +139,20 @@ function CreateListForm({
           className="input"
           placeholder="What this list represents"
         />
+      </div>
+      <div>
+        <label className="label">Event</label>
+        <select name="eventId" className="select" defaultValue="">
+          <option value="">All events (any registered)</option>
+          {events.map((ev) => (
+            <option key={ev.id} value={ev.id}>
+              {ev.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Scope the list to signups registered for one specific event.
+        </p>
       </div>
       <div>
         <label className="label">
@@ -163,6 +185,7 @@ function CreateListForm({
 
 function ListRow({
   list,
+  events,
   memberCount,
   editing,
   onEdit,
@@ -170,6 +193,7 @@ function ListRow({
   onDelete,
 }: {
   list: ListModel;
+  events: EventModel[];
   memberCount: number;
   editing: boolean;
   onEdit: () => void;
@@ -177,12 +201,18 @@ function ListRow({
     name?: string;
     description?: string | null;
     filterTypes?: ListFilterType[];
+    eventId?: string | null;
   }) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(list.name);
   const [description, setDescription] = useState(list.description ?? '');
   const [filterTypes, setFilterTypes] = useState<ListFilterType[]>(list.filterTypes);
+  const [eventId, setEventId] = useState<string>(list.eventId ?? '');
+
+  const eventName = list.eventId
+    ? events.find((e) => e.id === list.eventId)?.name ?? '(missing event)'
+    : null;
 
   if (!editing) {
     return (
@@ -208,6 +238,13 @@ function ListRow({
               })
             )}
           </div>
+        </td>
+        <td>
+          {eventName ? (
+            <span className="pill pill-violet">{eventName}</span>
+          ) : (
+            <span className="text-xs text-slate-400">All events</span>
+          )}
         </td>
         <td className="text-right font-mono">{memberCount}</td>
         <td className="text-right">
@@ -235,6 +272,20 @@ function ListRow({
           <p className="mt-1 text-xs text-red-600">Pick at least one filter.</p>
         )}
       </td>
+      <td>
+        <select
+          className="select"
+          value={eventId}
+          onChange={(e) => setEventId(e.target.value)}
+        >
+          <option value="">All events</option>
+          {events.map((ev) => (
+            <option key={ev.id} value={ev.id}>
+              {ev.name}
+            </option>
+          ))}
+        </select>
+      </td>
       <td className="text-right font-mono">{memberCount}</td>
       <td className="text-right">
         <button
@@ -245,6 +296,7 @@ function ListRow({
               name,
               description: description || null,
               filterTypes,
+              eventId: eventId || null,
             })
           }
         >

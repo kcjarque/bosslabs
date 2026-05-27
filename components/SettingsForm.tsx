@@ -1,9 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import type { Settings } from '@/lib/db';
+import type { Settings, EventModel } from '@/lib/db';
 
-export function SettingsForm({ initial }: { initial: Settings }) {
+export function SettingsForm({
+  initial,
+  events,
+}: {
+  initial: Settings;
+  events: EventModel[];
+}) {
   const [values, setValues] = useState<Settings>(initial);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +45,29 @@ export function SettingsForm({ initial }: { initial: Settings }) {
       }}
       className="space-y-5"
     >
+      <Section
+        title="Active event"
+        description="Which event new signups attach to. The checkout + registration flow tags every new signup with this event so lists scoped to a specific event know who belongs."
+      >
+        <Field
+          label="Current event"
+          hint="Change this when you start promoting a new webinar. Past signups keep their original event tag."
+        >
+          <select
+            className="select"
+            value={values.activeEventId ?? ''}
+            onChange={(e) => update('activeEventId', e.target.value || null)}
+          >
+            <option value="">— No active event (signups untagged) —</option>
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Section>
+
       <Section
         title="Webinar"
         description="These flow into the landing page (hero, host CTA, final countdown) and every email + SMS template variable. Editable live — no redeploy."

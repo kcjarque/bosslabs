@@ -25,9 +25,12 @@ export async function createListAction(formData: FormData): Promise<void> {
   const name = String(formData.get('name') ?? '').trim();
   const description = String(formData.get('description') ?? '').trim() || null;
   const filterTypes = parseFilterTypes(formData.getAll('filterTypes'));
+  // Empty string from the "All events" option → null. Otherwise the chosen event UUID.
+  const eventIdRaw = String(formData.get('eventId') ?? '').trim();
+  const eventId = eventIdRaw || null;
   if (!name) throw new Error('Name required');
   if (filterTypes.length === 0) throw new Error('Pick at least one filter');
-  await addList({ name, description, filterTypes });
+  await addList({ name, description, filterTypes, eventId });
   revalidatePath('/admin/lists');
 }
 
@@ -37,6 +40,7 @@ export async function updateListAction(
     name?: string;
     description?: string | null;
     filterTypes?: ListFilterType[];
+    eventId?: string | null;
   },
 ): Promise<void> {
   requireAdmin();
