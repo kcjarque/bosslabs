@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/admin-auth';
-import { getLists, computeListMembers, type ListFilterType } from '@/lib/db';
+import { getLists, computeListMembers } from '@/lib/db';
 import { ListsEditor } from '@/components/ListsEditor';
 import { createListAction, updateListAction, deleteListAction } from './actions';
 
@@ -13,7 +13,7 @@ export default async function ListsPage() {
   // if we ever grow to many lists, batch into a single sql with grouping.
   const counts: Record<string, number> = {};
   for (const list of lists) {
-    counts[list.id] = (await computeListMembers(list.filterType as ListFilterType)).length;
+    counts[list.id] = (await computeListMembers(list.filterTypes)).length;
   }
 
   return (

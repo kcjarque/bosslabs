@@ -1134,7 +1134,8 @@ export type ListModel = {
   id: string;
   name: string;
   description: string | null;
-  filterType: ListFilterType;
+  /** UNION of all selected filter types — members are anyone matching at least one. */
+  filterTypes: ListFilterType[];
   createdAt: string;
 };
 
@@ -1142,16 +1143,26 @@ type ListRow = {
   id: string;
   name: string;
   description: string | null;
-  filter_type: ListFilterType;
+  /** Legacy single-value column (nullable). Kept readable for back-compat. */
+  filter_type: ListFilterType | null;
+  filter_types: ListFilterType[] | null;
   created_at: string;
 };
 
 function rowToList(r: ListRow): ListModel {
+  // Prefer the new array column; fall back to wrapping the legacy single value
+  // so rows written before the migration still resolve correctly.
+  const types =
+    r.filter_types && r.filter_types.length > 0
+      ? r.filter_types
+      : r.filter_type
+        ? [r.filter_type]
+        : [];
   return {
     id: r.id,
     name: r.name,
     description: r.description,
-    filterType: r.filter_type,
+    filterTypes: types,
     createdAt: r.created_at,
   };
 }
@@ -1327,15 +1338,20 @@ export async function getList(id: string): Promise<ListModel | null> {
 export async function addList(input: {
   name: string;
   description?: string | null;
-  filterType: ListFilterType;
+  filterTypes: ListFilterType[];
 }): Promise<ListModel> {
   if (!isSupabaseConfigured()) throw new Error('addList: Supabase not configured');
+  if (!input.filterTypes.length) {
+    throw new Error('addList: at least one filter type is required');
+  }
   const { data, error } = await getSupabase()
     .from('lists')
     .insert({
       name: input.name,
       description: input.description ?? null,
-      filter_type: input.filterType,
+      // Legacy column for back-compat with old readers; keep in sync with the array.
+      filter_type: input.filterTypes[0],
+      filter_types: input.filterTypes,
     })
     .select('*')
     .single();
@@ -1345,13 +1361,19 @@ export async function addList(input: {
 
 export async function updateList(
   id: string,
-  patch: Partial<Pick<ListModel, 'name' | 'description' | 'filterType'>>,
+  patch: Partial<Pick<ListModel, 'name' | 'description' | 'filterTypes'>>,
 ): Promise<ListModel | null> {
   if (!isSupabaseConfigured()) return null;
   const row: Partial<ListRow> = {};
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.description !== undefined) row.description = patch.description;
-  if (patch.filterType !== undefined) row.filter_type = patch.filterType;
+  if (patch.filterTypes !== undefined) {
+    if (!patch.filterTypes.length) {
+      throw new Error('updateList: at least one filter type is required');
+    }
+    row.filter_types = patch.filterTypes;
+    row.filter_type = patch.filterTypes[0]; // keep legacy column synced
+  }
   const { data, error } = await getSupabase()
     .from('lists')
     .update(row)
@@ -1369,28 +1391,47 @@ export async function deleteList(id: string): Promise<void> {
 }
 
 /**
- * Resolve a list's filter against the current signups table. Returns
- * the matching Signup rows (live snapshot — no caching, called per cron run).
+ * Predicate for a single filter type — returned as a function so we can
+ * union-or multiple filters by OR-ing their predicates.
  */
-export async function computeListMembers(filterType: ListFilterType): Promise<Signup[]> {
-  const all = await getSignups();
+function filterPredicate(filterType: ListFilterType): (s: Signup) => boolean {
   switch (filterType) {
     case 'all_paid':
-      return all.filter((s) => s.status === 'paid');
+      return (s) => s.status === 'paid';
     case 'all_registered':
-      // The default "webinar attendees" list: registered (in-flight) + paid.
-      // Excludes free signups, refunded, unsubscribed.
-      return all.filter(
-        (s) => s.source === 'paid' && (s.status === 'registered' || s.status === 'paid'),
-      );
+      // The default "webinar attendees" filter: registered (in-flight) + paid.
+      return (s) => s.source === 'paid' && (s.status === 'registered' || s.status === 'paid');
     case 'all_free':
-      return all.filter((s) => s.source === 'free');
+      return (s) => s.source === 'free';
     case 'abandoned':
-      return all.filter((s) => s.source === 'paid' && s.status === 'registered');
+      return (s) => s.source === 'paid' && s.status === 'registered';
     case 'all_signups':
+      return (s) => s.status !== 'unsubscribed';
     default:
-      return all.filter((s) => s.status !== 'unsubscribed');
+      return () => false;
   }
+}
+
+/**
+ * Resolve a list's filters against the current signups table. Returns
+ * the UNION of matches across all selected filter types (deduped by id).
+ * Live snapshot — no caching, called once per cron run.
+ *
+ * Accepts a single filter type OR an array, so existing callers that
+ * still pass `filterType` work unchanged.
+ */
+export async function computeListMembers(
+  filterTypes: ListFilterType | ListFilterType[],
+): Promise<Signup[]> {
+  const types = Array.isArray(filterTypes) ? filterTypes : [filterTypes];
+  if (types.length === 0) return [];
+  const all = await getSignups();
+  const predicates = types.map(filterPredicate);
+  // Unsubscribed seats never receive anything, regardless of which filter
+  // included them. This safety net mirrors the old all_signups behavior.
+  return all.filter(
+    (s) => s.status !== 'unsubscribed' && predicates.some((p) => p(s)),
+  );
 }
 
 /* ─── Sequences ───────────────────────────────────────────────────────── */

@@ -23,7 +23,11 @@ export function ListsEditor({
   onCreate: (fd: FormData) => Promise<void>;
   onUpdate: (
     id: string,
-    patch: { name?: string; description?: string | null; filterType?: ListFilterType },
+    patch: {
+      name?: string;
+      description?: string | null;
+      filterTypes?: ListFilterType[];
+    },
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
@@ -46,41 +50,13 @@ export function ListsEditor({
         </div>
 
         {creating && (
-          <form
-            action={async (fd) => {
+          <CreateListForm
+            onCreate={async (fd) => {
               await onCreate(fd);
               setCreating(false);
             }}
-            className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4"
-          >
-            <div>
-              <label className="label">Name</label>
-              <input name="name" className="input" placeholder="VIP buyers" required />
-            </div>
-            <div>
-              <label className="label">Description (optional)</label>
-              <input
-                name="description"
-                className="input"
-                placeholder="What this list represents"
-              />
-            </div>
-            <div>
-              <label className="label">Filter</label>
-              <select name="filterType" className="select" required defaultValue="all_registered">
-                {FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label} — {opt.hint}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <button type="submit" className="btn btn-primary" disabled={isPending}>
-                Create list
-              </button>
-            </div>
-          </form>
+            isPending={isPending}
+          />
         )}
 
         {initial.length === 0 && !creating && (
@@ -92,7 +68,7 @@ export function ListsEditor({
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Filter</th>
+                <th>Filters</th>
                 <th className="text-right">Members</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -130,6 +106,61 @@ export function ListsEditor({
   );
 }
 
+function CreateListForm({
+  onCreate,
+  isPending,
+}: {
+  onCreate: (fd: FormData) => Promise<void>;
+  isPending: boolean;
+}) {
+  const [selected, setSelected] = useState<ListFilterType[]>(['all_registered']);
+
+  return (
+    <form
+      action={onCreate}
+      className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+    >
+      <div>
+        <label className="label">Name</label>
+        <input name="name" className="input" placeholder="VIP buyers" required />
+      </div>
+      <div>
+        <label className="label">Description (optional)</label>
+        <input
+          name="description"
+          className="input"
+          placeholder="What this list represents"
+        />
+      </div>
+      <div>
+        <label className="label">
+          Filters{' '}
+          <span className="ml-1 normal-case tracking-normal text-[10px] text-slate-400">
+            (members = UNION across selected filters)
+          </span>
+        </label>
+        <FilterCheckboxes
+          selected={selected}
+          onChange={setSelected}
+          formFieldName="filterTypes"
+        />
+        {selected.length === 0 && (
+          <p className="mt-1 text-xs text-red-600">Pick at least one filter.</p>
+        )}
+      </div>
+      <div>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={isPending || selected.length === 0}
+        >
+          Create list
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ListRow({
   list,
   memberCount,
@@ -142,14 +173,16 @@ function ListRow({
   memberCount: number;
   editing: boolean;
   onEdit: () => void;
-  onSave: (patch: { name?: string; description?: string | null; filterType?: ListFilterType }) => void;
+  onSave: (patch: {
+    name?: string;
+    description?: string | null;
+    filterTypes?: ListFilterType[];
+  }) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(list.name);
   const [description, setDescription] = useState(list.description ?? '');
-  const [filterType, setFilterType] = useState<ListFilterType>(list.filterType);
-
-  const filterLabel = FILTER_OPTIONS.find((o) => o.value === list.filterType)?.label ?? list.filterType;
+  const [filterTypes, setFilterTypes] = useState<ListFilterType[]>(list.filterTypes);
 
   if (!editing) {
     return (
@@ -161,7 +194,20 @@ function ListRow({
           )}
         </td>
         <td>
-          <span className="pill pill-cyan">{filterLabel}</span>
+          <div className="flex flex-wrap gap-1">
+            {list.filterTypes.length === 0 ? (
+              <span className="pill pill-red">no filter</span>
+            ) : (
+              list.filterTypes.map((ft) => {
+                const label = FILTER_OPTIONS.find((o) => o.value === ft)?.label ?? ft;
+                return (
+                  <span key={ft} className="pill pill-cyan">
+                    {label}
+                  </span>
+                );
+              })
+            )}
+          </div>
         </td>
         <td className="text-right font-mono">{memberCount}</td>
         <td className="text-right">
@@ -184,27 +230,21 @@ function ListRow({
         />
       </td>
       <td>
-        <select
-          className="select"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as ListFilterType)}
-        >
-          {FILTER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <FilterCheckboxes selected={filterTypes} onChange={setFilterTypes} />
+        {filterTypes.length === 0 && (
+          <p className="mt-1 text-xs text-red-600">Pick at least one filter.</p>
+        )}
       </td>
       <td className="text-right font-mono">{memberCount}</td>
       <td className="text-right">
         <button
           className="btn btn-primary"
+          disabled={filterTypes.length === 0}
           onClick={() =>
             onSave({
               name,
               description: description || null,
-              filterType,
+              filterTypes,
             })
           }
         >
@@ -213,5 +253,63 @@ function ListRow({
         <button className="btn btn-ghost" onClick={onEdit}>Cancel</button>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Reusable checkbox group used by both create and edit. Maintains its own
+ * hidden inputs (one per checked value) so form submissions naturally
+ * produce a multi-valued FormData entry when used inside a <form>.
+ */
+function FilterCheckboxes({
+  selected,
+  onChange,
+  formFieldName,
+}: {
+  selected: ListFilterType[];
+  onChange: (next: ListFilterType[]) => void;
+  /** When set, also emits hidden inputs so a parent <form> can collect via formData.getAll(). */
+  formFieldName?: string;
+}) {
+  function toggle(value: ListFilterType, checked: boolean) {
+    if (checked) {
+      onChange([...new Set([...selected, value])]);
+    } else {
+      onChange(selected.filter((v) => v !== value));
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {FILTER_OPTIONS.map((opt) => {
+        const checked = selected.includes(opt.value);
+        return (
+          <label
+            key={opt.value}
+            className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition ${
+              checked
+                ? 'border-cyan-300 bg-cyan-50/40'
+                : 'border-slate-200 bg-white hover:bg-slate-50'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => toggle(opt.value, e.target.checked)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-slate-900">{opt.label}</div>
+              <div className="text-xs text-slate-500">{opt.hint}</div>
+            </div>
+          </label>
+        );
+      })}
+      {/* Hidden inputs so a parent <form> can read filterTypes via formData.getAll */}
+      {formFieldName &&
+        selected.map((v) => (
+          <input key={v} type="hidden" name={formFieldName} value={v} />
+        ))}
+    </div>
   );
 }

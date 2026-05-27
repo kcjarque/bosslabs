@@ -483,16 +483,24 @@ create table if not exists lists (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text,
-  -- Dynamic filter type. Computed against signups at send time.
-  filter_type text not null check (filter_type in (
-    'all_paid',         -- status = 'paid'
-    'all_registered',   -- source = 'paid' AND status IN ('registered', 'paid')
-    'all_free',         -- source = 'free'
-    'all_signups',      -- everyone
-    'abandoned'         -- source = 'paid' AND status = 'registered' (no upgrade yet)
+  -- LEGACY single-filter column. Kept for backward compat; new code reads filter_types[].
+  -- May be null on rows created after the multi-filter migration.
+  filter_type text check (filter_type in (
+    'all_paid', 'all_registered', 'all_free', 'all_signups', 'abandoned'
   )),
+  -- Array of dynamic filters. Members are the UNION of matches across all
+  -- selected filters. e.g. ['all_paid','all_free'] = paid customers OR free signups.
+  filter_types text[] not null default array[]::text[],
   created_at timestamptz not null default now()
 );
+-- Idempotent: existing projects pre-multi-filter migration.
+alter table lists add column if not exists filter_types text[] not null default array[]::text[];
+alter table lists alter column filter_type drop not null;
+-- Backfill singular → array for legacy rows.
+update lists
+  set filter_types = array[filter_type]
+where (filter_types is null or filter_types = array[]::text[])
+  and filter_type is not null;
 
 create table if not exists sequences (
   id uuid primary key default gen_random_uuid(),
@@ -549,12 +557,13 @@ where s.id = 1
 on conflict (id) do nothing;
 
 -- ─── Seed: default "All Webinar Attendees" list ──────────────────────────
-insert into lists (id, name, description, filter_type)
+insert into lists (id, name, description, filter_type, filter_types)
 values (
   '22222222-2222-2222-2222-222222222222'::uuid,
   'All Webinar Attendees',
   'Anyone who registered or paid for the webinar.',
-  'all_registered'
+  'all_registered',                   -- legacy column for back-compat
+  array['all_registered']             -- new multi-filter column
 )
 on conflict (id) do nothing;
 

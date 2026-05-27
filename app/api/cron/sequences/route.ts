@@ -120,7 +120,7 @@ export async function GET(req: Request) {
 
     const event = sequence.eventId ? await getEvent(sequence.eventId) : null;
     const steps = await getSequenceSteps(sequence.id);
-    const members = await computeListMembers(list.filterType);
+    const members = await computeListMembers(list.filterTypes);
 
     for (const step of steps) {
       if (!step.active) continue;

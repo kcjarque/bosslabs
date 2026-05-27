@@ -4,21 +4,45 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
 import { addList, updateList, deleteList, type ListFilterType } from '@/lib/db';
 
+const VALID_FILTERS: ListFilterType[] = [
+  'all_paid',
+  'all_registered',
+  'all_free',
+  'all_signups',
+  'abandoned',
+];
+
+function parseFilterTypes(raw: FormDataEntryValue[]): ListFilterType[] {
+  return raw
+    .map((v) => String(v).trim())
+    .filter((v): v is ListFilterType =>
+      VALID_FILTERS.includes(v as ListFilterType),
+    );
+}
+
 export async function createListAction(formData: FormData): Promise<void> {
   requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
   const description = String(formData.get('description') ?? '').trim() || null;
-  const filterType = String(formData.get('filterType') ?? '').trim() as ListFilterType;
-  if (!name || !filterType) throw new Error('Name and filter type required');
-  await addList({ name, description, filterType });
+  const filterTypes = parseFilterTypes(formData.getAll('filterTypes'));
+  if (!name) throw new Error('Name required');
+  if (filterTypes.length === 0) throw new Error('Pick at least one filter');
+  await addList({ name, description, filterTypes });
   revalidatePath('/admin/lists');
 }
 
 export async function updateListAction(
   id: string,
-  patch: { name?: string; description?: string | null; filterType?: ListFilterType },
+  patch: {
+    name?: string;
+    description?: string | null;
+    filterTypes?: ListFilterType[];
+  },
 ): Promise<void> {
   requireAdmin();
+  if (patch.filterTypes !== undefined && patch.filterTypes.length === 0) {
+    throw new Error('Pick at least one filter');
+  }
   await updateList(id, patch);
   revalidatePath('/admin/lists');
 }
