@@ -19,6 +19,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { cache } from 'react';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 /* --------------------------------------------------------------------- */
@@ -547,7 +548,7 @@ export async function updateAdminSendStatus(
 }
 
 /** Single-row fetch by signup id. Returns null if not found. */
-export async function getSignupById(id: string): Promise<Signup | null> {
+export const getSignupById = cache(async (id: string): Promise<Signup | null> => {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('signups')
@@ -559,7 +560,7 @@ export async function getSignupById(id: string): Promise<Signup | null> {
   }
   const list = await readJson<Signup[]>('signups.json', []);
   return list.find((s) => s.id === id) ?? null;
-}
+});
 
 /**
  * Fetch every sequence_send row for a given signup, joined with enough
@@ -648,7 +649,13 @@ export async function getCustomerSequenceSends(
   });
 }
 
-export async function getSignups(): Promise<Signup[]> {
+/**
+ * Wrapped with React's `cache()` so multiple calls within the same
+ * server-side request hit Supabase ONCE. Critical for pages like
+ * /admin/customers/[id] that resolve list memberships in a loop —
+ * without this every iteration re-fetches the whole signups table.
+ */
+export const getSignups = cache(async (): Promise<Signup[]> => {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('signups')
@@ -659,7 +666,7 @@ export async function getSignups(): Promise<Signup[]> {
   }
   const list = await readJson<Signup[]>('signups.json', []);
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+});
 
 export async function addSignup(
   data: Omit<Signup, 'id' | 'createdAt' | 'status'> & { status?: SignupStatus },
@@ -789,7 +796,7 @@ export async function deleteDemoSignups(): Promise<number> {
 /* EMAIL TEMPLATES                                                       */
 /* --------------------------------------------------------------------- */
 
-export async function getEmailTemplates(): Promise<EmailTemplate[]> {
+export const getEmailTemplates = cache(async (): Promise<EmailTemplate[]> => {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('email_templates')
@@ -799,7 +806,7 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
     return (data as EmailTemplate[]) ?? [];
   }
   return readJson<EmailTemplate[]>('email_templates.json', []);
-}
+});
 
 export async function saveEmailTemplate(t: EmailTemplate) {
   if (isSupabaseConfigured()) {
@@ -827,7 +834,7 @@ export async function saveEmailTemplate(t: EmailTemplate) {
 /* SMS TEMPLATES                                                         */
 /* --------------------------------------------------------------------- */
 
-export async function getSmsTemplates(): Promise<SmsTemplate[]> {
+export const getSmsTemplates = cache(async (): Promise<SmsTemplate[]> => {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('sms_templates')
@@ -837,7 +844,7 @@ export async function getSmsTemplates(): Promise<SmsTemplate[]> {
     return (data as SmsTemplate[]) ?? [];
   }
   return readJson<SmsTemplate[]>('sms_templates.json', []);
-}
+});
 
 export async function saveSmsTemplate(t: SmsTemplate) {
   if (isSupabaseConfigured()) {
@@ -1197,7 +1204,7 @@ export function computeDiscountCentavos(
 /* SETTINGS                                                              */
 /* --------------------------------------------------------------------- */
 
-export async function getSettings(): Promise<Settings> {
+export const getSettings = cache(async (): Promise<Settings> => {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()
       .from('settings')
@@ -1210,7 +1217,7 @@ export async function getSettings(): Promise<Settings> {
   }
   const stored = await readJson<Partial<Settings>>('settings.json', {});
   return { ...DEFAULT_SETTINGS, ...stored };
-}
+});
 
 /** Fields whose value must never leave the server unredacted. */
 const SECRET_FIELDS: ReadonlyArray<keyof Settings> = [
@@ -1569,7 +1576,7 @@ function rowToStep(r: SequenceStepRow): SequenceStep {
 
 /* ─── Events ──────────────────────────────────────────────────────────── */
 
-export async function getEvents(): Promise<EventModel[]> {
+export const getEvents = cache(async (): Promise<EventModel[]> => {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getSupabase()
     .from('events')
@@ -1577,7 +1584,7 @@ export async function getEvents(): Promise<EventModel[]> {
     .order('starts_at_iso', { ascending: false });
   if (error) throw new Error(`getEvents: ${error.message}`);
   return (data as EventRow[]).map(rowToEvent);
-}
+});
 
 export async function getEvent(id: string): Promise<EventModel | null> {
   if (!isSupabaseConfigured()) return null;
@@ -1639,7 +1646,7 @@ export async function deleteEvent(id: string): Promise<void> {
 
 /* ─── Lists ───────────────────────────────────────────────────────────── */
 
-export async function getLists(): Promise<ListModel[]> {
+export const getLists = cache(async (): Promise<ListModel[]> => {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getSupabase()
     .from('lists')
@@ -1647,7 +1654,7 @@ export async function getLists(): Promise<ListModel[]> {
     .order('created_at', { ascending: false });
   if (error) throw new Error(`getLists: ${error.message}`);
   return (data as ListRow[]).map(rowToList);
-}
+});
 
 export async function getList(id: string): Promise<ListModel | null> {
   if (!isSupabaseConfigured()) return null;
@@ -1777,7 +1784,7 @@ export async function computeListMembers(
 
 /* ─── Sequences ───────────────────────────────────────────────────────── */
 
-export async function getSequences(): Promise<SequenceModel[]> {
+export const getSequences = cache(async (): Promise<SequenceModel[]> => {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getSupabase()
     .from('sequences')
@@ -1785,7 +1792,7 @@ export async function getSequences(): Promise<SequenceModel[]> {
     .order('created_at', { ascending: false });
   if (error) throw new Error(`getSequences: ${error.message}`);
   return (data as SequenceRow[]).map(rowToSequence);
-}
+});
 
 export async function getSequence(id: string): Promise<SequenceModel | null> {
   if (!isSupabaseConfigured()) return null;
@@ -1998,6 +2005,23 @@ export async function recordSequenceSend(input: {
   if (error && !error.message.includes('duplicate')) {
     throw new Error(`recordSequenceSend: ${error.message}`);
   }
+}
+
+/**
+ * Step counts grouped by sequence_id — single query instead of N
+ * per-sequence calls. Used by /admin/sequences to render the table.
+ */
+export async function getStepCountsBySequence(): Promise<Map<string, number>> {
+  if (!isSupabaseConfigured()) return new Map();
+  const { data, error } = await getSupabase()
+    .from('sequence_steps')
+    .select('sequence_id');
+  if (error) throw new Error(`getStepCountsBySequence: ${error.message}`);
+  const counts = new Map<string, number>();
+  for (const row of (data as Array<{ sequence_id: string }>) ?? []) {
+    counts.set(row.sequence_id, (counts.get(row.sequence_id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** Counts of recipients per step in a sequence — used by the admin UI. */

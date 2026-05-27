@@ -4,7 +4,7 @@ import {
   getSequences,
   getLists,
   getEvents,
-  getSequenceSteps,
+  getStepCountsBySequence,
 } from '@/lib/db';
 import { SequencesEditor } from '@/components/SequencesEditor';
 import {
@@ -17,18 +17,14 @@ export const dynamic = 'force-dynamic';
 
 export default async function SequencesPage() {
   requireAdmin();
-  const [sequences, lists, events] = await Promise.all([
+  const [sequences, lists, events, stepCountsMap] = await Promise.all([
     getSequences(),
     getLists(),
     getEvents(),
+    // Single round-trip — replaces the previous N+1 (one query per sequence).
+    getStepCountsBySequence(),
   ]);
-
-  // Step counts per sequence for the table — one quick call each.
-  const stepCounts: Record<string, number> = {};
-  for (const seq of sequences) {
-    const steps = await getSequenceSteps(seq.id);
-    stepCounts[seq.id] = steps.length;
-  }
+  const stepCounts: Record<string, number> = Object.fromEntries(stepCountsMap);
 
   return (
     <div className="space-y-6">
