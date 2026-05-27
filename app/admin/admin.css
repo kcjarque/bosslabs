@@ -1,7 +1,21 @@
 /* Admin-only overrides — flip the page from dark editorial to light dashboard. */
+
+/* The body in globals.css has a dark gradient (background-attachment: fixed),
+ * which bleeds through whenever the .admin-shell doesn't fully seal the
+ * viewport (e.g. during horizontal overflow or when content is shorter
+ * than the sidebar). Override at the body level instead of just the shell. */
+body:has(.admin-shell) {
+  background: #F5F7FB !important;
+  background-image: none !important;
+}
+
 .admin-shell {
   /* Reset the body's dark radial gradient (set in globals.css) for /admin/* */
   background-image: none !important;
+  /* Belt-and-suspenders: never let horizontal overflow expose the body bg. */
+  overflow-x: hidden;
+  /* Ensure the shell always covers full viewport width regardless of flex/grid behaviour. */
+  width: 100%;
 }
 
 .admin-shell h1,

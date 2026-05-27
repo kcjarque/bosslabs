@@ -83,8 +83,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </header>
 
       <div className="md:flex">
-        {/* Desktop sidebar */}
-        <aside className="hidden border-r border-slate-200 bg-white md:flex md:w-60 md:flex-col md:fixed md:inset-y-0">
+        {/* Desktop sidebar — explicit left:0 in case a browser interprets
+            `fixed inset-y-0` (which only sets top+bottom) ambiguously. */}
+        <aside className="hidden border-r border-slate-200 bg-white md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 md:left-0">
           <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5">
             <Mark size={22} />
             <Link href="/admin" className="font-semibold tracking-tight text-slate-900">
