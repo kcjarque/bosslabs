@@ -339,17 +339,9 @@ export async function POST(req: Request) {
       },
     });
 
-    // TG notification — new checkout initiated (pending payment).
-    const amtLabel = `₱${(amountCentavos / 100).toLocaleString()}`;
-    void sendTelegram(
-      `🛒 <b>New checkout!</b>\n\n` +
-      `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
-      `${esc(body.email)}\n` +
-      `Amount: <b>${amtLabel}</b>${bumped ? ' (with bump)' : ''}` +
-      (promoApplied ? `\nPromo: <code>${esc(promoApplied.code)}</code>` : '') +
-      `\nPayment method: ${group ?? 'ALL'}`,
-    );
-
+    // Note: We DON'T send a TG notification here. Registered = checkout
+    // started but not paid yet, which is normal in-flight. Abandonment
+    // is detected by /api/cron/abandoned after a 30-min grace period.
     return NextResponse.json({ redirectUrl: invoice.invoiceUrl, demo: invoice.demo });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
