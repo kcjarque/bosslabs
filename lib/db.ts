@@ -19,8 +19,26 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { cache } from 'react';
+import * as React from 'react';
 import { getSupabase, isSupabaseConfigured } from './supabase';
+
+/**
+ * Request-scoped caching wrapper.
+ *
+ * In a Server Component / Route Handler context, React's `cache()` dedupes
+ * calls within a single request. Critical because helpers like
+ * computeListMembers call getSignups internally — without `cache()` a
+ * 5-list page does 5 full-table fetches.
+ *
+ * In a Node CLI script (e.g. `npx tsx scripts/...`), React's cache export
+ * isn't reachable. The fallback identity function lets the same helpers
+ * work in scripts (just without the dedupe). Without this fallback, every
+ * script that imports lib/db.ts crashes at module load.
+ */
+type AnyFn = (...args: unknown[]) => unknown;
+const cache: <T extends AnyFn>(fn: T) => T =
+  (React as unknown as { cache?: <T extends AnyFn>(fn: T) => T }).cache ??
+  ((fn: AnyFn) => fn as AnyFn) as unknown as <T extends AnyFn>(fn: T) => T;
 
 /* --------------------------------------------------------------------- */
 /* TYPES                                                                 */
