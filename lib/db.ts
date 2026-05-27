@@ -739,6 +739,90 @@ export async function countPageViews(opts: {
   return { total: filtered.length, uniqueSessions: sessions.size };
 }
 
+/**
+ * Bucket pageviews by time interval. Returns one row per bucket with the
+ * unique-session and total counts inside that bucket. Buckets are aligned
+ * to the bucketMs grid starting at sinceMs.
+ *
+ * Used by the funnel chart to show traffic progression over time.
+ */
+export async function getVisitBuckets(opts: {
+  sinceIso: string;
+  untilIso?: string;
+  bucketMs: number; // e.g. 3600_000 for 1h, 86400_000 for 1d
+  pathPrefix?: string | string[] | null;
+}): Promise<Array<{ bucketStart: string; uniqueSessions: number; total: number }>> {
+  const sinceMs = new Date(opts.sinceIso).getTime();
+  const untilMs = opts.untilIso ? new Date(opts.untilIso).getTime() : Date.now();
+  const numBuckets = Math.max(1, Math.ceil((untilMs - sinceMs) / opts.bucketMs));
+
+  // Pre-allocate empty buckets so empty hours/days still show 0 (not gaps).
+  const buckets: Array<{ bucketStart: string; uniqueSessions: number; total: number; _sessions: Set<string> }> =
+    Array.from({ length: numBuckets }, (_, i) => ({
+      bucketStart: new Date(sinceMs + i * opts.bucketMs).toISOString(),
+      uniqueSessions: 0,
+      total: 0,
+      _sessions: new Set<string>(),
+    }));
+
+  function bucketIndex(ts: number): number {
+    return Math.floor((ts - sinceMs) / opts.bucketMs);
+  }
+
+  if (isSupabaseConfigured()) {
+    const sb = getSupabase();
+    const prefixes = Array.isArray(opts.pathPrefix)
+      ? opts.pathPrefix
+      : opts.pathPrefix
+        ? [opts.pathPrefix]
+        : null;
+    let q = sb
+      .from('page_views')
+      .select('session_id, created_at')
+      .gte('created_at', opts.sinceIso)
+      .lt('created_at', new Date(untilMs).toISOString());
+    if (prefixes && prefixes.length > 0) {
+      const orClause = prefixes.map((p) => `path.ilike.${p}%`).join(',');
+      q = q.or(orClause);
+    }
+    const { data, error } = await q;
+    if (error) throw new Error(`getVisitBuckets: ${error.message}`);
+    for (const row of (data as Array<{ session_id: string | null; created_at: string }>) ?? []) {
+      const ts = new Date(row.created_at).getTime();
+      const i = bucketIndex(ts);
+      if (i < 0 || i >= buckets.length) continue;
+      buckets[i].total++;
+      if (row.session_id) buckets[i]._sessions.add(row.session_id);
+    }
+  } else {
+    // JSON fallback
+    const list = await readJson<Array<PageViewInsert & { createdAt: string }>>(
+      'page_views.json',
+      [],
+    );
+    const prefixes = Array.isArray(opts.pathPrefix)
+      ? opts.pathPrefix
+      : opts.pathPrefix
+        ? [opts.pathPrefix]
+        : null;
+    for (const v of list) {
+      const ts = new Date(v.createdAt).getTime();
+      if (ts < sinceMs || ts >= untilMs) continue;
+      if (prefixes && !prefixes.some((p) => v.path.startsWith(p))) continue;
+      const i = bucketIndex(ts);
+      if (i < 0 || i >= buckets.length) continue;
+      buckets[i].total++;
+      if (v.sessionId) buckets[i]._sessions.add(v.sessionId);
+    }
+  }
+
+  return buckets.map((b) => ({
+    bucketStart: b.bucketStart,
+    uniqueSessions: b._sessions.size,
+    total: b.total,
+  }));
+}
+
 /* --------------------------------------------------------------------- */
 /* PROMO CODES                                                           */
 /* --------------------------------------------------------------------- */

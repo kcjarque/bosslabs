@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { countPageViews, getSettings, getSignups, type Signup } from '@/lib/db';
+import {
+  countPageViews,
+  getSettings,
+  getSignups,
+  getVisitBuckets,
+  type Signup,
+} from '@/lib/db';
 import { formatPHP, OFFER } from '@/lib/config';
 import { CustomDateRange } from '@/components/CustomDateRange';
 
@@ -131,15 +137,48 @@ export default async function AdminDashboard({
     FUNNEL_RANGES.find((r) => r.key === '7d')!;
   const funnelSinceMs = Date.now() - funnelRange.hours * 3600 * 1000;
   const funnelSinceIso = new Date(funnelSinceMs).toISOString();
+  // Previous period of equal length, for the comparison line in the visits chart.
+  const prevSinceMs = funnelSinceMs - funnelRange.hours * 3600 * 1000;
+  const prevSinceIso = new Date(prevSinceMs).toISOString();
 
-  const [signups, settings, viewsAll, viewsCheckout] = await Promise.all([
+  // Pick bucket size for the visits sparkline: 1h for short ranges,
+  // 1d once the range gets too wide to fit hourly points on the SVG.
+  const bucketMs = funnelRange.hours <= 24 * 7 ? 3600_000 : 86400_000;
+
+  const [
+    signups,
+    settings,
+    viewsAll,
+    viewsCheckout,
+    visitsBuckets,
+    visitsBucketsPrev,
+  ] = await Promise.all([
     getSignups(),
     getSettings(),
     // Top of funnel = anyone who landed on any public page.
     countPageViews({ sinceIso: funnelSinceIso }),
     // Mid-funnel hint = sessions that made it to /checkout.
     countPageViews({ sinceIso: funnelSinceIso, pathPrefix: '/checkout' }),
+    // Hourly/daily buckets for the visits sparkline.
+    getVisitBuckets({ sinceIso: funnelSinceIso, bucketMs }),
+    // Same-length previous window, for the dashed comparison line.
+    getVisitBuckets({
+      sinceIso: prevSinceIso,
+      untilIso: funnelSinceIso,
+      bucketMs,
+    }),
   ]);
+
+  // Average unique sessions per bucket across the previous period — used as
+  // the flat "previous day's avg" baseline shown next to the chart.
+  const prevTotalUnique = visitsBucketsPrev.reduce(
+    (sum, b) => sum + b.uniqueSessions,
+    0,
+  );
+  const prevAvgPerBucket =
+    visitsBucketsPrev.length > 0
+      ? prevTotalUnique / visitsBucketsPrev.length
+      : 0;
 
   const now = Date.now();
   const within = (h: number, predicate: (s: Signup) => boolean = () => true) =>
@@ -364,6 +403,43 @@ export default async function AdminDashboard({
             sub={`${fmtRate(checkoutToPaidPct)} of checkouts`}
             tone="emerald"
             widthPct={Math.max(20, Math.min(100, checkoutToPaidPct))}
+          />
+        </div>
+
+        {/* Visits-over-time sparkline (current vs previous period) */}
+        <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Visits over time
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {bucketMs === 3600_000 ? 'Hourly' : 'Daily'} unique sessions ·
+                dashed line = previous {funnelRange.label} avg per{' '}
+                {bucketMs === 3600_000 ? 'hour' : 'day'}
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3 bg-cyan-500" />
+                Current
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-3"
+                  style={{
+                    background:
+                      'repeating-linear-gradient(to right, #94a3b8 0, #94a3b8 3px, transparent 3px, transparent 6px)',
+                  }}
+                />
+                Prev avg ({prevAvgPerBucket.toFixed(1)})
+              </span>
+            </div>
+          </div>
+          <VisitsSparkline
+            buckets={visitsBuckets}
+            prevAverage={prevAvgPerBucket}
+            bucketMs={bucketMs}
           />
         </div>
 
@@ -1016,4 +1092,177 @@ function formatRelative(iso: string) {
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+/**
+ * VisitsSparkline — SVG line chart of unique sessions per bucket.
+ * Cyan solid line = current period. Dashed slate line = previous period's
+ * average per bucket (flat baseline). Tooltips via <title>.
+ */
+function VisitsSparkline({
+  buckets,
+  prevAverage,
+  bucketMs,
+}: {
+  buckets: Array<{ bucketStart: string; uniqueSessions: number; total: number }>;
+  prevAverage: number;
+  bucketMs: number;
+}) {
+  if (buckets.length === 0) {
+    return (
+      <p className="mt-4 text-[11px] text-slate-500">No traffic in this window.</p>
+    );
+  }
+
+  const W = 720;
+  const H = 140;
+  const padX = 8;
+  const padY = 14;
+  const innerW = W - padX * 2;
+  const innerH = H - padY * 2;
+
+  // Y-axis scale = max of current points OR previous-period average so the
+  // dashed baseline always lands inside the plot area.
+  const dataMax = Math.max(
+    1,
+    ...buckets.map((b) => b.uniqueSessions),
+    prevAverage,
+  );
+  // 10% headroom so the line never hits the top edge.
+  const yMax = dataMax * 1.1;
+
+  const slotW = innerW / Math.max(1, buckets.length - 1);
+  function px(i: number): number {
+    return padX + slotW * i;
+  }
+  function py(v: number): number {
+    return padY + innerH * (1 - v / yMax);
+  }
+
+  // Build the polyline path string for the current period.
+  const linePath = buckets
+    .map((b, i) => `${i === 0 ? 'M' : 'L'} ${px(i).toFixed(1)} ${py(b.uniqueSessions).toFixed(1)}`)
+    .join(' ');
+
+  // Area fill under the line (subtle gradient look via opacity).
+  const areaPath = [
+    `M ${px(0)} ${padY + innerH}`,
+    ...buckets.map((b, i) => `L ${px(i).toFixed(1)} ${py(b.uniqueSessions).toFixed(1)}`),
+    `L ${px(buckets.length - 1)} ${padY + innerH}`,
+    'Z',
+  ].join(' ');
+
+  const yPrev = py(prevAverage);
+
+  // Format the bucket time for tooltips/labels.
+  const hourly = bucketMs === 3600_000;
+  function fmtBucket(iso: string): string {
+    const d = new Date(iso);
+    return hourly
+      ? d.toLocaleString('en-PH', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          hour12: true,
+          timeZone: 'Asia/Manila',
+        })
+      : d.toLocaleDateString('en-PH', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'Asia/Manila',
+        });
+  }
+
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full text-slate-300">
+        {/* Y-axis gridlines (25/50/75/100% of yMax) */}
+        {[0.25, 0.5, 0.75, 1].map((t) => (
+          <line
+            key={t}
+            x1={padX}
+            x2={W - padX}
+            y1={padY + innerH * (1 - t)}
+            y2={padY + innerH * (1 - t)}
+            stroke="currentColor"
+            strokeWidth="0.5"
+            opacity="0.3"
+            strokeDasharray="2 3"
+          />
+        ))}
+
+        {/* Area fill under current line */}
+        <path d={areaPath} fill="#06b6d4" opacity="0.08" />
+
+        {/* Previous-period average — dashed horizontal */}
+        <line
+          x1={padX}
+          x2={W - padX}
+          y1={yPrev}
+          y2={yPrev}
+          stroke="#94a3b8"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+        />
+        <text
+          x={W - padX - 2}
+          y={yPrev - 3}
+          fontSize="9"
+          fill="#64748b"
+          textAnchor="end"
+        >
+          prev avg {prevAverage.toFixed(1)}
+        </text>
+
+        {/* Current period line */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#06b6d4"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Hover targets — invisible squares per bucket with <title> tooltip */}
+        {buckets.map((b, i) => (
+          <g key={b.bucketStart}>
+            <title>{`${fmtBucket(b.bucketStart)} · ${b.uniqueSessions} unique sessions · ${b.total} beacons`}</title>
+            <circle
+              cx={px(i)}
+              cy={py(b.uniqueSessions)}
+              r="2"
+              fill="#06b6d4"
+              opacity={b.uniqueSessions > 0 ? 1 : 0}
+            />
+            <rect
+              x={px(i) - slotW / 2}
+              y={padY}
+              width={slotW}
+              height={innerH}
+              fill="transparent"
+            />
+          </g>
+        ))}
+
+        {/* X-axis labels: first, middle, last bucket */}
+        <text x={padX} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="start">
+          {fmtBucket(buckets[0].bucketStart)}
+        </text>
+        {buckets.length > 4 && (
+          <text x={W / 2} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="middle">
+            {fmtBucket(buckets[Math.floor(buckets.length / 2)].bucketStart)}
+          </text>
+        )}
+        <text x={W - padX} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="end">
+          {fmtBucket(buckets[buckets.length - 1].bucketStart)}
+        </text>
+
+        {/* Y-axis max label */}
+        <text x={padX} y={padY + 2} fontSize="9" fill="#94a3b8" textAnchor="start">
+          {Math.round(yMax)}
+        </text>
+      </svg>
+    </div>
+  );
 }
