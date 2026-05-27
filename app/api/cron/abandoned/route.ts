@@ -59,7 +59,10 @@ export async function GET(req: Request) {
       },
     });
 
-    void sendTelegram(
+    // Awaited so Vercel doesn't kill the fetch mid-flight when the
+    // function returns. Plus the iteration cadence keeps us under
+    // Telegram's per-chat rate limit (~1 message/sec).
+    await sendTelegram(
       `🚨 <b>Abandoned checkout</b>\n\n` +
         `<b>${esc(fullName)}</b>\n` +
         `${esc(s.email)}\n` +
@@ -68,6 +71,11 @@ export async function GET(req: Request) {
         `Stuck for ${ageMin} min`,
     );
     sent++;
+    // Pace to ~1 msg/sec per chat to stay under Telegram's rate limit
+    // when a batch of multiple abandoned checkouts is processed.
+    if (abandoned.length > 1) {
+      await new Promise((r) => setTimeout(r, 1100));
+    }
   }
 
   return NextResponse.json({
