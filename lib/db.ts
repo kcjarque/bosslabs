@@ -660,6 +660,26 @@ export async function deleteSignup(id: string): Promise<boolean> {
   return true;
 }
 
+/** Bulk delete — `delete().in('id', ids)` is one round-trip on Supabase. */
+export async function deleteSignups(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .delete()
+      .in('id', ids)
+      .select('id');
+    if (error) throw new Error(`Supabase deleteSignups: ${error.message}`);
+    return data?.length ?? 0;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  const idSet = new Set(ids);
+  const next = list.filter((s) => !idSet.has(s.id));
+  const removed = list.length - next.length;
+  await writeJson('signups.json', next);
+  return removed;
+}
+
 /**
  * Wipe every signup whose metadata.demo === true. Used by the
  * /admin/test-thank-you QA tool to clean up after a test run so the
@@ -1963,6 +1983,24 @@ export async function subscribeToSequence(
     .single();
   if (error) throw new Error(`subscribeToSequence: ${error.message}`);
   return rowToSubscription(data as SequenceSubscriptionRow);
+}
+
+/** Bulk subscribe many customers to one sequence in a single round-trip. */
+export async function subscribeManyToSequence(
+  sequenceId: string,
+  signupIds: string[],
+): Promise<number> {
+  if (signupIds.length === 0) return 0;
+  if (!isSupabaseConfigured()) throw new Error('subscribeManyToSequence: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('sequence_subscriptions')
+    .upsert(
+      signupIds.map((sid) => ({ sequence_id: sequenceId, signup_id: sid })),
+      { onConflict: 'sequence_id,signup_id', ignoreDuplicates: false },
+    )
+    .select('id');
+  if (error) throw new Error(`subscribeManyToSequence: ${error.message}`);
+  return data?.length ?? signupIds.length;
 }
 
 export async function unsubscribeFromSequence(

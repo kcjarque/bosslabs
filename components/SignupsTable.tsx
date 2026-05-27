@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Signup, SignupStatus } from '@/lib/db';
+import type { Signup, SignupStatus, SequenceModel } from '@/lib/db';
 import { EventPill } from './EventPill';
 
 /**
@@ -48,16 +48,50 @@ function methodPillClass(s: Signup): string {
 export function SignupsTable({
   initial,
   eventNameById = {},
+  sequences = [],
+  onBulkSubscribe,
+  onBulkDelete,
 }: {
   initial: Signup[];
   eventNameById?: Record<string, string>;
+  sequences?: SequenceModel[];
+  onBulkSubscribe?: (
+    signupIds: string[],
+    sequenceId: string,
+  ) => Promise<{ count: number }>;
+  onBulkDelete?: (signupIds: string[]) => Promise<{ count: number }>;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [q, setQ] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSeqId, setBulkSeqId] = useState('');
+  const [isPending, startTransition] = useTransition();
 
   function openCustomer(id: string) {
     router.push(`/admin/customers/${id}`);
+  }
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll(ids: string[], checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) ids.forEach((i) => next.add(i));
+      else ids.forEach((i) => next.delete(i));
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
   }
 
   const filtered = useMemo(() => {
@@ -68,6 +102,12 @@ export function SignupsTable({
       return hay.includes(q.toLowerCase());
     });
   }, [initial, filter, q]);
+
+  const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const bulkSupported = Boolean(onBulkSubscribe || onBulkDelete);
+  const activeSequences = sequences.filter((s) => s.active);
 
   return (
     <>
@@ -96,6 +136,84 @@ export function SignupsTable({
           className="input sm:max-w-xs sm:flex-1"
         />
       </div>
+
+      {/* Bulk action bar — sticky at top once selections exist. */}
+      {bulkSupported && selectedIds.size > 0 && (
+        <div className="sticky top-0 z-30 card flex flex-col gap-3 border-cyan-200 bg-cyan-50/60 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm font-medium text-slate-900">
+            {selectedIds.size} selected
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {onBulkSubscribe && activeSequences.length > 0 && (
+              <>
+                <select
+                  className="select sm:w-auto"
+                  value={bulkSeqId}
+                  onChange={(e) => setBulkSeqId(e.target.value)}
+                >
+                  <option value="">Subscribe to sequence…</option>
+                  {activeSequences.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!bulkSeqId || isPending}
+                  onClick={() => {
+                    const ids = Array.from(selectedIds);
+                    const sid = bulkSeqId;
+                    startTransition(async () => {
+                      const res = await onBulkSubscribe(ids, sid);
+                      alert(`Subscribed ${res.count} customer${res.count === 1 ? '' : 's'}.`);
+                      setBulkSeqId('');
+                      clearSelection();
+                      router.refresh();
+                    });
+                  }}
+                >
+                  Subscribe
+                </button>
+              </>
+            )}
+            {onBulkDelete && (
+              <button
+                type="button"
+                className="btn btn-secondary text-red-600 hover:bg-red-50"
+                disabled={isPending}
+                onClick={() => {
+                  const n = selectedIds.size;
+                  if (
+                    !confirm(
+                      `Permanently delete ${n} customer${n === 1 ? '' : 's'}? This cascades and deletes their email/SMS/payment history. No undo.`,
+                    )
+                  )
+                    return;
+                  const ids = Array.from(selectedIds);
+                  startTransition(async () => {
+                    const res = await onBulkDelete(ids);
+                    alert(`Deleted ${res.count} customer${res.count === 1 ? '' : 's'}.`);
+                    clearSelection();
+                    router.refresh();
+                  });
+                }}
+              >
+                Delete
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={clearSelection}
+              disabled={isPending}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile: stacked cards. Desktop: table. */}
       <div className="space-y-3 sm:hidden">
@@ -147,6 +265,24 @@ export function SignupsTable({
           <table className="min-w-full">
             <thead>
               <tr>
+                {bulkSupported && (
+                  <th className="w-8">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      // ref hack avoids React warning when there's a partial selection
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate =
+                            filteredIds.some((id) => selectedIds.has(id)) &&
+                            !allFilteredSelected;
+                        }
+                      }}
+                      onChange={(e) => toggleAll(filteredIds, e.target.checked)}
+                      aria-label="Select all"
+                    />
+                  </th>
+                )}
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
@@ -162,9 +298,28 @@ export function SignupsTable({
               {filtered.map((s) => (
                 <tr
                   key={s.id}
-                  onClick={() => openCustomer(s.id)}
+                  onClick={(e) => {
+                    // Don't navigate when the click target is a checkbox or its cell —
+                    // selecting shouldn't open the profile.
+                    const target = e.target as HTMLElement;
+                    if (target.closest('.bulk-select-cell')) return;
+                    openCustomer(s.id);
+                  }}
                   className="cursor-pointer"
                 >
+                  {bulkSupported && (
+                    <td
+                      className="bulk-select-cell"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(s.id)}
+                        onChange={(e) => toggleOne(s.id, e.target.checked)}
+                        aria-label={`Select ${s.firstName}`}
+                      />
+                    </td>
+                  )}
                   <td className="font-medium text-slate-900">
                     {s.firstName} {s.lastName ?? ''}
                   </td>

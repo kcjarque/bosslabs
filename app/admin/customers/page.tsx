@@ -1,12 +1,17 @@
 import { requireAdmin } from '@/lib/admin-auth';
-import { getSignups, getEvents } from '@/lib/db';
+import { getSignups, getEvents, getSequences } from '@/lib/db';
 import { SignupsTable } from '@/components/SignupsTable';
+import { bulkSubscribeAction, bulkDeleteAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CustomersPage() {
   requireAdmin();
-  const [signups, events] = await Promise.all([getSignups(), getEvents()]);
+  const [signups, events, sequences] = await Promise.all([
+    getSignups(),
+    getEvents(),
+    getSequences(),
+  ]);
   const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
   return (
     <div className="space-y-6">
@@ -29,7 +34,13 @@ export default async function CustomersPage() {
         </a>
       </header>
 
-      <SignupsTable initial={signups} eventNameById={eventNameById} />
+      <SignupsTable
+        initial={signups}
+        eventNameById={eventNameById}
+        sequences={sequences}
+        onBulkSubscribe={bulkSubscribeAction}
+        onBulkDelete={bulkDeleteAction}
+      />
     </div>
   );
 }
