@@ -21,6 +21,7 @@ import {
   type EmailTemplate,
 } from './db';
 import { signUnsubscribeToken } from './admin-auth';
+import { renderEmailMarkdown } from './email-markdown';
 
 export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'demo' }
@@ -68,10 +69,18 @@ export async function renderEmail(
   const templates = await getEmailTemplates();
   const template = templates.find((t) => t.id === templateId);
   if (!template) return null;
+  // Fallback: if html is empty but markdown body exists, render the body
+  // through the BOSSLABS email shell on the fly. This lets the SQL seed
+  // ship templates with just markdown content — emails still work even
+  // before the admin opens the editor and clicks Save.
+  let html = template.html;
+  if ((!html || !html.trim()) && template.body && template.body.trim()) {
+    html = renderEmailMarkdown(template.body);
+  }
   return {
     template,
     subject: renderTemplate(template.subject, vars),
-    html: renderTemplate(template.html, vars),
+    html: renderTemplate(html, vars),
   };
 }
 

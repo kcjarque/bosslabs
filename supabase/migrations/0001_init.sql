@@ -659,3 +659,205 @@ begin
     on conflict (sequence_step_id, signup_id) do nothing;
   end loop;
 end $$;
+
+-- ─── Refreshed reminder copy + new reminder_3h template ──────────────────
+-- All seven webinar reminders (60h / 48h / 36h / 24h / 12h / 3h / 1h) get
+-- the new English-led, upmarket-register copy aimed at paid-attendee
+-- show-up. The html column is left empty — lib/email.ts renders the
+-- markdown body through renderEmailMarkdown() on the fly when html is
+-- missing. Admin Save in /admin/templates also re-renders.
+
+insert into email_templates (id, name, subject, html, body)
+values
+('reminder_60h',
+ '60-hour reminder',
+ $sub$You're confirmed for {{webinarDate}} — let's make it count$sub$,
+ '',
+ $body$^^60-hour reminder^^
+
+# You're confirmed, {{firstName}}.
+
+You're confirmed for the BOSSLABS session on **{{webinarDate}}, {{webinarTime}} {{webinarTimezone}}**. Glad to have you in.
+
+One request while it's in front of you: block {{webinarTime}} in your calendar right now, and set a reminder for 15 minutes before. It sounds basic, but it's the single thing that separates the people who get full value from a session like this and the people who mean to attend and don't.
+
+You've already invested in being there. Let's make sure you actually are.
+
+Over the next two days I'll send a few short notes so you walk in ready. For now — calendar blocked?
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+— Kyle & Mikey
+
+P.S. Come with one real bottleneck in your business in mind. You'll see why on the night.$body$
+),
+
+('reminder_48h',
+ '48-hour reminder',
+ $sub$Here's exactly what we're building for you live$sub$,
+ '',
+ $body$^^48-hour reminder^^
+
+# Here's what to expect, {{firstName}}.
+
+Two days out. Let me tell you precisely what to expect on **{{webinarDate}}**, because it's different from most things labeled "AI webinar."
+
+We're not running slides full of theory. Mikey and I are building a working app **live, from zero**, in front of you. Here's the shape of the night:
+
+— A real app built step by step, nothing pre-recorded
+— The exact system we use for our SME clients
+— A straight answer to the question most owners carry: *can I actually do this myself?*
+
+This is the kind of session where what you see changes how you think about your own business by the end. That only works if you're in the room while it happens.
+
+**{{webinarDate}}, {{webinarTime}} {{webinarTimezone}}.** You're in.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+— Kyle
+
+P.S. Keep that one bottleneck in mind. By the end you'll see exactly how a system like this removes it.$body$
+),
+
+('reminder_36h',
+ '36-hour reminder',
+ $sub$This won't be replayed in full — here's why that matters$sub$,
+ '',
+ $body$^^36-hour reminder^^
+
+# The live room is where the value lives.
+
+Hi {{firstName}} — a direct note, because it's the thing that quietly costs people the most.
+
+The temptation with any paid session is to think, *"I've already paid — I'll just catch the replay."* I want to be honest with you: we are not replaying this in full. The live build, the real-time problem-solving, the part where you can ask and we answer — none of that survives in a recording. The value is in the room.
+
+You invested to be there live. Don't trade that for a recording that won't exist.
+
+**{{webinarDate}}, {{webinarTime}} {{webinarTimezone}}.** Log in a few minutes early.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+— Kyle & Mikey
+
+P.S. Bring the bottleneck. The live portion is where it actually gets solved.$body$
+),
+
+('reminder_24h',
+ '24-hour reminder',
+ $sub$Tomorrow, {{webinarTime}} — here's how the night runs$sub$,
+ '',
+ $body$^^24-hour reminder^^
+
+# Tomorrow at {{webinarTime}}, {{firstName}}.
+
+Tomorrow — **{{webinarDate}}, {{webinarTime}} {{webinarTimezone}}**. Here's the run of show so you know what you're walking into:
+
+— We open by framing the one thing that changes everything (don't miss this — it sets up the rest)
+— Live app build from zero, every step visible
+— The exact system behind our SME client work
+— A clear path for anyone ready to take the next step
+
+Log in by {{webinarTime}} minus 5. The opening sets up everything that follows, so the first minutes matter most.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+— Kyle & Mikey
+
+P.S. This isn't replayed in full. Tomorrow night is the room.$body$
+),
+
+('reminder_12h',
+ '12-hour reminder',
+ $sub$Tonight, {{webinarTime}}. Your link's here.$sub$,
+ '',
+ $body$^^12-hour reminder^^
+
+# Tonight's the night, {{firstName}}.
+
+Tonight — **{{webinarTime}} {{webinarTimezone}}**.
+
+You committed to this for a reason. Whatever made you say yes, tonight you'll see exactly how it gets solved — live.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+Log in 5 minutes early so you don't miss the opening. See you tonight.
+
+— Kyle$body$
+),
+
+('reminder_3h',
+ '3-hour reminder',
+ $sub$A few hours out — quick heads up before tonight$sub$,
+ '',
+ $body$^^3-hour reminder^^
+
+# A few hours out, {{firstName}}.
+
+We go live in a few hours — **{{webinarTime}} {{webinarTimezone}} tonight**.
+
+Quick checklist so the evening's smooth: wind down your day a little early, find a quiet spot, and have that one business bottleneck ready in your head. You'll know what to do with it by the end.
+
+This is the afternoon where most people quietly decide whether they'll actually show. You already paid for your seat — take it.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+See you at {{webinarTime}}.
+
+— Kyle & Mikey$body$
+),
+
+('reminder_1h',
+ '1-hour reminder',
+ $sub$We start in an hour — see you in the room$sub$,
+ '',
+ $body$^^Starts in 1 hour^^
+
+# One hour to go, {{firstName}}.
+
+One hour to go — **{{webinarTime}} {{webinarTimezone}} sharp**.
+
+You're already in. All that's left is to actually be in the room when it counts. Join a few minutes early so you're settled before we open.
+
+[[Open the Zoom call]]({{zoomJoinUrl}})
+
+See you inside,
+Kyle & Mikey$body$
+)
+on conflict (id) do update set
+  name = excluded.name,
+  subject = excluded.subject,
+  html = excluded.html,
+  body = excluded.body,
+  updated_at = now();
+
+-- ─── Insert reminder_3h into the default Webinar Reminder Sequence ───────
+-- Position 5, between 12h (position 4) and 1h. Bump 1h's position to 6 so
+-- the UI still renders the steps in chronological order. Idempotent.
+update sequence_steps
+  set position = 6
+where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid
+  and email_template_id = 'reminder_1h'
+  and position < 6;
+
+insert into sequence_steps
+  (sequence_id, position, email_template_id, sms_template_id, schedule_type, hours_offset)
+select
+  '33333333-3333-3333-3333-333333333333'::uuid,
+  5,
+  'reminder_3h',
+  null::text,
+  'before_event',
+  3
+where not exists (
+  select 1 from sequence_steps
+  where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid
+    and email_template_id = 'reminder_3h'
+);
+
+-- ─── Set the active Zoom join URL ────────────────────────────────────────
+-- The new templates all reference {{zoomJoinUrl}}; make sure settings has
+-- the live Zoom link configured so substitution resolves to a real URL.
+update settings
+  set zoom_join_url = 'https://us02web.zoom.us/j/86011649255',
+      updated_at = now()
+where id = 1;
