@@ -463,6 +463,89 @@ export async function findSignupByRecoveryMessageId(messageId: string): Promise<
   );
 }
 
+/**
+ * Find the signup whose metadata.adminSends contains an entry with the
+ * given Resend provider id. Used by the Resend webhook to attach
+ * delivery lifecycle events to specific admin sends.
+ *
+ * Supabase JSONB containment: `metadata @> { adminSends: [{ providerId }] }`
+ * Note: PostgREST encodes this as `metadata.cs.{...}`. We approximate via
+ * a coarse select + JS filter — admin sends are append-only and small,
+ * so scanning ~30-100 signups is fine.
+ */
+export async function findSignupByAdminSendProviderId(
+  providerId: string,
+): Promise<Signup | null> {
+  if (!providerId) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase().from('signups').select('*');
+    if (error)
+      throw new Error(`findSignupByAdminSendProviderId: ${error.message}`);
+    for (const row of (data as SignupRow[]) ?? []) {
+      const meta = (row.metadata ?? {}) as { adminSends?: Array<{ providerId?: string }> };
+      const sends = meta.adminSends ?? [];
+      if (sends.some((s) => s.providerId === providerId)) {
+        return rowToSignup(row);
+      }
+    }
+    return null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  for (const s of list) {
+    const meta = (s.metadata ?? {}) as { adminSends?: Array<{ providerId?: string }> };
+    if ((meta.adminSends ?? []).some((x) => x.providerId === providerId)) return s;
+  }
+  return null;
+}
+
+/**
+ * Update an existing adminSends entry's status (sent → delivered → opened
+ * → clicked → bounced → complained). Never downgrades — out-of-order
+ * Resend webhooks won't clobber the richer signal.
+ */
+const ADMIN_SEND_RANK: Record<string, number> = {
+  sent: 1,
+  delivered: 2,
+  opened: 3,
+  clicked: 4,
+  bounced: 5, // terminal failures rank above 'good' states
+  complained: 5,
+};
+export type AdminSendStatus = keyof typeof ADMIN_SEND_RANK;
+
+export async function updateAdminSendStatus(
+  signupId: string,
+  providerId: string,
+  status: AdminSendStatus,
+  statusAt: string,
+): Promise<void> {
+  const signup = await getSignupById(signupId);
+  if (!signup) return;
+  const meta = (signup.metadata ?? {}) as {
+    adminSends?: Array<{
+      ts: string;
+      channel: 'email' | 'sms';
+      templateId: string;
+      ok?: boolean;
+      providerId?: string;
+      status?: AdminSendStatus;
+      statusAt?: string;
+      bounceMessage?: string | null;
+    }>;
+  };
+  const sends = meta.adminSends ?? [];
+  const next = sends.map((s) => {
+    if (s.providerId !== providerId) return s;
+    const currentRank = s.status ? ADMIN_SEND_RANK[s.status] ?? 0 : 0;
+    const incomingRank = ADMIN_SEND_RANK[status] ?? 0;
+    if (incomingRank <= currentRank) return s; // never downgrade
+    return { ...s, status, statusAt };
+  });
+  await updateSignup(signupId, {
+    metadata: { ...(signup.metadata ?? {}), adminSends: next },
+  });
+}
+
 /** Single-row fetch by signup id. Returns null if not found. */
 export async function getSignupById(id: string): Promise<Signup | null> {
   if (isSupabaseConfigured()) {

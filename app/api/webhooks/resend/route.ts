@@ -21,7 +21,13 @@
 
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { findSignupByRecoveryMessageId, upgradeRecoveryEmailStatus } from '@/lib/db';
+import {
+  findSignupByRecoveryMessageId,
+  findSignupByAdminSendProviderId,
+  upgradeRecoveryEmailStatus,
+  updateAdminSendStatus,
+  type AdminSendStatus,
+} from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -123,26 +129,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  const signup = await findSignupByRecoveryMessageId(emailId);
-  if (!signup) {
-    // Not a recovery email we sent — could be a paid_confirmation or a
-    // pre-webhook send. Ack without action.
-    return NextResponse.json({ ok: true, matched: false });
+  // Try recovery-email path first (older feature, simpler match).
+  const recoverySignup = await findSignupByRecoveryMessageId(emailId);
+  if (recoverySignup) {
+    // Atomic upgrade — the rank check + write happen inside Postgres so
+    // concurrent events (email.sent + email.delivered fire ms apart) can't
+    // clobber each other. See upgradeRecoveryEmailStatus / the SQL function
+    // for the race-safety guarantee.
+    await upgradeRecoveryEmailStatus({
+      signupId: recoverySignup.id,
+      status: newStatus as 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained',
+      statusAt: event.created_at || new Date().toISOString(),
+      bounceMessage:
+        newStatus === 'bounced'
+          ? event.data?.bounce?.message || event.data?.bounce?.type || 'bounced'
+          : null,
+    });
+    return NextResponse.json({ ok: true, matched: 'recovery', status: newStatus });
   }
 
-  // Atomic upgrade — the rank check + write happen inside Postgres so
-  // concurrent events (email.sent + email.delivered fire ms apart) can't
-  // clobber each other. See upgradeRecoveryEmailStatus / the SQL function
-  // for the race-safety guarantee.
-  await upgradeRecoveryEmailStatus({
-    signupId: signup.id,
-    status: newStatus as 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained',
-    statusAt: event.created_at || new Date().toISOString(),
-    bounceMessage:
-      newStatus === 'bounced'
-        ? event.data?.bounce?.message || event.data?.bounce?.type || 'bounced'
-        : null,
-  });
+  // Then try admin-sends (single profile send + bulk send both record here).
+  const adminSendSignup = await findSignupByAdminSendProviderId(emailId);
+  if (adminSendSignup) {
+    await updateAdminSendStatus(
+      adminSendSignup.id,
+      emailId,
+      newStatus as AdminSendStatus,
+      event.created_at || new Date().toISOString(),
+    );
+    return NextResponse.json({ ok: true, matched: 'adminSend', status: newStatus });
+  }
 
-  return NextResponse.json({ ok: true, status: newStatus });
+  // Not a tracked send — could be a paid_confirmation, a pre-webhook send,
+  // or a sequence_send (those don't have status tracking yet). Ack so Resend
+  // doesn't retry.
+  return NextResponse.json({ ok: true, matched: false });
 }

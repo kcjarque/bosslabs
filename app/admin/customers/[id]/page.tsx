@@ -32,6 +32,16 @@ type CommsEvent = {
   kind: string;
   description: string;
   ok: boolean;
+  /** Resend / OneWaySMS lifecycle status (optional — only filled for
+   *  emails where the webhook has matched a recorded send). */
+  status?:
+    | 'sent'
+    | 'delivered'
+    | 'opened'
+    | 'clicked'
+    | 'bounced'
+    | 'complained';
+  statusAt?: string;
 };
 
 function paymentMethodLabel(meta: Record<string, unknown>): string {
@@ -114,6 +124,8 @@ function buildCommsTimeline(
     templateId: string;
     ok?: boolean;
     providerId?: string;
+    status?: CommsEvent['status'];
+    statusAt?: string;
   };
   const adminSends = (meta.adminSends as AdminSendEntry[] | undefined) ?? [];
   for (const s of adminSends) {
@@ -130,7 +142,21 @@ function buildCommsTimeline(
       kind: 'Admin send',
       description: `Template: ${label}`,
       ok: s.ok !== false,
+      status: s.status,
+      statusAt: s.statusAt,
     });
+  }
+
+  // Recovery email — surface its status too (was already tracked via Resend
+  // webhook, just wasn't pilled in the UI).
+  if (typeof meta.recoveryEmailSent === 'string') {
+    const ev = events.find(
+      (e) => e.ts === meta.recoveryEmailSent && e.kind === 'Recovery email',
+    );
+    if (ev) {
+      ev.status = (meta.recoveryEmailStatus as CommsEvent['status']) ?? 'sent';
+      ev.statusAt = meta.recoveryEmailStatusAt as string | undefined;
+    }
   }
 
   // Sequence sends (the new generalized engine)
@@ -405,12 +431,28 @@ export default async function CustomerProfilePage({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900">{ev.kind}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900">
+                          {ev.kind}
+                        </span>
+                        {ev.status && <StatusPill status={ev.status} />}
+                      </div>
                       <div className="text-xs text-slate-500">{ev.description}</div>
                       <div className="mt-0.5 text-[11px] text-slate-400">
                         {new Date(ev.ts).toLocaleString('en-PH', {
                           timeZone: 'Asia/Manila',
                         })}
+                        {ev.statusAt && ev.status && (
+                          <>
+                            {' · '}
+                            <span className="text-slate-500">
+                              {ev.status}{' '}
+                              {new Date(ev.statusAt).toLocaleString('en-PH', {
+                                timeZone: 'Asia/Manila',
+                              })}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </li>
@@ -442,6 +484,41 @@ function StatusBadge({ status }: { status: string }) {
     unsubscribed: 'pill pill-red',
   };
   return <span className={map[status] ?? 'pill'}>{status}</span>;
+}
+
+/**
+ * Email delivery status pill — Resend lifecycle events flow in via the
+ * /api/webhooks/resend handler. Each status has its own color so the
+ * admin can scan a timeline and immediately spot bounces/complaints.
+ */
+function StatusPill({
+  status,
+}: {
+  status: NonNullable<CommsEvent['status']>;
+}) {
+  const styles: Record<NonNullable<CommsEvent['status']>, string> = {
+    sent: 'border-slate-200 bg-slate-100 text-slate-600',
+    delivered: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+    opened: 'border-cyan-300 bg-cyan-50 text-cyan-700',
+    clicked: 'border-cyan-400 bg-cyan-100 text-cyan-800',
+    bounced: 'border-red-300 bg-red-50 text-red-700',
+    complained: 'border-amber-300 bg-amber-50 text-amber-700',
+  };
+  const labels: Record<NonNullable<CommsEvent['status']>, string> = {
+    sent: 'Sent',
+    delivered: 'Delivered',
+    opened: 'Opened',
+    clicked: 'Clicked',
+    bounced: 'Bounced',
+    complained: 'Spam',
+  };
+  return (
+    <span
+      className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${styles[status]}`}
+    >
+      {labels[status]}
+    </span>
+  );
 }
 
 function ChannelBadge({ channel }: { channel: 'email' | 'sms' | 'tg' }) {
