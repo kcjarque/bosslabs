@@ -24,7 +24,7 @@ const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[
   {
     heading: 'Audience',
     items: [
-      { href: '/admin/signups', label: 'Signups' },
+      { href: '/admin/customers', label: 'Customers' },
       { href: '/admin/lists', label: 'Lists' },
       { href: '/admin/events', label: 'Events' },
     ],

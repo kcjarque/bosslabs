@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import type { ListModel, ListFilterType, EventModel } from '@/lib/db';
 import { EventPill } from './EventPill';
 
@@ -221,7 +222,12 @@ function ListRow({
     return (
       <tr>
         <td>
-          <div className="font-medium text-slate-900">{list.name}</div>
+          <Link
+            href={`/admin/lists/${list.id}`}
+            className="font-medium text-slate-900 hover:underline"
+          >
+            {list.name}
+          </Link>
           {list.description && (
             <div className="mt-0.5 text-xs text-slate-500">{list.description}</div>
           )}
@@ -312,9 +318,13 @@ function ListRow({
 }
 
 /**
- * Reusable checkbox group used by both create and edit. Maintains its own
- * hidden inputs (one per checked value) so form submissions naturally
- * produce a multi-valued FormData entry when used inside a <form>.
+ * Multi-select dropdown for filter types. The trigger button shows a
+ * summary of what's currently selected ("Paid only" or "3 filters")
+ * and a menu opens with one row per option. Hidden inputs let a parent
+ * <form> collect the selected values via formData.getAll(formFieldName).
+ *
+ * Replaced the inline stacked-card UI which took too much vertical
+ * space on the lists page once we added the event column.
  */
 function FilterCheckboxes({
   selected,
@@ -326,40 +336,121 @@ function FilterCheckboxes({
   /** When set, also emits hidden inputs so a parent <form> can collect via formData.getAll(). */
   formFieldName?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
   function toggle(value: ListFilterType, checked: boolean) {
-    if (checked) {
-      onChange([...new Set([...selected, value])]);
-    } else {
-      onChange(selected.filter((v) => v !== value));
-    }
+    if (checked) onChange([...new Set([...selected, value])]);
+    else onChange(selected.filter((v) => v !== value));
   }
 
+  function openMenu() {
+    // position: fixed lets the menu escape ancestor `overflow: hidden`
+    // (e.g. the lists table's overflow-x-auto wrapper). Recompute the
+    // coords from the trigger's bounding rect every time we open.
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        // Wider than the trigger so option descriptions stay readable
+        // even when the trigger gets squeezed inside a narrow table cell.
+        width: Math.max(rect.width, 260),
+      });
+    }
+    setOpen(true);
+  }
+
+  // Close on outside click / Escape. Menu lives in fixed coords so the
+  // listener needs to consider both the trigger and the menu element.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    function onScroll() {
+      // Trigger moves with the page but the fixed-position menu doesn't,
+      // so just close instead of recomputing on every scroll tick.
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  const summary =
+    selected.length === 0
+      ? 'Pick filters…'
+      : selected.length === 1
+        ? (FILTER_OPTIONS.find((o) => o.value === selected[0])?.label ?? selected[0])
+        : `${selected.length} filters`;
+
   return (
-    <div className="space-y-1.5">
-      {FILTER_OPTIONS.map((opt) => {
-        const checked = selected.includes(opt.value);
-        return (
-          <label
-            key={opt.value}
-            className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition ${
-              checked
-                ? 'border-cyan-300 bg-cyan-50/40'
-                : 'border-slate-200 bg-white hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => toggle(opt.value, e.target.checked)}
-              className="mt-0.5"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-slate-900">{opt.label}</div>
-              <div className="text-xs text-slate-500">{opt.hint}</div>
-            </div>
-          </label>
-        );
-      })}
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        ref={triggerRef}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        className="flex w-full items-center justify-between gap-2 truncate rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 transition hover:border-slate-400"
+      >
+        <span className={`truncate ${selected.length === 0 ? 'text-slate-400' : ''}`}>
+          {summary}
+        </span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          className={`shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && menuPos && (
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-50 max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+        >
+          {FILTER_OPTIONS.map((opt) => {
+            const checked = selected.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                className={`flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition ${
+                  checked ? 'bg-cyan-50/60' : 'hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => toggle(opt.value, e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-900">{opt.label}</div>
+                  <div className="text-xs text-slate-500">{opt.hint}</div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
       {/* Hidden inputs so a parent <form> can read filterTypes via formData.getAll */}
       {formFieldName &&
         selected.map((v) => (

@@ -463,6 +463,108 @@ export async function findSignupByRecoveryMessageId(messageId: string): Promise<
   );
 }
 
+/** Single-row fetch by signup id. Returns null if not found. */
+export async function getSignupById(id: string): Promise<Signup | null> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`getSignupById: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return list.find((s) => s.id === id) ?? null;
+}
+
+/**
+ * Fetch every sequence_send row for a given signup, joined with enough
+ * step + sequence + template metadata to render a comms timeline.
+ *
+ * Used by /admin/customers/[id] to show 'proof of all messages and emails
+ * that they have already received.'
+ */
+export type CustomerSequenceSend = {
+  id: string;
+  sentAt: string;
+  emailOk: boolean;
+  smsOk: boolean;
+  sequenceName: string;
+  scheduleType: SequenceScheduleType;
+  hoursOffset: number;
+  emailTemplateId: string | null;
+  emailTemplateName: string | null;
+  smsTemplateId: string | null;
+  smsTemplateName: string | null;
+};
+
+export async function getCustomerSequenceSends(
+  signupId: string,
+): Promise<CustomerSequenceSend[]> {
+  if (!isSupabaseConfigured()) return [];
+  // Nested select pulls step + sequence in one round-trip.
+  const { data, error } = await getSupabase()
+    .from('sequence_sends')
+    .select(
+      `
+      id, sent_at, email_ok, sms_ok,
+      sequence_step:sequence_step_id (
+        schedule_type, hours_offset,
+        email_template_id, sms_template_id,
+        sequence:sequence_id ( name )
+      )
+    `,
+    )
+    .eq('signup_id', signupId)
+    .order('sent_at', { ascending: false });
+  if (error) throw new Error(`getCustomerSequenceSends: ${error.message}`);
+
+  // Resolve template names separately to keep the join shape simple.
+  const rows = (data as Array<Record<string, unknown>>) ?? [];
+  const emailIds = new Set<string>();
+  const smsIds = new Set<string>();
+  for (const r of rows) {
+    const step = r.sequence_step as Record<string, unknown> | null;
+    if (step?.email_template_id) emailIds.add(step.email_template_id as string);
+    if (step?.sms_template_id) smsIds.add(step.sms_template_id as string);
+  }
+  const [emailTemplates, smsTemplates] = await Promise.all([
+    emailIds.size > 0
+      ? getSupabase().from('email_templates').select('id, name').in('id', [...emailIds])
+      : Promise.resolve({ data: [], error: null }),
+    smsIds.size > 0
+      ? getSupabase().from('sms_templates').select('id, name').in('id', [...smsIds])
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const emailNames = new Map(
+    ((emailTemplates.data as Array<{ id: string; name: string }>) ?? []).map((t) => [t.id, t.name]),
+  );
+  const smsNames = new Map(
+    ((smsTemplates.data as Array<{ id: string; name: string }>) ?? []).map((t) => [t.id, t.name]),
+  );
+
+  return rows.map((r) => {
+    const step = (r.sequence_step ?? {}) as Record<string, unknown>;
+    const sequence = (step.sequence ?? {}) as Record<string, unknown>;
+    return {
+      id: r.id as string,
+      sentAt: r.sent_at as string,
+      emailOk: Boolean(r.email_ok),
+      smsOk: Boolean(r.sms_ok),
+      sequenceName: (sequence.name as string) ?? '(deleted sequence)',
+      scheduleType: (step.schedule_type as SequenceScheduleType) ?? 'before_event',
+      hoursOffset: (step.hours_offset as number) ?? 0,
+      emailTemplateId: (step.email_template_id as string | null) ?? null,
+      emailTemplateName:
+        step.email_template_id ? (emailNames.get(step.email_template_id as string) ?? null) : null,
+      smsTemplateId: (step.sms_template_id as string | null) ?? null,
+      smsTemplateName:
+        step.sms_template_id ? (smsNames.get(step.sms_template_id as string) ?? null) : null,
+    };
+  });
+}
+
 export async function getSignups(): Promise<Signup[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await getSupabase()

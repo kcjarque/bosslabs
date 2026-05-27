@@ -151,10 +151,10 @@ export default async function CapiStatusPage({
             Paid signups — re-fire CAPI Purchase ({paid.length})
           </h2>
           <Link
-            href="/admin/signups"
+            href="/admin/customers"
             className="text-xs text-slate-500 underline-offset-4 hover:text-slate-900 hover:underline"
           >
-            View all signups →
+            View all customers →
           </Link>
         </div>
         {paid.length === 0 ? (

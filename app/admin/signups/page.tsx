@@ -1,35 +1,20 @@
-import { requireAdmin } from '@/lib/admin-auth';
-import { getSignups, getEvents } from '@/lib/db';
-import { SignupsTable } from '@/components/SignupsTable';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
-export default async function SignupsPage() {
-  requireAdmin();
-  const [signups, events] = await Promise.all([getSignups(), getEvents()]);
-  const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
-  return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Signups
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {signups.length} {signups.length === 1 ? 'record' : 'records'} · click any
-            row to send a templated email or SMS.
-          </p>
-        </div>
-        <a
-          href="/api/admin/signups.csv"
-          className="btn btn-secondary self-start sm:self-auto"
-          download
-        >
-          Export CSV
-        </a>
-      </header>
-
-      <SignupsTable initial={signups} eventNameById={eventNameById} />
-    </div>
-  );
+/**
+ * Legacy route. The page lives at /admin/customers now — anyone with a
+ * bookmark or old link gets bounced there transparently. Preserves any
+ * existing query string (e.g. ?q=email@x.com from pending-payments).
+ */
+export default function LegacySignupsPage({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(searchParams ?? {})) {
+    if (typeof v === 'string') qs.set(k, v);
+    else if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
+  }
+  const tail = qs.toString();
+  redirect(tail ? `/admin/customers?${tail}` : '/admin/customers');
 }

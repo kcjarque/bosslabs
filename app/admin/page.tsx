@@ -307,8 +307,8 @@ export default async function AdminDashboard({
             Live view of registrations + delivery channels.
           </p>
         </div>
-        <Link href="/admin/signups" className="btn btn-secondary self-start sm:self-auto">
-          View all signups →
+        <Link href="/admin/customers" className="btn btn-secondary self-start sm:self-auto">
+          View all customers →
         </Link>
       </header>
 
@@ -676,7 +676,7 @@ export default async function AdminDashboard({
       <div className="card overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-900">Recent signups</h2>
-          <Link href="/admin/signups" className="text-sm text-slate-500 hover:text-slate-900">
+          <Link href="/admin/customers" className="text-sm text-slate-500 hover:text-slate-900">
             See all →
           </Link>
         </div>

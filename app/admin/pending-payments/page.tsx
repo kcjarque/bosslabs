@@ -213,10 +213,10 @@ function PendingRow({ group, flagged }: { group: Group; flagged: boolean }) {
             </a>
           )}
           <Link
-            href={`/admin/signups?q=${encodeURIComponent(group.email)}`}
+            href={`/admin/customers?q=${encodeURIComponent(group.email)}`}
             className="text-slate-500 underline-offset-4 hover:underline"
           >
-            View in signups →
+            View customer →
           </Link>
         </div>
       </div>
