@@ -56,6 +56,8 @@ function scheduleLabel(scheduleType: string, hoursOffset: number): string {
 function buildCommsTimeline(
   signup: Signup,
   sequenceSends: CustomerSequenceSend[],
+  emailTemplateNames: Map<string, string>,
+  smsTemplateNames: Map<string, string>,
 ): CommsEvent[] {
   const events: CommsEvent[] = [];
   const meta = (signup.metadata as Record<string, unknown> | undefined) ?? {};
@@ -115,11 +117,18 @@ function buildCommsTimeline(
   };
   const adminSends = (meta.adminSends as AdminSendEntry[] | undefined) ?? [];
   for (const s of adminSends) {
+    const nameMap = s.channel === 'email' ? emailTemplateNames : smsTemplateNames;
+    const friendlyName = nameMap.get(s.templateId);
+    // Show the human name first, fall back to the id for templates that
+    // have since been renamed or deleted.
+    const label = friendlyName
+      ? `${friendlyName} (${s.templateId})`
+      : s.templateId;
     events.push({
       ts: s.ts,
       channel: s.channel,
       kind: 'Admin send',
-      description: `Template: ${s.templateId}${s.providerId ? ` · ${s.providerId}` : ''}`,
+      description: `Template: ${label}`,
       ok: s.ok !== false,
     });
   }
@@ -220,7 +229,14 @@ export default async function CustomerProfilePage({
     ? events.find((e) => e.id === customer.eventId)?.name
     : null;
 
-  const timeline = buildCommsTimeline(customer, sequenceSends);
+  const emailTemplateNames = new Map(emailTemplates.map((t) => [t.id, t.name]));
+  const smsTemplateNames = new Map(smsTemplates.map((t) => [t.id, t.name]));
+  const timeline = buildCommsTimeline(
+    customer,
+    sequenceSends,
+    emailTemplateNames,
+    smsTemplateNames,
+  );
 
   return (
     <div className="space-y-6">
