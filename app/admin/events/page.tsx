@@ -28,6 +28,7 @@ export default async function EventsPage() {
         onCreate={createEventAction}
         onUpdate={updateEventAction}
         onDelete={deleteEventAction}
+        defaultTimezone="Asia/Manila"
       />
     </div>
   );

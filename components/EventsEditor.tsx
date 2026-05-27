@@ -2,20 +2,32 @@
 
 import { useState, useTransition } from 'react';
 import type { EventModel } from '@/lib/db';
+import {
+  combineLocalAndTimezone,
+  isoToLocalDateTime,
+  COMMON_TIMEZONES,
+} from '@/lib/datetime';
 
 export function EventsEditor({
   initial,
   onCreate,
   onUpdate,
   onDelete,
+  defaultTimezone = 'Asia/Manila',
 }: {
   initial: EventModel[];
   onCreate: (fd: FormData) => Promise<void>;
   onUpdate: (
     id: string,
-    patch: { name?: string; startsAtIso?: string; timezone?: string; active?: boolean },
+    patch: {
+      name?: string;
+      startsAtLocal?: string;
+      timezone?: string;
+      active?: boolean;
+    },
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  defaultTimezone?: string;
 }) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,45 +48,20 @@ export function EventsEditor({
         </div>
 
         {creating && (
-          <form
-            action={async (fd) => {
+          <CreateEventForm
+            defaultTimezone={defaultTimezone}
+            onSubmit={async (fd) => {
               await onCreate(fd);
               setCreating(false);
             }}
-            className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-3"
-          >
-            <div className="sm:col-span-3">
-              <label className="label">Event name</label>
-              <input
-                name="name"
-                className="input"
-                placeholder="BOSSLABS AI Webinar — May 21"
-                required
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label">Starts at (ISO 8601)</label>
-              <input
-                name="startsAtIso"
-                className="input"
-                placeholder="2026-05-21T20:00:00+08:00"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Timezone</label>
-              <input name="timezone" className="input" defaultValue="Asia/Manila" />
-            </div>
-            <div className="sm:col-span-3">
-              <button type="submit" className="btn btn-primary" disabled={isPending}>
-                Create event
-              </button>
-            </div>
-          </form>
+            isPending={isPending}
+          />
         )}
 
         {initial.length === 0 && !creating && (
-          <p className="mt-4 text-sm text-slate-500">No events yet. Create one to start scheduling sequences.</p>
+          <p className="mt-4 text-sm text-slate-500">
+            No events yet. Create one to start scheduling sequences.
+          </p>
         )}
 
         {initial.length > 0 && (
@@ -102,7 +89,12 @@ export function EventsEditor({
                     });
                   }}
                   onDelete={() => {
-                    if (!confirm(`Delete event "${ev.name}"? Attached sequences will lose their anchor.`)) return;
+                    if (
+                      !confirm(
+                        `Delete event "${ev.name}"? Attached sequences will lose their anchor.`,
+                      )
+                    )
+                      return;
                     startTransition(() => onDelete(ev.id));
                   }}
                 />
@@ -112,6 +104,78 @@ export function EventsEditor({
         )}
       </div>
     </div>
+  );
+}
+
+function CreateEventForm({
+  defaultTimezone,
+  onSubmit,
+  isPending,
+}: {
+  defaultTimezone: string;
+  onSubmit: (fd: FormData) => Promise<void>;
+  isPending: boolean;
+}) {
+  const [startsAtLocal, setStartsAtLocal] = useState('');
+  const [timezone, setTimezone] = useState(defaultTimezone);
+
+  const preview =
+    startsAtLocal && timezone ? combineLocalAndTimezone(startsAtLocal, timezone) : '';
+
+  return (
+    <form
+      action={onSubmit}
+      className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2"
+    >
+      <div className="sm:col-span-2">
+        <label className="label">Event name</label>
+        <input
+          name="name"
+          className="input"
+          placeholder="BOSSLABS AI Webinar — May 21"
+          required
+        />
+      </div>
+      <div>
+        <label className="label">Starts at</label>
+        <input
+          type="datetime-local"
+          name="startsAtLocal"
+          className="input"
+          value={startsAtLocal}
+          onChange={(e) => setStartsAtLocal(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <label className="label">Timezone</label>
+        <select
+          name="timezone"
+          className="select"
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+        >
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz.value} value={tz.value}>
+              {tz.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {preview && (
+        <div className="sm:col-span-2">
+          <p className="text-xs text-slate-500">
+            Will be saved as{' '}
+            <span className="font-mono text-slate-700">{preview}</span>
+          </p>
+        </div>
+      )}
+      <div className="sm:col-span-2">
+        <button type="submit" className="btn btn-primary" disabled={isPending}>
+          Create event
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -125,11 +189,16 @@ function EventRow({
   ev: EventModel;
   editing: boolean;
   onEdit: () => void;
-  onSave: (patch: { name?: string; startsAtIso?: string; timezone?: string; active?: boolean }) => void;
+  onSave: (patch: {
+    name?: string;
+    startsAtLocal?: string;
+    timezone?: string;
+    active?: boolean;
+  }) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(ev.name);
-  const [startsAtIso, setStartsAtIso] = useState(ev.startsAtIso);
+  const [startsAtLocal, setStartsAtLocal] = useState(isoToLocalDateTime(ev.startsAtIso));
   const [timezone, setTimezone] = useState(ev.timezone);
   const [active, setActive] = useState(ev.active);
 
@@ -146,7 +215,10 @@ function EventRow({
     return (
       <tr>
         <td className="font-medium text-slate-900">{ev.name}</td>
-        <td className="font-mono text-xs text-slate-600">{formatted}</td>
+        <td>
+          <div className="text-slate-900">{formatted}</div>
+          <div className="font-mono text-[10px] text-slate-400">{ev.startsAtIso}</div>
+        </td>
         <td>{ev.timezone}</td>
         <td>
           {ev.active ? (
@@ -170,25 +242,44 @@ function EventRow({
       </td>
       <td>
         <input
-          className="input font-mono text-xs"
-          value={startsAtIso}
-          onChange={(e) => setStartsAtIso(e.target.value)}
-          placeholder="2026-05-21T20:00:00+08:00"
+          type="datetime-local"
+          className="input"
+          value={startsAtLocal}
+          onChange={(e) => setStartsAtLocal(e.target.value)}
         />
+        {startsAtLocal && (
+          <div className="mt-1 font-mono text-[10px] text-slate-400">
+            {combineLocalAndTimezone(startsAtLocal, timezone)}
+          </div>
+        )}
       </td>
       <td>
-        <input className="input" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+        <select
+          className="select"
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+        >
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz.value} value={tz.value}>
+              {tz.label}
+            </option>
+          ))}
+        </select>
       </td>
       <td>
         <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />
           Active
         </label>
       </td>
       <td className="text-right">
         <button
           className="btn btn-primary"
-          onClick={() => onSave({ name, startsAtIso, timezone, active })}
+          onClick={() => onSave({ name, startsAtLocal, timezone, active })}
         >
           Save
         </button>
