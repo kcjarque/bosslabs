@@ -143,7 +143,7 @@ function renderShell(innerHtml: string): string {
     `<div style="padding:24px 44px 40px;color:#0B0D12">${innerHtml}</div>`,
     // Signature + footer band
     '<div style="border-top:1px solid #E5E9F2;padding:28px 44px;background:#F8FAFC">',
-    '<p style="font-size:14px;color:#454A57;margin:0 0 12px;font-weight:500;line-height:1.5">— Mikey &amp; Kyle</p>',
+    '<p style="font-size:14px;color:#454A57;margin:0 0 12px;font-weight:500;line-height:1.5">— Mikey</p>',
     '<p style="font-size:11px;color:#9BA1AC;margin:0;line-height:1.7">',
     'BOSSLABS AI · Built in Manila<br>',
     'Want fewer emails? <a href="{{unsubscribeUrl}}" style="color:#9BA1AC;text-decoration:underline">Unsubscribe</a>',
