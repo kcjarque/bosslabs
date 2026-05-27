@@ -26,6 +26,7 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
 import { OFFER } from '@/lib/config';
+import { sendTelegram, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -159,6 +160,16 @@ async function handleMainPaid(event: XenditEvent) {
     },
   });
 
+  // Best-effort Telegram notification — never blocks the webhook response.
+  const amtFmt = `₱${amountPhp.toLocaleString()}`;
+  void sendTelegram(
+    `💰 <b>New payment!</b>\n\n` +
+    `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
+    `${esc(signup.email)}\n` +
+    `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
+    `Invoice: <code>${externalId}</code>`,
+  );
+
   return NextResponse.json({ ok: true, emailOk: emailRes.ok });
 }
 
@@ -233,6 +244,15 @@ async function handleOtoPaid(event: XenditEvent) {
       numItems: 1,
     },
   });
+
+  // Best-effort TG notification for standalone OTO.
+  void sendTelegram(
+    `💰 <b>OTO upsell paid!</b>\n\n` +
+    `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
+    `${esc(signup.email)}\n` +
+    `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
+    `OTO invoice: <code>${event.external_id}</code>`,
+  );
 
   return NextResponse.json({ ok: true, oto: true });
 }

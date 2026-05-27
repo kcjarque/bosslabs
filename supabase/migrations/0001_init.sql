@@ -456,3 +456,7 @@ create or replace function sum_recording_bytes()
 returns bigint language sql stable as $$
   select coalesce(sum(size_bytes), 0) from session_recordings;
 $$;
+
+-- ─── Telegram bot notifications ──────────────────────────────────────────
+alter table settings add column if not exists telegram_bot_token text default '';
+alter table settings add column if not exists telegram_chat_id text default '';

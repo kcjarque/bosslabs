@@ -111,6 +111,9 @@ export type Settings = {
   messengerGroupUrl: string;
   /* Session recording */
   recordingEnabled: boolean;
+  /* Telegram bot */
+  telegramBotToken: string;
+  telegramChatId: string;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -138,6 +141,8 @@ const DEFAULT_SETTINGS: Settings = {
   replayUrl: '',
   messengerGroupUrl: '',
   recordingEnabled: false,
+  telegramBotToken: '',
+  telegramChatId: '',
 };
 
 /* --------------------------------------------------------------------- */
@@ -213,6 +218,8 @@ type SettingsRow = {
   replay_url: string;
   messenger_group_url: string;
   recording_enabled: boolean;
+  telegram_bot_token: string;
+  telegram_chat_id: string;
 };
 
 function rowToSettings(r: SettingsRow): Settings {
@@ -235,6 +242,8 @@ function rowToSettings(r: SettingsRow): Settings {
     replayUrl: r.replay_url ?? '',
     messengerGroupUrl: r.messenger_group_url ?? '',
     recordingEnabled: r.recording_enabled ?? false,
+    telegramBotToken: r.telegram_bot_token ?? '',
+    telegramChatId: r.telegram_chat_id ?? '',
   };
 }
 
@@ -258,6 +267,8 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.replayUrl !== undefined) out.replay_url = s.replayUrl;
   if (s.messengerGroupUrl !== undefined) out.messenger_group_url = s.messengerGroupUrl;
   if (s.recordingEnabled !== undefined) out.recording_enabled = s.recordingEnabled;
+  if (s.telegramBotToken !== undefined) out.telegram_bot_token = s.telegramBotToken;
+  if (s.telegramChatId !== undefined) out.telegram_chat_id = s.telegramChatId;
   return out;
 }
 
@@ -885,6 +896,7 @@ export async function getSettings(): Promise<Settings> {
 const SECRET_FIELDS: ReadonlyArray<keyof Settings> = [
   'resendApiKey',
   'onewaysmsPassword',
+  'telegramBotToken',
 ];
 
 /**

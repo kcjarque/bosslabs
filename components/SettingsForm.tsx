@@ -231,6 +231,38 @@ export function SettingsForm({ initial }: { initial: Settings }) {
         </Field>
       </Section>
 
+      <Section
+        title="Telegram notifications"
+        description="Real-time alerts to a Telegram group chat when someone pays or abandons checkout, plus a daily summary."
+      >
+        <Field
+          label="Bot Token"
+          hint="Create a bot via @BotFather → /newbot. Leave blank to keep current."
+        >
+          <input
+            type="password"
+            autoComplete="new-password"
+            className="input"
+            value={values.telegramBotToken}
+            onChange={(e) => update('telegramBotToken', e.target.value)}
+            placeholder="••••••••  (stored — blank to keep)"
+          />
+        </Field>
+        <Field
+          label="Chat ID"
+          hint="The group chat ID (e.g. -100…). Add the bot to your group, then use @RawDataBot or the getUpdates API to find it."
+        >
+          <input
+            type="text"
+            className="input"
+            value={values.telegramChatId}
+            onChange={(e) => update('telegramChatId', e.target.value)}
+            placeholder="-1001234567890"
+          />
+        </Field>
+        <TelegramTestPanel />
+      </Section>
+
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
@@ -291,6 +323,68 @@ function Field({
       <label className="label">{label}</label>
       {children}
       {hint && <p className="mt-1 text-[11px] text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * TelegramTestPanel — sends a test message via the saved Telegram settings.
+ */
+function TelegramTestPanel() {
+  const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'fail'>('idle');
+  const [detail, setDetail] = useState('');
+
+  async function send() {
+    setStatus('sending');
+    setDetail('');
+    try {
+      const res = await fetch('/api/admin/test-telegram', { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setStatus('fail');
+        setDetail(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      setStatus('ok');
+      setDetail('Message sent to group chat.');
+    } catch (err) {
+      setStatus('fail');
+      setDetail(err instanceof Error ? err.message : 'Network error');
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+        Diagnostic
+      </div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        <button
+          type="button"
+          onClick={send}
+          disabled={status === 'sending'}
+          className="btn btn-secondary whitespace-nowrap"
+        >
+          {status === 'sending' ? 'Sending…' : 'Send test message'}
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Uses the currently <strong>saved</strong> bot token and chat ID.
+        Save settings first if you just changed them.
+      </p>
+      {status === 'ok' && (
+        <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+          ✓ {detail}
+        </div>
+      )}
+      {status === 'fail' && (
+        <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
+          ✗ {detail}
+        </div>
+      )}
     </div>
   );
 }

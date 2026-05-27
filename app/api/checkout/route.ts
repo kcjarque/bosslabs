@@ -19,6 +19,7 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { getWebinarInfo } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
+import { sendTelegram, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -215,6 +216,15 @@ export async function POST(req: Request) {
         },
       });
 
+      // TG notification — free-seat promo purchase (already marked paid).
+      void sendTelegram(
+        `💰 <b>Free promo purchase!</b>\n\n` +
+        `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
+        `${esc(body.email)}\n` +
+        `Promo: <code>${esc(promoApplied.code)}</code>\n` +
+        `Amount: <b>₱0</b>${bumped ? ' (with bump)' : ''}`,
+      );
+
       return NextResponse.json({
         redirectUrl: `/accepted?order=${acceptedSlug}`,
         free: true,
@@ -328,6 +338,17 @@ export async function POST(req: Request) {
         numItems: bumped ? 2 : 1,
       },
     });
+
+    // TG notification — new checkout initiated (pending payment).
+    const amtLabel = `₱${(amountCentavos / 100).toLocaleString()}`;
+    void sendTelegram(
+      `🛒 <b>New checkout!</b>\n\n` +
+      `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
+      `${esc(body.email)}\n` +
+      `Amount: <b>${amtLabel}</b>${bumped ? ' (with bump)' : ''}` +
+      (promoApplied ? `\nPromo: <code>${esc(promoApplied.code)}</code>` : '') +
+      `\nPayment method: ${group ?? 'ALL'}`,
+    );
 
     return NextResponse.json({ redirectUrl: invoice.invoiceUrl, demo: invoice.demo });
   } catch (err: unknown) {
