@@ -117,6 +117,9 @@ export function SignupsTable({
               </div>
               <div className="flex flex-col items-end gap-1">
                 <StatusPill status={s.status} />
+                {s.eventId && eventNameById[s.eventId] && (
+                  <EventPill name={eventNameById[s.eventId]} />
+                )}
                 {paymentMethodLabel(s) !== '—' && (
                   <span className={methodPillClass(s)}>{paymentMethodLabel(s)}</span>
                 )}

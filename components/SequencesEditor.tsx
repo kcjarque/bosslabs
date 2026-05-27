@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import type { SequenceModel, ListModel, EventModel } from '@/lib/db';
+import { EventPill } from './EventPill';
 
 export function SequencesEditor({
   initial,
@@ -103,19 +104,20 @@ export function SequencesEditor({
       )}
 
       {initial.length > 0 && (
-        <table className="mt-4">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>List</th>
-              <th>Event</th>
-              <th className="text-right">Steps</th>
-              <th>Status</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {initial.map((seq) => (
+        <div className="mt-4 -mx-5 overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>List</th>
+                <th>Event</th>
+                <th className="text-right">Steps</th>
+                <th>Status</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {initial.map((seq) => (
               <tr key={seq.id}>
                 <td>
                   <Link
@@ -137,7 +139,7 @@ export function SequencesEditor({
                 </td>
                 <td>
                   {seq.eventId && eventById[seq.eventId] ? (
-                    <span className="pill">{eventById[seq.eventId].name}</span>
+                    <EventPill name={eventById[seq.eventId].name} />
                   ) : (
                     <span className="text-xs text-slate-400">—</span>
                   )}
@@ -180,7 +182,8 @@ export function SequencesEditor({
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

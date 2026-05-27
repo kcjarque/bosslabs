@@ -326,8 +326,8 @@ function StepRow({
   const scheduleLabel = scheduleDescription(step.scheduleType, step.hoursOffset);
 
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex-1">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-600">
             #{index + 1}
@@ -337,19 +337,20 @@ function StepRow({
         </div>
         <div className="mt-1 grid gap-1 text-xs text-slate-600">
           {step.emailTemplateId ? (
-            <div>📧 {emailTemplate?.name ?? step.emailTemplateId}</div>
+            <div className="truncate">📧 {emailTemplate?.name ?? step.emailTemplateId}</div>
           ) : (
             <div className="text-slate-400">📧 — no email —</div>
           )}
           {step.smsTemplateId && (
-            <div>📱 SMS · {smsTemplate?.name ?? step.smsTemplateId}</div>
+            <div className="truncate">📱 SMS · {smsTemplate?.name ?? step.smsTemplateId}</div>
           )}
         </div>
         <div className="mt-1 text-xs text-slate-400">
           Sent to {sendCount} recipient{sendCount === 1 ? '' : 's'}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      {/* Actions: wrap below on mobile, sit alongside on sm+ */}
+      <div className="-ml-2 flex shrink-0 items-center gap-1 self-end sm:ml-0 sm:self-start">
         <button className="btn btn-ghost" onClick={onEdit}>
           Edit
         </button>

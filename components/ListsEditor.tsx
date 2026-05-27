@@ -69,44 +69,46 @@ export function ListsEditor({
         )}
 
         {initial.length > 0 && (
-          <table className="mt-4">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Filters</th>
-                <th>Event</th>
-                <th className="text-right">Members</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {initial.map((list) => (
-                <ListRow
-                  key={list.id}
-                  list={list}
-                  events={events}
-                  memberCount={memberCounts[list.id] ?? 0}
-                  editing={editingId === list.id}
-                  onEdit={() => setEditingId(list.id === editingId ? null : list.id)}
-                  onSave={(patch) => {
-                    startTransition(async () => {
-                      await onUpdate(list.id, patch);
-                      setEditingId(null);
-                    });
-                  }}
-                  onDelete={() => {
-                    if (
-                      !confirm(
-                        `Delete list "${list.name}"? Any sequences attached will be deleted too.`,
+          <div className="mt-4 -mx-5 overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Filters</th>
+                  <th>Event</th>
+                  <th className="text-right">Members</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {initial.map((list) => (
+                  <ListRow
+                    key={list.id}
+                    list={list}
+                    events={events}
+                    memberCount={memberCounts[list.id] ?? 0}
+                    editing={editingId === list.id}
+                    onEdit={() => setEditingId(list.id === editingId ? null : list.id)}
+                    onSave={(patch) => {
+                      startTransition(async () => {
+                        await onUpdate(list.id, patch);
+                        setEditingId(null);
+                      });
+                    }}
+                    onDelete={() => {
+                      if (
+                        !confirm(
+                          `Delete list "${list.name}"? Any sequences attached will be deleted too.`,
+                        )
                       )
-                    )
-                      return;
-                    startTransition(() => onDelete(list.id));
-                  }}
-                />
-              ))}
-            </tbody>
-          </table>
+                        return;
+                      startTransition(() => onDelete(list.id));
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

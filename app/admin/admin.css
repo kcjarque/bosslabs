@@ -119,6 +119,9 @@ body:has(.admin-shell) {
   font-size: 11px;
   font-weight: 500;
   color: #475569;
+  /* Pills are short labels; never let them wrap to 2+ lines. The parent
+   * table cell may scroll horizontally if the pill is wider than the cell. */
+  white-space: nowrap;
 }
 .admin-shell .pill-cyan {
   border-color: rgba(0, 184, 230, 0.4);

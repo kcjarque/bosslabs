@@ -65,42 +65,44 @@ export function EventsEditor({
         )}
 
         {initial.length > 0 && (
-          <table className="mt-4">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Starts at</th>
-                <th>Timezone</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {initial.map((ev) => (
-                <EventRow
-                  key={ev.id}
-                  ev={ev}
-                  editing={editingId === ev.id}
-                  onEdit={() => setEditingId(ev.id === editingId ? null : ev.id)}
-                  onSave={(patch) => {
-                    startTransition(async () => {
-                      await onUpdate(ev.id, patch);
-                      setEditingId(null);
-                    });
-                  }}
-                  onDelete={() => {
-                    if (
-                      !confirm(
-                        `Delete event "${ev.name}"? Attached sequences will lose their anchor.`,
+          <div className="mt-4 -mx-5 overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Starts at</th>
+                  <th>Timezone</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {initial.map((ev) => (
+                  <EventRow
+                    key={ev.id}
+                    ev={ev}
+                    editing={editingId === ev.id}
+                    onEdit={() => setEditingId(ev.id === editingId ? null : ev.id)}
+                    onSave={(patch) => {
+                      startTransition(async () => {
+                        await onUpdate(ev.id, patch);
+                        setEditingId(null);
+                      });
+                    }}
+                    onDelete={() => {
+                      if (
+                        !confirm(
+                          `Delete event "${ev.name}"? Attached sequences will lose their anchor.`,
+                        )
                       )
-                    )
-                      return;
-                    startTransition(() => onDelete(ev.id));
-                  }}
-                />
-              ))}
-            </tbody>
-          </table>
+                        return;
+                      startTransition(() => onDelete(ev.id));
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
