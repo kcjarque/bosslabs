@@ -6,10 +6,41 @@ import {
   deleteSignups,
   getSignupById,
   subscribeManyToSequence,
+  updateSignup,
+  type Signup,
 } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { getWebinarInfo } from '@/lib/webinar';
+
+type AdminSendEntry = {
+  ts: string;
+  channel: 'email' | 'sms';
+  templateId: string;
+  ok: boolean;
+  providerId?: string;
+};
+
+/** Same shape + best-effort write as /api/admin/send. */
+async function recordAdminSend(
+  signup: Signup,
+  entry: AdminSendEntry,
+): Promise<void> {
+  try {
+    const existing =
+      ((signup.metadata as Record<string, unknown> | undefined)?.adminSends as
+        | AdminSendEntry[]
+        | undefined) ?? [];
+    await updateSignup(signup.id, {
+      metadata: {
+        ...(signup.metadata ?? {}),
+        adminSends: [...existing, entry],
+      },
+    });
+  } catch (err) {
+    console.warn('[bulkSendAction] failed to record adminSends entry', err);
+  }
+}
 
 /**
  * Bulk-subscribe the given customers to a sequence. Server-side filter
@@ -92,18 +123,39 @@ export async function bulkSendAction(
     };
     if (channel === 'email') {
       const res = await sendEmail({ to: signup.email, templateId, vars });
-      if (res.ok) sent++;
-      else failed++;
+      if (res.ok) {
+        sent++;
+        await recordAdminSend(signup, {
+          ts: new Date().toISOString(),
+          channel,
+          templateId,
+          ok: true,
+          providerId: res.id,
+        });
+      } else {
+        failed++;
+      }
     } else {
       if (!signup.phone) {
         noPhone++;
         continue;
       }
       const res = await sendSms({ to: signup.phone, templateId, vars });
-      if (res.ok) sent++;
-      else failed++;
+      if (res.ok) {
+        sent++;
+        await recordAdminSend(signup, {
+          ts: new Date().toISOString(),
+          channel,
+          templateId,
+          ok: true,
+          providerId: res.id,
+        });
+      } else {
+        failed++;
+      }
     }
   }
 
+  revalidatePath('/admin/customers');
   return { sent, failed, noPhone };
 }

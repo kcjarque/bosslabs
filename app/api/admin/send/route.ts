@@ -1,9 +1,39 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
-import { getSignups, type Signup } from '@/lib/db';
+import { getSignups, updateSignup, type Signup } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { getWebinarInfo } from '@/lib/webinar';
+
+/**
+ * Append a fresh entry to a signup's metadata.adminSends array so the
+ * customer profile's comms timeline shows it. Best-effort — failures
+ * here don't fail the actual send (which already happened).
+ */
+type AdminSendEntry = {
+  ts: string;
+  channel: 'email' | 'sms';
+  templateId: string;
+  ok: boolean;
+  providerId?: string;
+};
+
+async function recordAdminSend(signup: Signup, entry: AdminSendEntry): Promise<void> {
+  try {
+    const existing =
+      ((signup.metadata as Record<string, unknown> | undefined)?.adminSends as
+        | AdminSendEntry[]
+        | undefined) ?? [];
+    await updateSignup(signup.id, {
+      metadata: {
+        ...(signup.metadata ?? {}),
+        adminSends: [...existing, entry],
+      },
+    });
+  } catch (err) {
+    console.warn('[admin/send] failed to record adminSends entry', err);
+  }
+}
 
 export const runtime = 'nodejs';
 
@@ -67,12 +97,30 @@ export async function POST(req: Request) {
     if (!to) return NextResponse.json({ error: 'Recipient email missing' }, { status: 400 });
     const result = await sendEmail({ to, templateId: body.templateId, vars });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
+    if (signup) {
+      await recordAdminSend(signup, {
+        ts: new Date().toISOString(),
+        channel: 'email',
+        templateId: body.templateId,
+        ok: true,
+        providerId: result.id,
+      });
+    }
     return NextResponse.json({ ok: true, provider: result.provider, id: result.id });
   } else {
     const to = signup?.phone || body.to;
     if (!to) return NextResponse.json({ error: 'Recipient phone missing' }, { status: 400 });
     const result = await sendSms({ to, templateId: body.templateId, vars });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
+    if (signup) {
+      await recordAdminSend(signup, {
+        ts: new Date().toISOString(),
+        channel: 'sms',
+        templateId: body.templateId,
+        ok: true,
+        providerId: result.id,
+      });
+    }
     return NextResponse.json({ ok: true, provider: result.provider, id: result.id });
   }
 }

@@ -105,6 +105,25 @@ function buildCommsTimeline(
     });
   }
 
+  // Admin-fired sends (single from profile, bulk from customers table).
+  type AdminSendEntry = {
+    ts: string;
+    channel: 'email' | 'sms';
+    templateId: string;
+    ok?: boolean;
+    providerId?: string;
+  };
+  const adminSends = (meta.adminSends as AdminSendEntry[] | undefined) ?? [];
+  for (const s of adminSends) {
+    events.push({
+      ts: s.ts,
+      channel: s.channel,
+      kind: 'Admin send',
+      description: `Template: ${s.templateId}${s.providerId ? ` · ${s.providerId}` : ''}`,
+      ok: s.ok !== false,
+    });
+  }
+
   // Sequence sends (the new generalized engine)
   for (const send of sequenceSends) {
     if (send.emailTemplateId) {
