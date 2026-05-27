@@ -115,7 +115,7 @@ async function main() {
         .select('id, sent_at, email_ok, sms_ok, signup_id')
         .eq('sequence_step_id', step.id);
       if (error) {
-        console.log(`  Step ${step.hoursOffset}h: error fetching sends - ${error.message}`);
+        console.log(`  Step ${step.hours_offset}h: error fetching sends - ${error.message}`);
         continue;
       }
       const sendsArr = sends ?? [];

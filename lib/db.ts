@@ -35,10 +35,15 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
  * work in scripts (just without the dedupe). Without this fallback, every
  * script that imports lib/db.ts crashes at module load.
  */
-type AnyFn = (...args: unknown[]) => unknown;
+// `any[]` is the right shape here — we want the wrapper to preserve the
+// inner function's exact parameter + return types, which the stricter
+// `unknown[]` constraint collapses to `{}`. Suppress the lint just for
+// this utility type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyFn = (...args: any[]) => any;
 const cache: <T extends AnyFn>(fn: T) => T =
   (React as unknown as { cache?: <T extends AnyFn>(fn: T) => T }).cache ??
-  ((fn: AnyFn) => fn as AnyFn) as unknown as <T extends AnyFn>(fn: T) => T;
+  (((fn: AnyFn) => fn) as <T extends AnyFn>(fn: T) => T);
 
 /* --------------------------------------------------------------------- */
 /* TYPES                                                                 */
