@@ -460,3 +460,166 @@ $$;
 -- ─── Telegram bot notifications ──────────────────────────────────────────
 alter table settings add column if not exists telegram_bot_token text default '';
 alter table settings add column if not exists telegram_chat_id text default '';
+
+-- ─── Email sequence engine ───────────────────────────────────────────────
+-- Generalized version of the hardcoded 6-window reminder cron.
+--   events       — webinars (current + future). Sequences anchor here.
+--   lists        — saved filters across signups (e.g. "all paid").
+--   sequences    — series of emails attached to a list, anchored to an event.
+--   sequence_steps — individual emails in a sequence (template + offset).
+--   sequence_sends — log of every send (idempotency).
+
+create table if not exists events (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  starts_at_iso text not null,         -- ISO 8601 with TZ
+  timezone text not null default 'Asia/Manila',
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists events_active_idx on events (active);
+
+create table if not exists lists (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  -- Dynamic filter type. Computed against signups at send time.
+  filter_type text not null check (filter_type in (
+    'all_paid',         -- status = 'paid'
+    'all_registered',   -- source = 'paid' AND status IN ('registered', 'paid')
+    'all_free',         -- source = 'free'
+    'all_signups',      -- everyone
+    'abandoned'         -- source = 'paid' AND status = 'registered' (no upgrade yet)
+  )),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists sequences (
+  id uuid primary key default gen_random_uuid(),
+  list_id uuid not null references lists(id) on delete cascade,
+  event_id uuid references events(id) on delete set null,
+  name text not null,
+  description text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists sequences_list_idx on sequences (list_id);
+create index if not exists sequences_event_idx on sequences (event_id);
+
+create table if not exists sequence_steps (
+  id uuid primary key default gen_random_uuid(),
+  sequence_id uuid not null references sequences(id) on delete cascade,
+  position integer not null default 0,
+  email_template_id text references email_templates(id),
+  sms_template_id text references sms_templates(id),    -- nullable: email-only
+  schedule_type text not null check (schedule_type in (
+    'before_event',     -- N hours before event.starts_at
+    'after_event',      -- N hours after event.starts_at
+    'after_subscribe'   -- N hours after signup.created_at
+  )),
+  hours_offset integer not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists sequence_steps_seq_idx on sequence_steps (sequence_id, position);
+
+create table if not exists sequence_sends (
+  id uuid primary key default gen_random_uuid(),
+  sequence_step_id uuid not null references sequence_steps(id) on delete cascade,
+  signup_id text not null references signups(id) on delete cascade,
+  sent_at timestamptz not null default now(),
+  email_ok boolean not null default false,
+  sms_ok boolean not null default false,
+  unique (sequence_step_id, signup_id)
+);
+create index if not exists sequence_sends_signup_idx on sequence_sends (signup_id);
+
+-- ─── Seed: the existing webinar as the first event ───────────────────────
+-- If settings has a starts_at_iso configured, mirror it into events row #1
+-- so the default reminder sequence has something to anchor against.
+insert into events (id, name, starts_at_iso, timezone, active)
+select
+  '11111111-1111-1111-1111-111111111111'::uuid,
+  coalesce(nullif(s.webinar_name, ''), 'BOSSLABS AI Webinar'),
+  coalesce(nullif(s.webinar_starts_at_iso, ''), '2026-05-21T20:00:00+08:00'),
+  coalesce(nullif(s.webinar_timezone, ''), 'Asia/Manila'),
+  true
+from settings s
+where s.id = 1
+on conflict (id) do nothing;
+
+-- ─── Seed: default "All Webinar Attendees" list ──────────────────────────
+insert into lists (id, name, description, filter_type)
+values (
+  '22222222-2222-2222-2222-222222222222'::uuid,
+  'All Webinar Attendees',
+  'Anyone who registered or paid for the webinar.',
+  'all_registered'
+)
+on conflict (id) do nothing;
+
+-- ─── Seed: default reminder sequence (replicates the old 6-window cron) ──
+insert into sequences (id, list_id, event_id, name, description, active)
+values (
+  '33333333-3333-3333-3333-333333333333'::uuid,
+  '22222222-2222-2222-2222-222222222222'::uuid,
+  '11111111-1111-1111-1111-111111111111'::uuid,
+  'Webinar Reminder Sequence',
+  'Six reminders before the live webinar: 60h / 48h / 36h / 24h / 12h / 1h.',
+  true
+)
+on conflict (id) do nothing;
+
+insert into sequence_steps (sequence_id, position, email_template_id, sms_template_id, schedule_type, hours_offset)
+select
+  '33333333-3333-3333-3333-333333333333'::uuid,
+  s.position,
+  s.email_template_id,
+  s.sms_template_id,
+  'before_event',
+  s.hours_offset
+from (values
+  (0, 'reminder_60h', null::text, 60),
+  (1, 'reminder_48h', null::text, 48),
+  (2, 'reminder_36h', null::text, 36),
+  (3, 'reminder_24h', 'reminder_24h', 24),
+  (4, 'reminder_12h', null::text, 12),
+  (5, 'reminder_1h',  'reminder_1h',  1)
+) as s(position, email_template_id, sms_template_id, hours_offset)
+where not exists (
+  select 1 from sequence_steps
+  where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid
+);
+
+-- ─── Backfill: convert metadata.reminders.{h60..h1} into sequence_sends ──
+-- Existing signups already received some reminders. Insert sequence_sends
+-- rows for each (signup, step) pair that's already been sent, so the new
+-- cron doesn't re-send them. Idempotent via the unique constraint.
+do $$
+declare
+  step_map jsonb := jsonb_build_object(
+    'h60', (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 60),
+    'h48', (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 48),
+    'h36', (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 36),
+    'h24', (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 24),
+    'h12', (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 12),
+    'h1',  (select id from sequence_steps where sequence_id = '33333333-3333-3333-3333-333333333333'::uuid and hours_offset = 1)
+  );
+  k text;
+begin
+  for k in select jsonb_object_keys(step_map) loop
+    insert into sequence_sends (sequence_step_id, signup_id, sent_at, email_ok)
+    select
+      (step_map->>k)::uuid,
+      s.id,
+      coalesce(
+        (s.metadata->'reminders'->>k)::timestamptz,
+        now()
+      ),
+      true
+    from signups s
+    where s.metadata->'reminders'->>k is not null
+      and (step_map->>k) is not null
+    on conflict (sequence_step_id, signup_id) do nothing;
+  end loop;
+end $$;

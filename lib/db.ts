@@ -1089,3 +1089,556 @@ export async function getRecordingsStorageBytes(): Promise<number> {
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
   return rows.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }
+
+/* --------------------------------------------------------------------- */
+/* EMAIL SEQUENCE ENGINE                                                  */
+/* --------------------------------------------------------------------- */
+
+export type EventRow = {
+  id: string;
+  name: string;
+  starts_at_iso: string;
+  timezone: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type EventModel = {
+  id: string;
+  name: string;
+  startsAtIso: string;
+  timezone: string;
+  active: boolean;
+  createdAt: string;
+};
+
+function rowToEvent(r: EventRow): EventModel {
+  return {
+    id: r.id,
+    name: r.name,
+    startsAtIso: r.starts_at_iso,
+    timezone: r.timezone,
+    active: r.active,
+    createdAt: r.created_at,
+  };
+}
+
+export type ListFilterType =
+  | 'all_paid'
+  | 'all_registered'
+  | 'all_free'
+  | 'all_signups'
+  | 'abandoned';
+
+export type ListModel = {
+  id: string;
+  name: string;
+  description: string | null;
+  filterType: ListFilterType;
+  createdAt: string;
+};
+
+type ListRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  filter_type: ListFilterType;
+  created_at: string;
+};
+
+function rowToList(r: ListRow): ListModel {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    filterType: r.filter_type,
+    createdAt: r.created_at,
+  };
+}
+
+export type SequenceModel = {
+  id: string;
+  listId: string;
+  eventId: string | null;
+  name: string;
+  description: string | null;
+  active: boolean;
+  createdAt: string;
+};
+
+type SequenceRow = {
+  id: string;
+  list_id: string;
+  event_id: string | null;
+  name: string;
+  description: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+function rowToSequence(r: SequenceRow): SequenceModel {
+  return {
+    id: r.id,
+    listId: r.list_id,
+    eventId: r.event_id,
+    name: r.name,
+    description: r.description,
+    active: r.active,
+    createdAt: r.created_at,
+  };
+}
+
+export type SequenceScheduleType =
+  | 'before_event'
+  | 'after_event'
+  | 'after_subscribe';
+
+export type SequenceStep = {
+  id: string;
+  sequenceId: string;
+  position: number;
+  emailTemplateId: string | null;
+  smsTemplateId: string | null;
+  scheduleType: SequenceScheduleType;
+  hoursOffset: number;
+  active: boolean;
+  createdAt: string;
+};
+
+type SequenceStepRow = {
+  id: string;
+  sequence_id: string;
+  position: number;
+  email_template_id: string | null;
+  sms_template_id: string | null;
+  schedule_type: SequenceScheduleType;
+  hours_offset: number;
+  active: boolean;
+  created_at: string;
+};
+
+function rowToStep(r: SequenceStepRow): SequenceStep {
+  return {
+    id: r.id,
+    sequenceId: r.sequence_id,
+    position: r.position,
+    emailTemplateId: r.email_template_id,
+    smsTemplateId: r.sms_template_id,
+    scheduleType: r.schedule_type,
+    hoursOffset: r.hours_offset,
+    active: r.active,
+    createdAt: r.created_at,
+  };
+}
+
+/* ─── Events ──────────────────────────────────────────────────────────── */
+
+export async function getEvents(): Promise<EventModel[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('events')
+    .select('*')
+    .order('starts_at_iso', { ascending: false });
+  if (error) throw new Error(`getEvents: ${error.message}`);
+  return (data as EventRow[]).map(rowToEvent);
+}
+
+export async function getEvent(id: string): Promise<EventModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('events')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getEvent: ${error.message}`);
+  return data ? rowToEvent(data as EventRow) : null;
+}
+
+export async function addEvent(input: {
+  name: string;
+  startsAtIso: string;
+  timezone?: string;
+  active?: boolean;
+}): Promise<EventModel> {
+  if (!isSupabaseConfigured()) throw new Error('addEvent: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('events')
+    .insert({
+      name: input.name,
+      starts_at_iso: input.startsAtIso,
+      timezone: input.timezone ?? 'Asia/Manila',
+      active: input.active ?? true,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`addEvent: ${error.message}`);
+  return rowToEvent(data as EventRow);
+}
+
+export async function updateEvent(
+  id: string,
+  patch: Partial<Pick<EventModel, 'name' | 'startsAtIso' | 'timezone' | 'active'>>,
+): Promise<EventModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const row: Partial<EventRow> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.startsAtIso !== undefined) row.starts_at_iso = patch.startsAtIso;
+  if (patch.timezone !== undefined) row.timezone = patch.timezone;
+  if (patch.active !== undefined) row.active = patch.active;
+  const { data, error } = await getSupabase()
+    .from('events')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`updateEvent: ${error.message}`);
+  return data ? rowToEvent(data as EventRow) : null;
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase().from('events').delete().eq('id', id);
+  if (error) throw new Error(`deleteEvent: ${error.message}`);
+}
+
+/* ─── Lists ───────────────────────────────────────────────────────────── */
+
+export async function getLists(): Promise<ListModel[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('lists')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`getLists: ${error.message}`);
+  return (data as ListRow[]).map(rowToList);
+}
+
+export async function getList(id: string): Promise<ListModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('lists')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getList: ${error.message}`);
+  return data ? rowToList(data as ListRow) : null;
+}
+
+export async function addList(input: {
+  name: string;
+  description?: string | null;
+  filterType: ListFilterType;
+}): Promise<ListModel> {
+  if (!isSupabaseConfigured()) throw new Error('addList: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('lists')
+    .insert({
+      name: input.name,
+      description: input.description ?? null,
+      filter_type: input.filterType,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`addList: ${error.message}`);
+  return rowToList(data as ListRow);
+}
+
+export async function updateList(
+  id: string,
+  patch: Partial<Pick<ListModel, 'name' | 'description' | 'filterType'>>,
+): Promise<ListModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const row: Partial<ListRow> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.filterType !== undefined) row.filter_type = patch.filterType;
+  const { data, error } = await getSupabase()
+    .from('lists')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`updateList: ${error.message}`);
+  return data ? rowToList(data as ListRow) : null;
+}
+
+export async function deleteList(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase().from('lists').delete().eq('id', id);
+  if (error) throw new Error(`deleteList: ${error.message}`);
+}
+
+/**
+ * Resolve a list's filter against the current signups table. Returns
+ * the matching Signup rows (live snapshot — no caching, called per cron run).
+ */
+export async function computeListMembers(filterType: ListFilterType): Promise<Signup[]> {
+  const all = await getSignups();
+  switch (filterType) {
+    case 'all_paid':
+      return all.filter((s) => s.status === 'paid');
+    case 'all_registered':
+      // The default "webinar attendees" list: registered (in-flight) + paid.
+      // Excludes free signups, refunded, unsubscribed.
+      return all.filter(
+        (s) => s.source === 'paid' && (s.status === 'registered' || s.status === 'paid'),
+      );
+    case 'all_free':
+      return all.filter((s) => s.source === 'free');
+    case 'abandoned':
+      return all.filter((s) => s.source === 'paid' && s.status === 'registered');
+    case 'all_signups':
+    default:
+      return all.filter((s) => s.status !== 'unsubscribed');
+  }
+}
+
+/* ─── Sequences ───────────────────────────────────────────────────────── */
+
+export async function getSequences(): Promise<SequenceModel[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`getSequences: ${error.message}`);
+  return (data as SequenceRow[]).map(rowToSequence);
+}
+
+export async function getSequence(id: string): Promise<SequenceModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getSequence: ${error.message}`);
+  return data ? rowToSequence(data as SequenceRow) : null;
+}
+
+export async function getActiveSequences(): Promise<SequenceModel[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .select('*')
+    .eq('active', true);
+  if (error) throw new Error(`getActiveSequences: ${error.message}`);
+  return (data as SequenceRow[]).map(rowToSequence);
+}
+
+export async function addSequence(input: {
+  listId: string;
+  eventId: string | null;
+  name: string;
+  description?: string | null;
+  active?: boolean;
+}): Promise<SequenceModel> {
+  if (!isSupabaseConfigured()) throw new Error('addSequence: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .insert({
+      list_id: input.listId,
+      event_id: input.eventId,
+      name: input.name,
+      description: input.description ?? null,
+      active: input.active ?? true,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`addSequence: ${error.message}`);
+  return rowToSequence(data as SequenceRow);
+}
+
+export async function updateSequence(
+  id: string,
+  patch: Partial<
+    Pick<SequenceModel, 'listId' | 'eventId' | 'name' | 'description' | 'active'>
+  >,
+): Promise<SequenceModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const row: Partial<SequenceRow> = {};
+  if (patch.listId !== undefined) row.list_id = patch.listId;
+  if (patch.eventId !== undefined) row.event_id = patch.eventId;
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.active !== undefined) row.active = patch.active;
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`updateSequence: ${error.message}`);
+  return data ? rowToSequence(data as SequenceRow) : null;
+}
+
+export async function deleteSequence(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase().from('sequences').delete().eq('id', id);
+  if (error) throw new Error(`deleteSequence: ${error.message}`);
+}
+
+/* ─── Sequence steps ──────────────────────────────────────────────────── */
+
+export async function getSequenceSteps(sequenceId: string): Promise<SequenceStep[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('sequence_steps')
+    .select('*')
+    .eq('sequence_id', sequenceId)
+    .order('position', { ascending: true });
+  if (error) throw new Error(`getSequenceSteps: ${error.message}`);
+  return (data as SequenceStepRow[]).map(rowToStep);
+}
+
+export async function addSequenceStep(input: {
+  sequenceId: string;
+  position: number;
+  emailTemplateId: string | null;
+  smsTemplateId: string | null;
+  scheduleType: SequenceScheduleType;
+  hoursOffset: number;
+  active?: boolean;
+}): Promise<SequenceStep> {
+  if (!isSupabaseConfigured()) throw new Error('addSequenceStep: Supabase not configured');
+  const { data, error } = await getSupabase()
+    .from('sequence_steps')
+    .insert({
+      sequence_id: input.sequenceId,
+      position: input.position,
+      email_template_id: input.emailTemplateId,
+      sms_template_id: input.smsTemplateId,
+      schedule_type: input.scheduleType,
+      hours_offset: input.hoursOffset,
+      active: input.active ?? true,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`addSequenceStep: ${error.message}`);
+  return rowToStep(data as SequenceStepRow);
+}
+
+export async function updateSequenceStep(
+  id: string,
+  patch: Partial<
+    Pick<
+      SequenceStep,
+      | 'position'
+      | 'emailTemplateId'
+      | 'smsTemplateId'
+      | 'scheduleType'
+      | 'hoursOffset'
+      | 'active'
+    >
+  >,
+): Promise<SequenceStep | null> {
+  if (!isSupabaseConfigured()) return null;
+  const row: Partial<SequenceStepRow> = {};
+  if (patch.position !== undefined) row.position = patch.position;
+  if (patch.emailTemplateId !== undefined) row.email_template_id = patch.emailTemplateId;
+  if (patch.smsTemplateId !== undefined) row.sms_template_id = patch.smsTemplateId;
+  if (patch.scheduleType !== undefined) row.schedule_type = patch.scheduleType;
+  if (patch.hoursOffset !== undefined) row.hours_offset = patch.hoursOffset;
+  if (patch.active !== undefined) row.active = patch.active;
+  const { data, error } = await getSupabase()
+    .from('sequence_steps')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`updateSequenceStep: ${error.message}`);
+  return data ? rowToStep(data as SequenceStepRow) : null;
+}
+
+export async function deleteSequenceStep(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('sequence_steps')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(`deleteSequenceStep: ${error.message}`);
+}
+
+/* ─── Sequence sends (idempotency log) ────────────────────────────────── */
+
+/**
+ * Has this step already been delivered to this signup? Used as the
+ * idempotency check inside the cron — never re-send the same step
+ * to the same person.
+ */
+export async function hasSequenceSend(
+  sequenceStepId: string,
+  signupId: string,
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  const { data, error } = await getSupabase()
+    .from('sequence_sends')
+    .select('id')
+    .eq('sequence_step_id', sequenceStepId)
+    .eq('signup_id', signupId)
+    .maybeSingle();
+  if (error) throw new Error(`hasSequenceSend: ${error.message}`);
+  return Boolean(data);
+}
+
+/**
+ * Find all signup IDs that have already received a given step.
+ * Cheaper than calling hasSequenceSend() in a loop — one query per step.
+ */
+export async function getSequenceSendRecipients(
+  sequenceStepId: string,
+): Promise<Set<string>> {
+  if (!isSupabaseConfigured()) return new Set();
+  const { data, error } = await getSupabase()
+    .from('sequence_sends')
+    .select('signup_id')
+    .eq('sequence_step_id', sequenceStepId);
+  if (error) throw new Error(`getSequenceSendRecipients: ${error.message}`);
+  return new Set((data as Array<{ signup_id: string }>).map((r) => r.signup_id));
+}
+
+export async function recordSequenceSend(input: {
+  sequenceStepId: string;
+  signupId: string;
+  emailOk: boolean;
+  smsOk: boolean;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('sequence_sends')
+    .insert({
+      sequence_step_id: input.sequenceStepId,
+      signup_id: input.signupId,
+      email_ok: input.emailOk,
+      sms_ok: input.smsOk,
+    });
+  // Unique-violation = someone else already wrote it (concurrent cron). Ignore.
+  if (error && !error.message.includes('duplicate')) {
+    throw new Error(`recordSequenceSend: ${error.message}`);
+  }
+}
+
+/** Counts of recipients per step in a sequence — used by the admin UI. */
+export async function getSequenceStepSendCounts(
+  sequenceId: string,
+): Promise<Map<string, number>> {
+  if (!isSupabaseConfigured()) return new Map();
+  const sb = getSupabase();
+  const { data: steps, error: e1 } = await sb
+    .from('sequence_steps')
+    .select('id')
+    .eq('sequence_id', sequenceId);
+  if (e1) throw new Error(`getSequenceStepSendCounts steps: ${e1.message}`);
+  const stepIds = (steps as Array<{ id: string }>).map((s) => s.id);
+  if (stepIds.length === 0) return new Map();
+  const { data: sends, error: e2 } = await sb
+    .from('sequence_sends')
+    .select('sequence_step_id')
+    .in('sequence_step_id', stepIds);
+  if (e2) throw new Error(`getSequenceStepSendCounts sends: ${e2.message}`);
+  const counts = new Map<string, number>();
+  for (const row of sends as Array<{ sequence_step_id: string }>) {
+    counts.set(row.sequence_step_id, (counts.get(row.sequence_step_id) ?? 0) + 1);
+  }
+  return counts;
+}
