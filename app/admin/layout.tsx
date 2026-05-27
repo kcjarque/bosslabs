@@ -126,7 +126,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-60">
+        {/* min-w-0 is critical: by default flex items have min-width:auto,
+            meaning they can't shrink below their content's natural size.
+            Without min-w-0, a wide child (like the signups table) blows
+            the main element past the viewport edge. */}
+        <main className="min-w-0 flex-1 md:ml-60">
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">{children}</div>
         </main>
       </div>
