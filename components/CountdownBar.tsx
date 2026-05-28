@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Props = {
   /** ISO date the webinar starts. When empty, the bar hides itself. */
@@ -50,9 +51,12 @@ export function CountdownBar({
   startsAtIso,
   message = 'Seats close soon — do not get left behind',
 }: Props) {
+  const pathname = usePathname();
   const [target] = useState(() => getTarget(startsAtIso));
   const { mounted, days, hours, mins, secs } = useCountdown(target);
 
+  // Never show the urgency bar inside the admin — it's a public-funnel signal.
+  if (pathname?.startsWith('/admin')) return null;
   // No date configured (or already past) → hide the bar entirely rather
   // than show a misleading "+14 days from your page load" timer.
   if (!target) return null;
