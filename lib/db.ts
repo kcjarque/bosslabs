@@ -1451,6 +1451,7 @@ export type EventRow = {
   timezone: string;
   active: boolean;
   created_at: string;
+  zoom_join_url: string | null;
 };
 
 export type EventModel = {
@@ -1460,6 +1461,10 @@ export type EventModel = {
   timezone: string;
   active: boolean;
   createdAt: string;
+  /** Per-event Zoom link. Empty/null falls back to settings.zoomJoinUrl
+   *  in the email var resolution. Lets a 2nd event use a different
+   *  meeting without touching global settings. */
+  zoomJoinUrl: string;
 };
 
 function rowToEvent(r: EventRow): EventModel {
@@ -1470,6 +1475,7 @@ function rowToEvent(r: EventRow): EventModel {
     timezone: r.timezone,
     active: r.active,
     createdAt: r.created_at,
+    zoomJoinUrl: r.zoom_join_url ?? '',
   };
 }
 
@@ -1625,6 +1631,7 @@ export async function addEvent(input: {
   startsAtIso: string;
   timezone?: string;
   active?: boolean;
+  zoomJoinUrl?: string;
 }): Promise<EventModel> {
   if (!isSupabaseConfigured()) throw new Error('addEvent: Supabase not configured');
   const { data, error } = await getSupabase()
@@ -1634,6 +1641,7 @@ export async function addEvent(input: {
       starts_at_iso: input.startsAtIso,
       timezone: input.timezone ?? 'Asia/Manila',
       active: input.active ?? true,
+      zoom_join_url: input.zoomJoinUrl ?? '',
     })
     .select('*')
     .single();
@@ -1643,7 +1651,7 @@ export async function addEvent(input: {
 
 export async function updateEvent(
   id: string,
-  patch: Partial<Pick<EventModel, 'name' | 'startsAtIso' | 'timezone' | 'active'>>,
+  patch: Partial<Pick<EventModel, 'name' | 'startsAtIso' | 'timezone' | 'active' | 'zoomJoinUrl'>>,
 ): Promise<EventModel | null> {
   if (!isSupabaseConfigured()) return null;
   const row: Partial<EventRow> = {};
@@ -1651,6 +1659,7 @@ export async function updateEvent(
   if (patch.startsAtIso !== undefined) row.starts_at_iso = patch.startsAtIso;
   if (patch.timezone !== undefined) row.timezone = patch.timezone;
   if (patch.active !== undefined) row.active = patch.active;
+  if (patch.zoomJoinUrl !== undefined) row.zoom_join_url = patch.zoomJoinUrl;
   const { data, error } = await getSupabase()
     .from('events')
     .update(row)

@@ -14,9 +14,10 @@ export async function createEventAction(formData: FormData): Promise<void> {
   const startsAtLocal = String(formData.get('startsAtLocal') ?? '').trim();
   const timezone =
     String(formData.get('timezone') ?? 'Asia/Manila').trim() || 'Asia/Manila';
+  const zoomJoinUrl = String(formData.get('zoomJoinUrl') ?? '').trim();
   if (!name || !startsAtLocal) throw new Error('Name and start time required');
   const startsAtIso = combineLocalAndTimezone(startsAtLocal, timezone);
-  await addEvent({ name, startsAtIso, timezone, active: true });
+  await addEvent({ name, startsAtIso, timezone, active: true, zoomJoinUrl });
   revalidatePath('/admin/events');
 }
 
@@ -34,6 +35,7 @@ export async function updateEventAction(
     startsAtLocal?: string;
     timezone?: string;
     active?: boolean;
+    zoomJoinUrl?: string;
   },
 ): Promise<void> {
   requireAdmin();
@@ -42,10 +44,12 @@ export async function updateEventAction(
     startsAtIso?: string;
     timezone?: string;
     active?: boolean;
+    zoomJoinUrl?: string;
   } = {};
   if (patch.name !== undefined) finalPatch.name = patch.name;
   if (patch.timezone !== undefined) finalPatch.timezone = patch.timezone;
   if (patch.active !== undefined) finalPatch.active = patch.active;
+  if (patch.zoomJoinUrl !== undefined) finalPatch.zoomJoinUrl = patch.zoomJoinUrl;
   // Prefer the wall-clock + timezone path; fall back to raw ISO.
   if (patch.startsAtLocal !== undefined) {
     finalPatch.startsAtIso = combineLocalAndTimezone(

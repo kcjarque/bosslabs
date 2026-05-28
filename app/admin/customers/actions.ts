@@ -11,7 +11,7 @@ import {
 } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 
 type AdminSendEntry = {
   ts: string;
@@ -107,20 +107,8 @@ export async function bulkSendAction(
       failed++;
       continue;
     }
-    const vars: Record<string, string> = {
-      firstName: signup.firstName,
-      lastName: signup.lastName ?? '',
-      email: signup.email,
-      phone: signup.phone,
-      webinarName: webinar.name,
-      webinarDate: webinar.date,
-      webinarTime: webinar.time,
-      webinarTimezone: webinar.timezone,
-      zoomRegisterUrl: webinar.zoomRegisterUrl,
-      zoomJoinUrl: webinar.zoomJoinUrl,
-      replayUrl: webinar.replayUrl,
-      messengerGroupUrl: webinar.messengerGroupUrl,
-    };
+    // Resolves the per-event Zoom link (falls back to global settings).
+    const vars = await templateVarsForSignup(signup, webinar);
     if (channel === 'email') {
       const res = await sendEmail({ to: signup.email, templateId, vars });
       if (res.ok) {

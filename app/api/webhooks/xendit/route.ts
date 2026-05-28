@@ -21,7 +21,7 @@
 import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup } from '@/lib/db';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -111,17 +111,8 @@ async function handleMainPaid(event: XenditEvent) {
   });
 
   const webinar = await getWebinarInfo();
-  const vars = {
-    firstName: signup.firstName,
-    webinarName: webinar.name,
-    webinarDate: webinar.date,
-    webinarTime: webinar.time,
-    webinarTimezone: webinar.timezone,
-    zoomJoinUrl: webinar.zoomJoinUrl,
-    zoomRegisterUrl: webinar.zoomRegisterUrl,
-    messengerGroupUrl: webinar.messengerGroupUrl,
-    replayUrl: webinar.replayUrl,
-  };
+  // Resolves the per-event Zoom link from the signup's event, else global.
+  const vars = await templateVarsForSignup(signup, webinar);
 
   const emailRes = await sendEmail({
     to: signup.email,

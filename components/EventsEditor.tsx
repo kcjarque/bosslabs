@@ -24,6 +24,7 @@ export function EventsEditor({
       startsAtLocal?: string;
       timezone?: string;
       active?: boolean;
+      zoomJoinUrl?: string;
     },
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -164,6 +165,18 @@ function CreateEventForm({
           ))}
         </select>
       </div>
+      <div className="sm:col-span-2">
+        <label className="label">Zoom join URL</label>
+        <input
+          name="zoomJoinUrl"
+          className="input"
+          placeholder="https://zoom.us/j/… (blank = use global Settings link)"
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          Per-event link. Leave blank to fall back to the global Zoom link in
+          Settings.
+        </p>
+      </div>
       {preview && (
         <div className="sm:col-span-2">
           <p className="text-xs text-slate-500">
@@ -196,6 +209,7 @@ function EventRow({
     startsAtLocal?: string;
     timezone?: string;
     active?: boolean;
+    zoomJoinUrl?: string;
   }) => void;
   onDelete: () => void;
 }) {
@@ -203,6 +217,7 @@ function EventRow({
   const [startsAtLocal, setStartsAtLocal] = useState(isoToLocalDateTime(ev.startsAtIso));
   const [timezone, setTimezone] = useState(ev.timezone);
   const [active, setActive] = useState(ev.active);
+  const [zoomJoinUrl, setZoomJoinUrl] = useState(ev.zoomJoinUrl ?? '');
 
   let formatted = ev.startsAtIso;
   try {
@@ -277,11 +292,17 @@ function EventRow({
           />
           Active
         </label>
+        <input
+          className="input mt-2 text-xs"
+          value={zoomJoinUrl}
+          onChange={(e) => setZoomJoinUrl(e.target.value)}
+          placeholder="Zoom URL (blank = global)"
+        />
       </td>
       <td className="text-right">
         <button
           className="btn btn-primary"
-          onClick={() => onSave({ name, startsAtLocal, timezone, active })}
+          onClick={() => onSave({ name, startsAtLocal, timezone, active, zoomJoinUrl })}
         >
           Save
         </button>

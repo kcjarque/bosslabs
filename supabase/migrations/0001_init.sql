@@ -475,9 +475,12 @@ create table if not exists events (
   starts_at_iso text not null,         -- ISO 8601 with TZ
   timezone text not null default 'Asia/Manila',
   active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  zoom_join_url text default ''        -- per-event link; '' falls back to settings
 );
 create index if not exists events_active_idx on events (active);
+-- Idempotent add for projects scaffolded before the per-event Zoom column.
+alter table events add column if not exists zoom_join_url text default '';
 
 create table if not exists lists (
   id uuid primary key default gen_random_uuid(),

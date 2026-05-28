@@ -7,7 +7,7 @@
  * (handy for first-ever deploys before the admin has touched anything).
  */
 
-import { getSettings } from './db';
+import { getSettings, getEvent, type Signup } from './db';
 
 export type WebinarInfo = {
   name: string;
@@ -38,6 +38,44 @@ function pick(...vals: (string | undefined | null)[]): string {
     if (typeof v === 'string' && v.length > 0) return v;
   }
   return '';
+}
+
+/**
+ * Build the template-variable map for a specific customer's email/SMS.
+ *
+ * The Zoom join URL resolves per-event: if the signup is tagged with an
+ * event that has its own zoom_join_url, that wins; otherwise it falls
+ * back to the global webinar (settings) link. Everything else comes from
+ * the shared webinar info. Pass the already-loaded WebinarInfo so the
+ * caller controls how many times getWebinarInfo() runs.
+ */
+export async function templateVarsForSignup(
+  signup: Pick<Signup, 'firstName' | 'lastName' | 'email' | 'phone' | 'eventId'>,
+  webinar: WebinarInfo,
+): Promise<Record<string, string>> {
+  let zoomJoinUrl = webinar.zoomJoinUrl;
+  if (signup.eventId) {
+    try {
+      const event = await getEvent(signup.eventId);
+      if (event?.zoomJoinUrl) zoomJoinUrl = event.zoomJoinUrl;
+    } catch {
+      // fall back to the global link on any lookup error
+    }
+  }
+  return {
+    firstName: signup.firstName,
+    lastName: signup.lastName ?? '',
+    email: signup.email,
+    phone: signup.phone,
+    webinarName: webinar.name,
+    webinarDate: webinar.date,
+    webinarTime: webinar.time,
+    webinarTimezone: webinar.timezone,
+    zoomJoinUrl,
+    zoomRegisterUrl: webinar.zoomRegisterUrl,
+    replayUrl: webinar.replayUrl,
+    messengerGroupUrl: webinar.messengerGroupUrl,
+  };
 }
 
 export async function getWebinarInfo(): Promise<WebinarInfo> {

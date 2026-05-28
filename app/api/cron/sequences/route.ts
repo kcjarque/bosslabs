@@ -40,7 +40,7 @@ import {
   type Signup,
   type SequenceStep,
 } from '@/lib/db';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { verifyCronAuth } from '@/lib/cron';
@@ -50,21 +50,6 @@ export const maxDuration = 60;
 
 /** ±15 min tolerance — matches the 10-min cron cadence with safety margin. */
 const TOLERANCE_MS = 15 * 60 * 1000;
-
-function templateVarsFor(signup: Signup, webinar: Awaited<ReturnType<typeof getWebinarInfo>>) {
-  return {
-    firstName: signup.firstName,
-    lastName: signup.lastName ?? '',
-    webinarName: webinar.name,
-    webinarDate: webinar.date,
-    webinarTime: webinar.time,
-    webinarTimezone: webinar.timezone,
-    zoomJoinUrl: webinar.zoomJoinUrl,
-    zoomRegisterUrl: webinar.zoomRegisterUrl,
-    messengerGroupUrl: webinar.messengerGroupUrl,
-    replayUrl: webinar.replayUrl,
-  };
-}
 
 /**
  * For a fixed-anchor step (before/after_event), what timestamp does the
@@ -201,7 +186,8 @@ export async function GET(req: Request) {
       totals.stepsFired++;
 
       for (const signup of fresh) {
-        const vars = templateVarsFor(signup, webinar);
+        // Resolves the per-event Zoom link (falls back to global settings).
+        const vars = await templateVarsForSignup(signup, webinar);
         let emailOk = false;
         let smsOk = false;
 
