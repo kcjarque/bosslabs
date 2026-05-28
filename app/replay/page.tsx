@@ -3,6 +3,7 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { ReplayOffer } from '@/components/ReplayOffer';
+import { ReplayGate } from '@/components/ReplayGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,15 +17,32 @@ export const metadata: Metadata = {
 const REPLAY_YOUTUBE_ID = 'mlOrJhKZc_Y';
 const APP_URL = 'https://REPLACE-WITH-APP-LINK';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
+// Real 7-day deadline — the replay genuinely closes at this moment. Replay
+// opens tomorrow (the morning after the webinar) and runs 7 days. Change this
+// single line to move the close date.
+const REPLAY_CLOSES_AT = '2026-06-05T23:59:00+08:00';
 
 export default function ReplayPage({
   searchParams,
 }: {
-  searchParams: { t?: string };
+  searchParams: { t?: string; closed?: string };
 }) {
   // `?t=<seconds>` overrides the 5-min offer delay (for previewing the popup).
   const seconds = Number(searchParams.t);
   const delayMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 5 * 60 * 1000;
+
+  const deadline = new Date(REPLAY_CLOSES_AT).getTime();
+  // Server-enforced: a reload after the deadline shows the closed state, so
+  // the cutoff is genuine. `?closed=1` forces it for previewing.
+  const initiallyClosed = searchParams.closed === '1' || Date.now() >= deadline;
+  const endLabel = new Intl.DateTimeFormat('en-PH', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Asia/Manila',
+  }).format(deadline);
 
   return (
     <div className="min-h-screen bg-[#06070A] text-ink-100">
@@ -56,20 +74,16 @@ export default function ReplayPage({
           </p>
         </div>
 
-        {/* Replay video */}
-        <div className="mx-auto mt-10 max-w-4xl">
-          <div
-            className="relative w-full overflow-hidden rounded-2xl border border-white/10 shadow-glow"
-            style={{ paddingTop: '56.25%' }}
-          >
-            <iframe
-              className="absolute inset-0 h-full w-full"
-              src={`https://www.youtube.com/embed/${REPLAY_YOUTUBE_ID}`}
-              title="AI Vibe Coding 101 — Replay"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          </div>
+        {/* Replay video — gated by a real 7-day countdown */}
+        <div className="mt-10">
+          <ReplayGate
+            youtubeId={REPLAY_YOUTUBE_ID}
+            closesAtIso={REPLAY_CLOSES_AT}
+            endLabel={endLabel}
+            initiallyClosed={initiallyClosed}
+            retreatUrl={RETREAT_URL}
+            forceClosed={searchParams.closed === '1'}
+          />
         </div>
 
         {/* App we built */}
