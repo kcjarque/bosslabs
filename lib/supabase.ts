@@ -30,6 +30,14 @@ export function getSupabase(): SupabaseClient {
   }
   _client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      // Next.js patches global fetch to cache responses in its Data Cache by
+      // default. That made server reads serve STALE rows after a write — e.g.
+      // the homepage kept showing the old webinar date after Settings changed.
+      // Force no-store so DB reads are always fresh; per-request dedup is still
+      // handled by React cache() in lib/db.ts.
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
   return _client;
 }
