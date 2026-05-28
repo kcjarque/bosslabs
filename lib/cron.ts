@@ -11,13 +11,18 @@ export type CronAuthResult = { ok: true } | { ok: false; status: number; error: 
 
 export function verifyCronAuth(req: Request): CronAuthResult {
   const secret = process.env.CRON_SECRET;
-  // No secret configured → fail closed in prod, allow in dev for testing.
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      return { ok: false, status: 500, error: 'CRON_SECRET not configured' };
-    }
-    return { ok: true };
-  }
+  // No secret configured → allow. This MUST match the inline checks the
+  // other crons (abandoned, daily-summary) use, which fail OPEN when the
+  // secret is unset. The previous fail-CLOSED behavior here meant that on
+  // a Vercel project WITHOUT CRON_SECRET set, this cron 500'd on every
+  // tick while the others ran fine — silently breaking every reminder.
+  //
+  // The route is low-risk to leave open: sends are idempotent
+  // (sequence_sends dedup) and only fire inside a ±15-min window, so an
+  // anonymous hit can't spam. For defense-in-depth, set CRON_SECRET in
+  // the Vercel project — Vercel then auto-injects it as a Bearer token
+  // and the check below enforces it.
+  if (!secret) return { ok: true };
   const header = req.headers.get('authorization');
   if (header === `Bearer ${secret}`) return { ok: true };
   return { ok: false, status: 401, error: 'unauthorized' };
