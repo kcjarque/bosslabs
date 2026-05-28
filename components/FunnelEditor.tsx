@@ -96,7 +96,7 @@ export function FunnelEditor({
       <section className="card space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Offer</h2>
-          {publicUrl.trim() && (
+          {publicUrl.trim() ? (
             <a
               href={publicUrl.trim()}
               target="_blank"
@@ -105,11 +105,18 @@ export function FunnelEditor({
             >
               View funnel ↗
             </a>
+          ) : (
+            <span
+              className="btn btn-secondary cursor-not-allowed opacity-40"
+              title="Add a Funnel URL below, then save, to enable this"
+            >
+              View funnel ↗
+            </span>
           )}
         </div>
         <Field
           label="Funnel URL"
-          hint="The public link to this funnel's page. Click 'View funnel' above to open it."
+          hint="Paste the public link to this funnel's page, then Save. The 'View funnel' button above opens it in a new tab."
         >
           <input
             className="input"
