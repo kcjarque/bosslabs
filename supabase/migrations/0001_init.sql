@@ -423,7 +423,7 @@ insert into sms_templates (id, name, body) values
 ),
 ('reminder_24h',
  '24-Hour Reminder',
- 'BOSSLABS AI: Hi {{firstName}}! Tomorrow at {{webinarTime}} {{webinarTimezone}}. Join: {{zoomJoinUrl}}'
+ 'BOSSLABS AI: Hi {{firstName}}! Tomorrow at {{webinarTime}} {{webinarTimezone}}. Save this link for tonight: {{zoomJoinUrl}}'
 ),
 ('reminder_1h',
  '1-Hour Reminder',
