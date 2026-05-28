@@ -525,11 +525,18 @@ create table if not exists sequence_steps (
     'after_event',      -- N hours after event.starts_at
     'after_subscribe'   -- N hours after signup.created_at
   )),
-  hours_offset integer not null,
+  -- Numeric so we can support sub-hour reminders (e.g. 0.25 = 15 min).
+  -- Older deploys may have this as `integer`; the alter below promotes it.
+  hours_offset numeric not null,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
 create index if not exists sequence_steps_seq_idx on sequence_steps (sequence_id, position);
+
+-- Idempotent column-type promotion for projects that scaffolded on the
+-- original integer schema. Safe to re-run; no-op once the type is numeric.
+alter table sequence_steps
+  alter column hours_offset type numeric using hours_offset::numeric;
 
 create table if not exists sequence_sends (
   id uuid primary key default gen_random_uuid(),
