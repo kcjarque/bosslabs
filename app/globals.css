@@ -163,3 +163,161 @@ body {
   font-style: italic;
   color: #80DBF6;
 }
+
+/* ───────────────────────────────────────────────────────────────
+   Event word-art — Orbitron, iridescent chrome gradient + glow with
+   a slow shimmer. Injects high-energy "poster" vibe on event heroes
+   while staying on the dark/cyan brand. Used on /vibecode-retreat.
+   ─────────────────────────────────────────────────────────────── */
+.word-art {
+  font-family: var(--font-orbitron), system-ui, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.012em;
+  line-height: 0.92;
+  background-image: linear-gradient(
+    150deg,
+    #ff8a00 0%,
+    #ff5a3c 36%,
+    #ff3e6b 66%,
+    #d61f97 100%
+  );
+  background-size: 135% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  /* Glossy 3D depth: a bright top edge + warm terracotta risers carve a
+     readable, polished bevel on the light background, grounded with a soft
+     shadow + warm glow. */
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 0 #d79a72,
+    0 2px 0 #cd8d63,
+    0 3px 0 #c38055,
+    0 4px 0 #b97347,
+    0 5px 0 #af673a,
+    0 6px 0 #a55c2f,
+    0 8px 2px rgba(85, 35, 20, 0.26),
+    0 13px 26px rgba(150, 60, 45, 0.3),
+    0 0 34px rgba(255, 140, 70, 0.32);
+  animation: wordArtShimmer 9s ease-in-out infinite;
+}
+@keyframes wordArtShimmer {
+  0%,
+  100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .word-art {
+    animation: none;
+  }
+}
+
+/* Gradient strip echoing the poster's "LEARN · BUILD · INNOVATE" line. */
+.word-strip {
+  font-family: var(--font-orbitron), system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  background-image: linear-gradient(100deg, #80dbf6, #8ea2ff 50%, #d57bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Stylized event-detail chip (date / location / seats), poster-style,
+   tuned for the light zen background. */
+.event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(0, 147, 184, 0.28);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.6rem 0.95rem;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(15, 40, 70, 0.06),
+    0 10px 26px -16px rgba(0, 147, 184, 0.6);
+  backdrop-filter: blur(6px);
+}
+.event-chip .v {
+  color: #0e7490;
+  font-weight: 700;
+}
+
+/* ── Zen background — light, breathing, meditative movement ──
+   Slow drifting soft-color orbs + concentric "ripple" rings echo the
+   homepage's animated hero, recolored calm and light for the retreat. */
+@keyframes zen-breath {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: translate(1.5%, -2%) scale(1.16);
+  }
+}
+/* Botanical branches gently swaying in a breeze. */
+@keyframes grove-sway {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+/* Leaves drifting down and across, slow and chill. */
+@keyframes leaf-fall {
+  0% {
+    transform: translateY(-12vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  88% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(104vh) translateX(50px) rotate(260deg);
+    opacity: 0;
+  }
+}
+.zen-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  animation: zen-breath 12s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.grove-branch {
+  position: absolute;
+  animation: grove-sway 8s ease-in-out infinite;
+}
+.grove-leaf {
+  position: absolute;
+  top: 0;
+  animation: leaf-fall linear infinite;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .word-art,
+  .zen-orb,
+  .grove-branch,
+  .grove-leaf {
+    animation: none;
+  }
+}

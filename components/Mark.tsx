@@ -1,14 +1,17 @@
-type Props = { size?: number; className?: string };
+type Props = { size?: number; className?: string; onLight?: boolean };
 
 /**
  * BOSSLABS AI logomark — two intersecting bezier arcs over 6 nodes.
  * Companion to the wordmark; works in nav, footer, favicon contexts.
+ *
+ * Pass `onLight` when rendering on a light background so the ink arcs/nodes
+ * read as dark instead of near-white.
  */
-export function Mark({ size = 32, className = '' }: Props) {
+export function Mark({ size = 32, className = '', onLight = false }: Props) {
   const STROKE = 5.5;
   const RADIUS = 9;
-  const NODE_FILL = '#06070A';
-  const BLACK = '#E8EAEE'; // light "black" so it reads on dark bg; swap to #0B0D12 for light bg
+  const NODE_FILL = onLight ? '#FFFFFF' : '#06070A';
+  const BLACK = onLight ? '#0B0D12' : '#E8EAEE';
   const CYAN = '#00B8E6';
 
   return (

@@ -2432,3 +2432,127 @@ export async function updateFunnel(
   if (error) throw new Error(`updateFunnel: ${error.message}`);
   return data ? rowToFunnel(data as FunnelRow) : null;
 }
+
+/* ─── VibeCode Retreat reservations ─────────────────────────────────────── */
+
+export type RetreatPlan = 'full' | 'reservation' | 'installment';
+export type RetreatMethod = 'BPI' | 'BDO' | 'Maya';
+
+export type RetreatReservationInput = {
+  name: string;
+  email: string;
+  phone: string;
+  paymentMethod?: RetreatMethod;
+  paymentPlan?: RetreatPlan;
+  overnight?: boolean;
+  diet?: string;
+  business?: string;
+  buildIdea?: string;
+  extraPersonName?: string;
+  tshirtSize?: string;
+  heardFrom?: string;
+  amountDueCentavos?: number;
+};
+
+export type RetreatReservation = RetreatReservationInput & {
+  id: string;
+  createdAt: string;
+  status: 'reserved' | 'proof_submitted';
+  proofSubmittedAt: string | null;
+};
+
+type RetreatReservationRow = {
+  id: string;
+  created_at: string;
+  name: string;
+  email: string;
+  phone: string;
+  payment_method: string | null;
+  payment_plan: string | null;
+  overnight: boolean | null;
+  diet: string | null;
+  business: string | null;
+  build_idea: string | null;
+  extra_person_name: string | null;
+  tshirt_size: string | null;
+  heard_from: string | null;
+  amount_due_centavos: number | null;
+  status: string;
+  proof_submitted_at: string | null;
+};
+
+function rowToReservation(r: RetreatReservationRow): RetreatReservation {
+  return {
+    id: r.id,
+    createdAt: r.created_at,
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    paymentMethod: (r.payment_method as RetreatMethod) ?? undefined,
+    paymentPlan: (r.payment_plan as RetreatPlan) ?? undefined,
+    overnight: r.overnight ?? undefined,
+    diet: r.diet ?? '',
+    business: r.business ?? '',
+    buildIdea: r.build_idea ?? '',
+    extraPersonName: r.extra_person_name ?? '',
+    tshirtSize: r.tshirt_size ?? '',
+    heardFrom: r.heard_from ?? '',
+    amountDueCentavos: r.amount_due_centavos ?? undefined,
+    status: r.status === 'proof_submitted' ? 'proof_submitted' : 'reserved',
+    proofSubmittedAt: r.proof_submitted_at,
+  };
+}
+
+export async function createRetreatReservation(
+  input: RetreatReservationInput,
+): Promise<RetreatReservation> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured');
+  }
+  const { data, error } = await getSupabase()
+    .from('retreat_reservations')
+    .insert({
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      payment_method: input.paymentMethod ?? null,
+      payment_plan: input.paymentPlan ?? null,
+      overnight: input.overnight ?? null,
+      diet: input.diet ?? '',
+      business: input.business ?? '',
+      build_idea: input.buildIdea ?? '',
+      extra_person_name: input.extraPersonName ?? '',
+      tshirt_size: input.tshirtSize ?? '',
+      heard_from: input.heardFrom ?? '',
+      amount_due_centavos: input.amountDueCentavos ?? null,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`createRetreatReservation: ${error.message}`);
+  return rowToReservation(data as RetreatReservationRow);
+}
+
+export async function getRetreatReservation(
+  id: string,
+): Promise<RetreatReservation | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('retreat_reservations')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTableError(error.message)) return null;
+    throw new Error(`getRetreatReservation: ${error.message}`);
+  }
+  return data ? rowToReservation(data as RetreatReservationRow) : null;
+}
+
+export async function markRetreatReservationProof(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('retreat_reservations')
+    .update({ status: 'proof_submitted', proof_submitted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`markRetreatReservationProof: ${error.message}`);
+}

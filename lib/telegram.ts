@@ -55,6 +55,41 @@ export async function sendTelegram(
   }
 }
 
+/**
+ * Send a photo (e.g. a payment-proof screenshot) to the configured chat.
+ * Forwards the raw bytes via multipart. Never throws.
+ */
+export async function sendTelegramPhoto(
+  bytes: ArrayBuffer,
+  filename: string,
+  caption: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const settings = await getSettings();
+    const token = settings.telegramBotToken;
+    const chatId = settings.telegramChatId;
+    if (!token || !chatId) return { ok: false, reason: 'telegram not configured' };
+
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    form.append('caption', caption);
+    form.append('parse_mode', 'HTML');
+    form.append('photo', new Blob([bytes]), filename);
+
+    const res = await fetch(`${BASE}${token}/sendPhoto`, { method: 'POST', body: form });
+    const json = (await res.json()) as TgResponse;
+    if (!json.ok) {
+      console.warn('[telegram] sendPhoto failed:', json.description);
+      return { ok: false, reason: json.description };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Network error';
+    console.warn('[telegram] sendPhoto error:', msg);
+    return { ok: false, reason: msg };
+  }
+}
+
 /** Escape HTML special chars for Telegram HTML parse mode. */
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
