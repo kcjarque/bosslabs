@@ -13,7 +13,7 @@
  * a generated artifact regenerated on every save.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EmailTemplate } from '@/lib/db';
 
 function slugifyId(s: string): string {
@@ -232,6 +232,47 @@ function Editor({
   const [error, setError] = useState<string | null>(null);
   const [testTo, setTestTo] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Insert a markdown snippet at the cursor (or append if the textarea isn't
+  // focused), then restore the caret just after what we inserted.
+  function insertAtCursor(snippet: string) {
+    const ta = bodyRef.current;
+    const current = body ?? '';
+    if (!ta) {
+      setBody(current + snippet);
+      return;
+    }
+    const start = ta.selectionStart ?? current.length;
+    const end = ta.selectionEnd ?? start;
+    const next = current.slice(0, start) + snippet + current.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + snippet.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  }
+
+  async function uploadImage(file: File) {
+    setError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/admin/upload-image', { method: 'POST', body: fd });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !json.url) throw new Error(json.error || 'Upload failed.');
+      const caption = file.name.replace(/\.[^.]+$/, '');
+      insertAtCursor(`\n\n![${caption}](${json.url})\n\n`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   // Re-render the preview pane whenever the markdown body changes. Hits
   // the server preview endpoint so the rendering logic stays single-
@@ -377,7 +418,47 @@ function Editor({
               <p className="mt-1 text-[11px] text-slate-500">
                 Type plain text. We&rsquo;ll style + add the BOSSLABS logo around it.
               </p>
+
+              {/* Insert toolbar — upload an image (to storage) or drop in the
+                  link/button markdown at the cursor, so you never hand-type it. */}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <input
+                  ref={imgInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadImage(f);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => imgInputRef.current?.click()}
+                  disabled={uploading}
+                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading…' : 'Upload image'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor('[link text](https://)')}
+                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700"
+                >
+                  Insert link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor('[[Button label]](https://)')}
+                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700"
+                >
+                  Insert button
+                </button>
+              </div>
+
               <textarea
+                ref={bodyRef}
                 className="input mt-2 font-mono text-[13px]"
                 style={{ minHeight: 360 }}
                 value={body ?? ''}
