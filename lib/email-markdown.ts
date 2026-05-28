@@ -48,6 +48,17 @@ function safeHref(raw: string): string {
   return '#';
 }
 
+/** Resolve image sources. Only absolute http(s) URLs (or mustache vars) are
+ *  allowed — data: URIs get spam-flagged and bloat the email, and relative
+ *  paths won't load in an email client. Returns '' when unsafe so the caller
+ *  can skip rendering the <img>. */
+function safeImgSrc(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.includes('{{')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '';
+}
+
 /**
  * Inline pass — runs on the contents of a single paragraph or heading
  * (NOT across line breaks). Order matters: process the longest-match
@@ -59,6 +70,19 @@ function renderInline(text: string): string {
   const out: string[] = [];
   let i = 0;
   while (i < text.length) {
+    // Image: ![alt](url) — checked before links so the leading ! isn't
+    // emitted as text + the rest parsed as a [link].
+    const img = /^!\[([^\]]*?)\]\(([^)]+?)\)/.exec(text.slice(i));
+    if (img) {
+      const src = safeImgSrc(img[2]);
+      out.push(
+        src
+          ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(img[1])}" style="max-width:100%;height:auto;border-radius:12px;vertical-align:middle" />`
+          : escapeHtml(img[0]),
+      );
+      i += img[0].length;
+      continue;
+    }
     // Button: [[Label]](url)
     const btn = /^\[\[([^\]]+?)\]\]\(([^)]+?)\)/.exec(text.slice(i));
     if (btn) {
@@ -216,6 +240,26 @@ export function renderEmailMarkdown(markdown: string): string {
       blocks.push(
         `<h1 style="font-family:Georgia,serif;font-weight:400;font-size:40px;line-height:1.12;margin:0 0 24px;color:#0B0D12;letter-spacing:-0.5px">${renderInline(line.slice(2))}</h1>`,
       );
+      continue;
+    }
+
+    // Standalone image line: ![caption](url) — centered, rounded, responsive.
+    // The alt text doubles as a small caption beneath the image.
+    const standaloneImage = /^!\[([^\]]*)\]\(([^)]+?)\)$/.exec(line);
+    if (standaloneImage) {
+      flushParagraph();
+      const src = safeImgSrc(standaloneImage[2]);
+      if (src) {
+        const caption = standaloneImage[1].trim();
+        blocks.push(
+          `<div style="margin:28px 0;text-align:center">` +
+            `<img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}" style="max-width:100%;height:auto;border-radius:16px;border:1px solid #E5E9F2" />` +
+            (caption
+              ? `<p style="font-size:12px;color:#9BA1AC;margin:10px 0 0">${escapeHtml(caption)}</p>`
+              : '') +
+            `</div>`,
+        );
+      }
       continue;
     }
 

@@ -392,6 +392,7 @@ function Editor({
                   <div><code>**bold**</code> · <code>*italic*</code></div>
                   <div><code>[label](https://…)</code> — inline link</div>
                   <div><code>[[Button label]](https://…)</code> — pill CTA button</div>
+                  <div><code>![caption](https://…)</code> — embed an image (paste a public URL)</div>
                   <div><code>---</code> — horizontal divider</div>
                   <div>Blank line = new paragraph. <code>{'{{firstName}}'}</code> variables pass through.</div>
                 </div>
