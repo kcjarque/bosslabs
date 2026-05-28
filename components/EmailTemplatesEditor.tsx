@@ -16,19 +16,137 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EmailTemplate } from '@/lib/db';
 
+function slugifyId(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+}
+
 export function EmailTemplatesEditor({ initial }: { initial: EmailTemplate[] }) {
   const [templates, setTemplates] = useState(initial);
   const [activeId, setActiveId] = useState(initial[0]?.id || '');
   const active = templates.find((t) => t.id === activeId);
 
+  // "New template" creation state.
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newId, setNewId] = useState('');
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function createTemplate() {
+    const name = newName.trim();
+    const id = (newId.trim() || slugifyId(name)).toLowerCase();
+    if (!name) {
+      setCreateError('Give your template a name.');
+      return;
+    }
+    if (!/^[a-z0-9_]+$/.test(id)) {
+      setCreateError('ID can only use lowercase letters, numbers, and underscores.');
+      return;
+    }
+    if (templates.some((t) => t.id === id)) {
+      setCreateError('A template with that ID already exists.');
+      return;
+    }
+    setCreateBusy(true);
+    setCreateError(null);
+    const starter = `^^BOSSLABS AI^^\n# Hello {{firstName}}\n\nWrite your email here — use the formatting cheatsheet below.`;
+    try {
+      const res = await fetch('/api/admin/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'email',
+          template: { id, name, subject: name, body: starter },
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Could not create the template.');
+      }
+      const created: EmailTemplate = { id, name, subject: name, html: '', body: starter };
+      setTemplates((list) => [...list, created]);
+      setActiveId(id);
+      setCreating(false);
+      setNewName('');
+      setNewId('');
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Could not create the template.');
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
       <aside className="card lg:p-3">
-        <h2 className="hidden text-xs uppercase tracking-[0.06em] text-slate-500 lg:block lg:px-2 lg:py-1.5">
-          Templates
-        </h2>
+        <div className="flex items-center justify-between gap-2 lg:px-2 lg:py-1.5">
+          <h2 className="text-xs uppercase tracking-[0.06em] text-slate-500">
+            Templates
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              setCreating((v) => !v);
+              setCreateError(null);
+            }}
+            className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-slate-700"
+          >
+            {creating ? 'Close' : '+ New'}
+          </button>
+        </div>
+
+        {creating && (
+          <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <input
+              className="input"
+              placeholder="Template name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+            />
+            <input
+              className="input font-mono text-[12px]"
+              placeholder={newName ? slugifyId(newName) : 'template_id (auto)'}
+              value={newId}
+              onChange={(e) => setNewId(e.target.value)}
+            />
+            <p className="text-[10px] leading-snug text-slate-500">
+              ID is how the app refers to it. Leave blank to auto-generate from
+              the name.
+            </p>
+            {createError && (
+              <p className="text-[11px] text-red-600">{createError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={createTemplate}
+                disabled={createBusy}
+                className="btn btn-primary flex-1 !py-1.5 text-[12px]"
+              >
+                {createBusy ? 'Creating…' : 'Create template'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreating(false);
+                  setCreateError(null);
+                }}
+                className="btn btn-secondary !py-1.5 text-[12px]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <select
-          className="input lg:hidden"
+          className="input mt-2 lg:hidden"
           value={activeId}
           onChange={(e) => setActiveId(e.target.value)}
         >
