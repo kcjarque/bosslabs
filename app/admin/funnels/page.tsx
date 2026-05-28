@@ -106,8 +106,11 @@ export default async function FunnelsPage() {
                 </p>
               )}
 
-              <div className="mt-4 text-xs font-medium text-cyan-700">
-                Configure →
+              <div className="mt-4 flex items-center gap-3 text-xs font-medium">
+                <span className="text-cyan-700">Configure →</span>
+                {f.config.publicUrl && (
+                  <span className="text-slate-400">· has live URL</span>
+                )}
               </div>
             </Link>
           );

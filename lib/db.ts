@@ -2329,6 +2329,9 @@ export type FunnelAlternative = {
  * can extend it without migrations. All money fields are centavos.
  */
 export type EventFunnelConfig = {
+  /** Public URL of the live funnel page (wherever it's hosted). Surfaced
+   *  as a 'View funnel' link in the admin so you can jump to it. */
+  publicUrl?: string;
   tagline?: string;
   subtitle?: string;
   location?: string;

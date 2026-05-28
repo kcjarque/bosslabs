@@ -40,6 +40,7 @@ export function FunnelEditor({
 
   const [name, setName] = useState(funnel.name);
   const [active, setActive] = useState(funnel.active);
+  const [publicUrl, setPublicUrl] = useState(c.publicUrl ?? '');
   const [tagline, setTagline] = useState(c.tagline ?? '');
   const [subtitle, setSubtitle] = useState(c.subtitle ?? '');
   const [location, setLocation] = useState(c.location ?? '');
@@ -61,6 +62,7 @@ export function FunnelEditor({
   function save() {
     const config: EventFunnelConfig & Record<string, unknown> = {
       ...funnel.config,
+      publicUrl: publicUrl.trim() || undefined,
       tagline: tagline || undefined,
       subtitle: subtitle || undefined,
       location: location || undefined,
@@ -92,7 +94,30 @@ export function FunnelEditor({
     <div className="space-y-6">
       {/* Core */}
       <section className="card space-y-3">
-        <h2 className="text-base font-semibold text-slate-900">Offer</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Offer</h2>
+          {publicUrl.trim() && (
+            <a
+              href={publicUrl.trim()}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-secondary"
+            >
+              View funnel ↗
+            </a>
+          )}
+        </div>
+        <Field
+          label="Funnel URL"
+          hint="The public link to this funnel's page. Click 'View funnel' above to open it."
+        >
+          <input
+            className="input"
+            value={publicUrl}
+            onChange={(e) => setPublicUrl(e.target.value)}
+            placeholder="https://bosslabs.ai/retreat"
+          />
+        </Field>
         <Field label="Funnel name">
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
