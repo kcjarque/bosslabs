@@ -2289,3 +2289,134 @@ export async function getSequenceSubscriptions(
   }
   return (data as SequenceSubscriptionRow[]).map(rowToSubscription);
 }
+
+/* --------------------------------------------------------------------- */
+/* FUNNELS                                                               */
+/* --------------------------------------------------------------------- */
+
+export type FunnelKind = 'webinar' | 'event' | 'product';
+
+/** A single line in the value stack (the "Everything you get" breakdown). */
+export type ValueStackItem = {
+  label: string;
+  description: string;
+  /** Centavos, or null for "Priceless". */
+  valueCentavos: number | null;
+};
+
+/** Big-number proof points (e.g. "10 · Builders only"). */
+export type FunnelStat = { stat: string; label: string };
+
+/** Cost-comparison cards (agency / freelancer / "someday"). */
+export type FunnelAlternative = {
+  label: string;
+  headline: string;
+  timeframe: string;
+  detail: string;
+};
+
+/**
+ * Event-funnel config (the VibeCode Retreat shape). Stored as JSONB so we
+ * can extend it without migrations. All money fields are centavos.
+ */
+export type EventFunnelConfig = {
+  tagline?: string;
+  subtitle?: string;
+  location?: string;
+  capacity?: number;
+  /** Standard all-in price. */
+  standardPriceCentavos?: number;
+  /** Discounted price if paid in full today. */
+  payInFullPriceCentavos?: number;
+  /** Slot-securing deposit. */
+  depositCentavos?: number;
+  /** Human date by which the balance is due, e.g. "June 19". */
+  balanceDueDate?: string;
+  /** Add-on price to bring an extra person. */
+  extraPersonCentavos?: number;
+  /** Sum of the value stack for the "Not ₱X" anchor. */
+  totalValueCentavos?: number;
+  paymentMethods?: string[];
+  guarantee?: string;
+  valueStack?: ValueStackItem[];
+  byTheNumbers?: FunnelStat[];
+  alternatives?: FunnelAlternative[];
+};
+
+export type FunnelModel = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: FunnelKind;
+  active: boolean;
+  config: EventFunnelConfig & Record<string, unknown>;
+  createdAt: string;
+};
+
+type FunnelRow = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: FunnelKind;
+  active: boolean;
+  config: Record<string, unknown> | null;
+  created_at: string;
+};
+
+function rowToFunnel(r: FunnelRow): FunnelModel {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    kind: r.kind,
+    active: r.active,
+    config: (r.config ?? {}) as EventFunnelConfig & Record<string, unknown>,
+    createdAt: r.created_at,
+  };
+}
+
+export const getFunnels = cache(async (): Promise<FunnelModel[]> => {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('funnels')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) {
+    if (isMissingTableError(error.message)) return [];
+    throw new Error(`getFunnels: ${error.message}`);
+  }
+  return (data as FunnelRow[]).map(rowToFunnel);
+});
+
+export const getFunnel = cache(async (id: string): Promise<FunnelModel | null> => {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('funnels')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTableError(error.message)) return null;
+    throw new Error(`getFunnel: ${error.message}`);
+  }
+  return data ? rowToFunnel(data as FunnelRow) : null;
+}) as (id: string) => Promise<FunnelModel | null>;
+
+export async function updateFunnel(
+  id: string,
+  patch: Partial<Pick<FunnelModel, 'name' | 'active' | 'config'>>,
+): Promise<FunnelModel | null> {
+  if (!isSupabaseConfigured()) return null;
+  const row: Partial<FunnelRow> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.active !== undefined) row.active = patch.active;
+  if (patch.config !== undefined) row.config = patch.config;
+  const { data, error } = await getSupabase()
+    .from('funnels')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`updateFunnel: ${error.message}`);
+  return data ? rowToFunnel(data as FunnelRow) : null;
+}

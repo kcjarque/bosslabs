@@ -884,3 +884,27 @@ update settings
   set zoom_join_url = 'https://us02web.zoom.us/j/86011649255',
       updated_at = now()
 where id = 1;
+
+-- ─── Funnels ───────────────────────────────────────────────────────────
+-- Config hub for the distinct sales funnels the business runs. The
+-- webinar funnel's live config still lives in `settings` (wired into the
+-- public site + emails); this table is the place to document + manage
+-- each funnel's offer, especially the upsell (VibeCode Retreat) which is
+-- sold manually (bank transfer / Maya — no Xendit).
+--
+-- `config` is JSONB so each funnel kind can carry its own shape without
+-- schema churn. See lib/db.ts EventFunnelConfig for the event-kind fields.
+create table if not exists funnels (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  name text not null,
+  kind text not null check (kind in ('webinar', 'event', 'product')),
+  active boolean not null default true,
+  config jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists funnels_active_idx on funnels (active);
+
+-- Seed rows are inserted by scripts/seed-funnels.ts (config payload is too
+-- large + nested to hand-write as SQL literals). on conflict (slug) keeps
+-- it idempotent there.
