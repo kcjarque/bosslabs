@@ -75,6 +75,10 @@ export async function templateVarsForSignup(
     zoomRegisterUrl: webinar.zoomRegisterUrl,
     replayUrl: webinar.replayUrl,
     messengerGroupUrl: webinar.messengerGroupUrl,
+    // Resume-payment link for cart-recovery emails/SMS.
+    checkoutUrl:
+      (process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        'https://www.bosslabs.live') + '/checkout',
   };
 }
 
