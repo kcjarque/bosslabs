@@ -80,6 +80,40 @@ function chartRanges(): ChartRange[] {
   ];
 }
 
+/* --------------------------------------------------------------------- */
+/* Dashboard date range — scopes the headline KPI cards. Default: all time */
+/* --------------------------------------------------------------------- */
+
+const DASH_RANGES = [
+  { key: 'all', label: 'All time' },
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'mtd', label: 'This month' },
+] as const;
+
+type DashRange = { key: string; label: string; startMs: number } | null;
+
+/** Resolve the ?dr= preset into a start cutoff (ms). null = all time. */
+function resolveDashRange(dr?: string): DashRange {
+  const now = Date.now();
+  const todayStr = manilaToday();
+  const midnight = new Date(todayStr + 'T00:00:00+08:00').getTime();
+  const monthStart = new Date(todayStr.slice(0, 8) + '01T00:00:00+08:00').getTime();
+  switch (dr) {
+    case 'today':
+      return { key: 'today', label: 'today', startMs: midnight };
+    case '7d':
+      return { key: '7d', label: 'the last 7 days', startMs: now - 7 * 86400_000 };
+    case '30d':
+      return { key: '30d', label: 'the last 30 days', startMs: now - 30 * 86400_000 };
+    case 'mtd':
+      return { key: 'mtd', label: 'this month', startMs: monthStart };
+    default:
+      return null;
+  }
+}
+
 /** Count distinct buyers by paymentMethodGroup for paid signups. */
 function channelMix(paid: Signup[]) {
   const counts: Record<string, number> = { GCASH: 0, CREDIT_CARD: 0, BANKS: 0, OTHER: 0 };
@@ -128,7 +162,7 @@ type FunnelRangeKey = (typeof FUNNEL_RANGES)[number]['key'];
 export default async function AdminDashboard({
   searchParams,
 }: {
-  searchParams: { fr?: string; cr?: string; cs?: string; ce?: string };
+  searchParams: { fr?: string; cr?: string; cs?: string; ce?: string; dr?: string };
 }) {
   requireAdmin();
 
@@ -212,6 +246,27 @@ export default async function AdminDashboard({
   const funnelEntrants = signups.filter((s) => s.source === 'paid').length;
   const conversionRate =
     funnelEntrants > 0 ? (paid.length / funnelEntrants) * 100 : 0;
+
+  // ── Dashboard date filter (?dr=) — scopes the headline KPI cards by
+  // createdAt. Default (null) = all time, so the cards are unchanged.
+  const dashRange = resolveDashRange(searchParams?.dr);
+  const scoped = dashRange
+    ? signups.filter((s) => {
+        const t = new Date(s.createdAt).getTime();
+        return t >= dashRange.startMs && t <= now;
+      })
+    : signups;
+  const sPaid = scoped.filter((s) => s.status === 'paid' || s.status === 'attended');
+  const sRegistered = scoped.filter((s) => s.status === 'registered');
+  const sRefunded = scoped.filter((s) => s.status === 'refunded');
+  const sRevenueCentavos = sPaid.reduce((sum, s) => {
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    return sum + (s.amountCentavos ?? 0) + otoExtra;
+  }, 0);
+  const sAovPhp = sPaid.length > 0 ? sRevenueCentavos / 100 / sPaid.length : 0;
+  const sFunnelEntrants = scoped.filter((s) => s.source === 'paid').length;
+  const sConversion = sFunnelEntrants > 0 ? (sPaid.length / sFunnelEntrants) * 100 : 0;
 
   // Last-N-hours splits — broken out by paid vs registered for actual signal.
   const last24Paid = within(24, (s) => s.status === 'paid');
@@ -313,31 +368,43 @@ export default async function AdminDashboard({
         </Link>
       </header>
 
+      {/* Date filter — scopes the headline KPI cards below. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
+          Period
+        </span>
+        <DashboardDateFilter activeKey={dashRange?.key ?? 'all'} />
+      </div>
+
       {/* Revenue + headline metrics — these are the numbers that matter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
           label="Revenue"
-          value={formatPHP(revenueCentavos)}
-          sub={`${paid.length} paid · AOV ${formatPHP(Math.round(aovPhp * 100))}`}
+          value={formatPHP(sRevenueCentavos)}
+          sub={`${sPaid.length} paid · AOV ${formatPHP(Math.round(sAovPhp * 100))}`}
           tone="green"
         />
         <StatCard
           label="Paid tickets"
-          value={paid.length.toString()}
-          sub={`+${last24Paid} in 24h · +${last7dPaid} in 7d`}
+          value={sPaid.length.toString()}
+          sub={
+            dashRange
+              ? `in ${dashRange.label}`
+              : `+${last24Paid} in 24h · +${last7dPaid} in 7d`
+          }
           tone="green"
         />
         <StatCard
           label="Conversion rate"
-          value={`${conversionRate.toFixed(1)}%`}
-          sub={`${paid.length} of ${funnelEntrants} checkout-starts`}
+          value={`${sConversion.toFixed(1)}%`}
+          sub={`${sPaid.length} of ${sFunnelEntrants} checkout-starts`}
         />
         <StatCard
           label="Stuck (unpaid)"
-          value={registered.length.toString()}
-          sub={`Started checkout, never paid · ${refunded.length} refunded`}
-          tone={registered.length > 0 ? 'amber' : undefined}
-          href={registered.length > 0 ? '/admin/pending-payments' : undefined}
+          value={sRegistered.length.toString()}
+          sub={`Started checkout, never paid · ${sRefunded.length} refunded`}
+          tone={sRegistered.length > 0 ? 'amber' : undefined}
+          href={sRegistered.length > 0 ? '/admin/pending-payments' : undefined}
         />
       </div>
 
@@ -345,8 +412,8 @@ export default async function AdminDashboard({
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard
           label="Total signups (all sources)"
-          value={signups.length.toString()}
-          sub={`${funnelEntrants} via paid funnel`}
+          value={scoped.length.toString()}
+          sub={`${sFunnelEntrants} via paid funnel`}
         />
         <StatCard
           label="Last 24 hours"
@@ -808,6 +875,38 @@ function FunnelDateFilter({ activeKey }: { activeKey: FunnelRangeKey }) {
           <Link
             key={r.key}
             href={`/admin?fr=${r.key}`}
+            scroll={false}
+            className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
+              active
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+            }`}
+          >
+            {r.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * DashboardDateFilter — pill row that scopes the headline KPI cards via
+ * ?dr=<key>. Pure RSC, matches the chart/funnel filters.
+ */
+function DashboardDateFilter({ activeKey }: { activeKey: string }) {
+  return (
+    <div
+      role="group"
+      aria-label="Dashboard date range"
+      className="inline-flex flex-wrap rounded-full border border-slate-200 bg-slate-50 p-0.5"
+    >
+      {DASH_RANGES.map((r) => {
+        const active = r.key === activeKey;
+        return (
+          <Link
+            key={r.key}
+            href={`/admin?dr=${r.key}`}
             scroll={false}
             className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
               active
