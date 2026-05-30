@@ -1,5 +1,6 @@
 'use client';
 
+import 'rrweb-player/dist/style.css';
 import { useEffect, useRef } from 'react';
 
 export function ReplayViewer({ events }: { events: unknown[] }) {
