@@ -113,12 +113,15 @@ async function handleMainPaid(event: XenditEvent) {
 
   // Affiliate commission — if this buyer was referred, record the payout
   // (idempotent; computed on the total paid incl. any OTO bump).
-  const refCode = (signup.metadata as { affiliateCode?: string } | undefined)?.affiliateCode;
-  if (refCode) {
+  const refMeta = signup.metadata as { affiliateCode?: string; affiliateSub?: string } | undefined;
+  if (refMeta?.affiliateCode) {
     const saleCentavos = event.amount ? event.amount * 100 : signup.amountCentavos ?? 0;
-    await recordCommission({ affiliateCode: refCode, signupId: signup.id, saleCentavos }).catch(
-      () => {},
-    );
+    await recordCommission({
+      affiliateCode: refMeta.affiliateCode,
+      signupId: signup.id,
+      saleCentavos,
+      sub: refMeta.affiliateSub || '',
+    }).catch(() => {});
   }
 
   const webinar = await getWebinarInfo();

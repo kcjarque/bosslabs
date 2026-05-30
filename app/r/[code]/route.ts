@@ -6,6 +6,7 @@ import {
   REF_TOUCH_COOKIE,
   REF_MAX_AGE_SECONDS,
 } from '@/lib/affiliates';
+import { REF_SUB_COOKIE } from '@/lib/ref-cookie';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,9 +26,11 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
   const aff = await getAffiliateByCode(code);
   if (!aff || !aff.active) return res; // unknown/inactive → just go home
 
+  const sub = (url.searchParams.get('sub') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+
   // Best-effort click log (every visit).
   try {
-    await logAffiliateClick({ affiliateId: aff.id, landingPath: '/', referrer: req.headers.get('referer') ?? '' });
+    await logAffiliateClick({ affiliateId: aff.id, landingPath: '/', referrer: req.headers.get('referer') ?? '', sub });
   } catch {
     /* never block the redirect */
   }
@@ -37,6 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
     const opts = { maxAge: REF_MAX_AGE_SECONDS, httpOnly: true, sameSite: 'lax' as const, path: '/' };
     res.cookies.set(REF_COOKIE, aff.code, opts);
     res.cookies.set(REF_TOUCH_COOKIE, Date.now().toString(), opts);
+    if (sub) res.cookies.set(REF_SUB_COOKIE, sub, opts);
   }
   return res;
 }

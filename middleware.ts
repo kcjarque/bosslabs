@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { REF_COOKIE, REF_TOUCH_COOKIE, REF_MAX_AGE_SECONDS } from '@/lib/ref-cookie';
+import {
+  REF_COOKIE,
+  REF_TOUCH_COOKIE,
+  REF_SUB_COOKIE,
+  REF_MAX_AGE_SECONDS,
+} from '@/lib/ref-cookie';
 
 /**
  * Referral capture for `?ref=<code>` links (e.g. ad destinations). Sets the
@@ -19,6 +24,9 @@ export function middleware(req: NextRequest) {
       const opts = { maxAge: REF_MAX_AGE_SECONDS, httpOnly: true, sameSite: 'lax' as const, path: '/' };
       res.cookies.set(REF_COOKIE, code, opts);
       res.cookies.set(REF_TOUCH_COOKIE, Date.now().toString(), opts);
+      // Optional campaign tag (?sub=) for the affiliate's own tracking.
+      const sub = (req.nextUrl.searchParams.get('sub') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+      if (sub) res.cookies.set(REF_SUB_COOKIE, sub, opts);
     }
   }
   return res;

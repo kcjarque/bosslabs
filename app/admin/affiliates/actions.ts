@@ -8,15 +8,32 @@ import {
   markCommissionPaid,
   randomAffiliateCode,
   saveAffiliateProgram,
+  getAffiliateProgram,
   type CommissionType,
 } from '@/lib/affiliates';
 
 export async function saveAffiliateProgramAction(formData: FormData): Promise<void> {
   requireAdmin();
+  const cur = await getAffiliateProgram();
   await saveAffiliateProgram({
+    ...cur,
     swipeCopy: String(formData.get('swipeCopy') ?? ''),
     assetsUrl: String(formData.get('assetsUrl') ?? '').trim(),
     onePagerUrl: String(formData.get('onePagerUrl') ?? '').trim(),
+  });
+  revalidatePath('/admin/affiliates');
+}
+
+export async function saveAffiliateTiersAction(formData: FormData): Promise<void> {
+  requireAdmin();
+  const cur = await getAffiliateProgram();
+  await saveAffiliateProgram({
+    ...cur,
+    tiersEnabled: formData.get('tiersEnabled') === 'on',
+    tierMinSales: Math.max(0, Math.round(Number(formData.get('tierMinSales') ?? 0))),
+    tierPercent: Math.max(0, Number(formData.get('tierPercent') ?? 0)),
+    bonusAtSales: Math.max(0, Math.round(Number(formData.get('bonusAtSales') ?? 0))),
+    bonusAmountCentavos: Math.max(0, Math.round(Number(formData.get('bonusAmount') ?? 0) * 100)),
   });
   revalidatePath('/admin/affiliates');
 }

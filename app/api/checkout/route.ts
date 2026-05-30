@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { REF_COOKIE, REF_TOUCH_COOKIE } from '@/lib/ref-cookie';
+import { REF_COOKIE, REF_TOUCH_COOKIE, REF_SUB_COOKIE } from '@/lib/ref-cookie';
 import { OFFER } from '@/lib/config';
 import {
   createInvoice,
@@ -117,6 +117,7 @@ export async function POST(req: Request) {
     const affiliateMeta = affiliateCode
       ? {
           affiliateCode,
+          affiliateSub: refJar.get(REF_SUB_COOKIE)?.value || '',
           affiliateFirstTouchAt: new Date(
             Number(refJar.get(REF_TOUCH_COOKIE)?.value) || Date.now(),
           ).toISOString(),

@@ -82,21 +82,42 @@ export type AffiliateProgram = {
   swipeCopy: string;
   assetsUrl: string;
   onePagerUrl: string;
+  /** Reward tiers + bonuses (one tier + one bonus). */
+  tiersEnabled: boolean;
+  tierMinSales: number;
+  tierPercent: number;
+  bonusAtSales: number;
+  bonusAmountCentavos: number;
+};
+
+const EMPTY_PROGRAM: AffiliateProgram = {
+  swipeCopy: '',
+  assetsUrl: '',
+  onePagerUrl: '',
+  tiersEnabled: false,
+  tierMinSales: 10,
+  tierPercent: 0,
+  bonusAtSales: 0,
+  bonusAmountCentavos: 0,
 };
 
 export async function getAffiliateProgram(): Promise<AffiliateProgram> {
-  const empty = { swipeCopy: '', assetsUrl: '', onePagerUrl: '' };
-  if (!isSupabaseConfigured()) return empty;
+  if (!isSupabaseConfigured()) return EMPTY_PROGRAM;
   const { data } = await getSupabase()
     .from('affiliate_program')
     .select('*')
     .eq('id', 1)
     .maybeSingle();
-  if (!data) return empty;
+  if (!data) return EMPTY_PROGRAM;
   return {
     swipeCopy: data.swipe_copy ?? '',
     assetsUrl: data.assets_url ?? '',
     onePagerUrl: data.onepager_url ?? '',
+    tiersEnabled: data.tiers_enabled ?? false,
+    tierMinSales: Number(data.tier_min_sales ?? 10),
+    tierPercent: Number(data.tier_percent ?? 0),
+    bonusAtSales: Number(data.bonus_at_sales ?? 0),
+    bonusAmountCentavos: Number(data.bonus_amount_centavos ?? 0),
   };
 }
 
@@ -107,6 +128,11 @@ export async function saveAffiliateProgram(p: AffiliateProgram): Promise<void> {
     swipe_copy: p.swipeCopy,
     assets_url: p.assetsUrl,
     onepager_url: p.onePagerUrl,
+    tiers_enabled: p.tiersEnabled,
+    tier_min_sales: p.tierMinSales,
+    tier_percent: p.tierPercent,
+    bonus_at_sales: p.bonusAtSales,
+    bonus_amount_centavos: p.bonusAmountCentavos,
     updated_at: new Date().toISOString(),
   });
 }
@@ -224,6 +250,7 @@ export async function logAffiliateClick(input: {
   sessionId?: string;
   landingPath?: string;
   referrer?: string;
+  sub?: string;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   await getSupabase().from('affiliate_clicks').insert({
@@ -231,6 +258,7 @@ export async function logAffiliateClick(input: {
     session_id: input.sessionId ?? '',
     landing_path: input.landingPath ?? '',
     referrer: input.referrer ?? '',
+    sub: input.sub ?? '',
   });
 }
 
@@ -243,12 +271,35 @@ export async function recordCommission(input: {
   affiliateCode: string;
   signupId: string;
   saleCentavos: number;
+  sub?: string;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const aff = await getAffiliateByCode(input.affiliateCode);
   if (!aff || !aff.active) return;
-  const commission = commissionCentavos(aff, input.saleCentavos);
-  const { data: inserted } = await getSupabase()
+  const sb = getSupabase();
+  const program = await getAffiliateProgram();
+
+  // Count prior non-void SALE commissions — drives tier + bonus thresholds.
+  const { count: prior } = await sb
+    .from('affiliate_commissions')
+    .select('id', { count: 'exact', head: true })
+    .eq('affiliate_id', aff.id)
+    .eq('kind', 'sale')
+    .neq('status', 'void');
+  const salesCount = prior ?? 0;
+
+  // Effective rate: a reward tier can only bump a percent affiliate UP.
+  let commission = commissionCentavos(aff, input.saleCentavos);
+  if (
+    program.tiersEnabled &&
+    aff.commissionType === 'percent' &&
+    program.tierPercent > aff.commissionValue &&
+    salesCount >= program.tierMinSales
+  ) {
+    commission = Math.round((input.saleCentavos * program.tierPercent) / 100);
+  }
+
+  const { data: inserted } = await sb
     .from('affiliate_commissions')
     .upsert(
       {
@@ -257,15 +308,39 @@ export async function recordCommission(input: {
         sale_centavos: input.saleCentavos,
         commission_centavos: commission,
         status: 'pending',
+        kind: 'sale',
+        sub: input.sub ?? '',
       },
       { onConflict: 'signup_id', ignoreDuplicates: true },
     )
     .select('id');
 
-  // Only notify on a genuinely NEW commission (ignoreDuplicates returns no
-  // rows when the signup was already credited).
-  if (inserted && inserted.length > 0) {
-    await notifyAffiliateOfSale(aff, commission).catch(() => {});
+  // ignoreDuplicates returns no rows when the signup was already credited.
+  if (!inserted || inserted.length === 0) return;
+
+  await notifyAffiliateOfSale(aff, commission).catch(() => {});
+
+  // One-time milestone bonus. The synthetic signup_id (unique) guarantees it
+  // is only ever awarded once per affiliate per threshold.
+  const newCount = salesCount + 1;
+  if (
+    program.tiersEnabled &&
+    program.bonusAtSales > 0 &&
+    program.bonusAmountCentavos > 0 &&
+    newCount >= program.bonusAtSales
+  ) {
+    await sb.from('affiliate_commissions').upsert(
+      {
+        affiliate_id: aff.id,
+        signup_id: `bonus_${aff.id}_${program.bonusAtSales}`,
+        sale_centavos: 0,
+        commission_centavos: program.bonusAmountCentavos,
+        status: 'pending',
+        kind: 'bonus',
+        sub: '',
+      },
+      { onConflict: 'signup_id', ignoreDuplicates: true },
+    );
   }
 }
 
@@ -320,6 +395,8 @@ export type Commission = {
   commissionCentavos: number;
   status: 'pending' | 'paid' | 'void';
   createdAt: string;
+  sub: string;
+  kind: 'sale' | 'bonus';
 };
 
 function rowToCommission(r: Record<string, unknown>): Commission {
@@ -331,6 +408,8 @@ function rowToCommission(r: Record<string, unknown>): Commission {
     commissionCentavos: Number(r.commission_centavos),
     status: r.status as Commission['status'],
     createdAt: r.created_at as string,
+    sub: (r.sub as string) ?? '',
+    kind: ((r.kind as string) === 'bonus' ? 'bonus' : 'sale'),
   };
 }
 
@@ -384,8 +463,42 @@ export async function getAffiliateStats(aff: Affiliate): Promise<AffiliateStats>
   return {
     clicks: clicksRes.count ?? 0,
     referredSignups: signupsRes.count ?? 0,
-    paidConversions: comms.filter((c) => c.status !== 'void').length,
+    // Count only real sales, not milestone-bonus ledger rows.
+    paidConversions: comms.filter((c) => c.status !== 'void' && c.kind === 'sale').length,
     earningsPendingCentavos: pending,
     earningsPaidCentavos: paid,
   };
+}
+
+export type LeaderboardEntry = {
+  affiliateId: string;
+  name: string;
+  sales: number;
+  earningsCentavos: number;
+};
+
+/** Top affiliates by paid+pending sales, names masked to first name + initial. */
+export async function getLeaderboard(limit = 5): Promise<LeaderboardEntry[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const [affs, comms] = await Promise.all([listAffiliates(), listCommissions()]);
+  const byId = new Map(affs.map((a) => [a.id, a]));
+  const agg = new Map<string, { sales: number; earnings: number }>();
+  for (const c of comms) {
+    if (c.status === 'void') continue;
+    const cur = agg.get(c.affiliateId) ?? { sales: 0, earnings: 0 };
+    if (c.kind === 'sale') cur.sales += 1;
+    cur.earnings += c.commissionCentavos;
+    agg.set(c.affiliateId, cur);
+  }
+  return [...agg.entries()]
+    .map(([id, v]) => {
+      const a = byId.get(id);
+      const parts = (a?.name ?? '').trim().split(/\s+/);
+      const masked = parts[0] ? `${parts[0]}${parts[1] ? ' ' + parts[1][0] + '.' : ''}` : 'Affiliate';
+      return { affiliateId: id, name: masked, sales: v.sales, earningsCentavos: v.earnings };
+    })
+    .filter((e) => e.sales > 0)
+    .sort((a, b) => b.sales - a.sales || b.earningsCentavos - a.earningsCentavos)
+    .slice(0, limit);
 }

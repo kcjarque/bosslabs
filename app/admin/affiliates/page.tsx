@@ -13,6 +13,7 @@ import {
   toggleAffiliateAction,
   markCommissionPaidAction,
   saveAffiliateProgramAction,
+  saveAffiliateTiersAction,
 } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -102,6 +103,41 @@ export default async function AffiliatesPage() {
           <div>
             <label className="label">One-pager URL</label>
             <input name="onePagerUrl" defaultValue={program.onePagerUrl} placeholder="Link to the why-this-webinar PDF" className="input" />
+          </div>
+        </div>
+      </form>
+
+      {/* Commission tiers & bonuses (on/off) */}
+      <form action={saveAffiliateTiersAction} className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Reward tiers &amp; bonuses</h2>
+          <button type="submit" className="btn btn-primary text-xs">Save tiers</button>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="tiersEnabled" defaultChecked={program.tiersEnabled} />
+          Turn rewards on
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="text-xs font-semibold text-slate-700">Tier — bump high performers</div>
+            <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+              After
+              <input name="tierMinSales" type="number" min="0" defaultValue={program.tierMinSales} className="input w-20 py-1.5" />
+              sales, pay
+              <input name="tierPercent" type="number" min="0" step="0.5" defaultValue={program.tierPercent} className="input w-20 py-1.5" />
+              %
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">Only raises percent-based affiliates. 0% = no tier.</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="text-xs font-semibold text-slate-700">One-time milestone bonus</div>
+            <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+              At
+              <input name="bonusAtSales" type="number" min="0" defaultValue={program.bonusAtSales} className="input w-20 py-1.5" />
+              sales, pay ₱
+              <input name="bonusAmount" type="number" min="0" defaultValue={program.bonusAmountCentavos / 100} className="input w-28 py-1.5" />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">Awarded once per affiliate. 0 = no bonus.</p>
           </div>
         </div>
       </form>

@@ -4,12 +4,15 @@ import {
   getAffiliateByToken,
   getAffiliateStats,
   getAffiliateProgram,
+  getLeaderboard,
+  listCommissions,
   PUBLIC_SITE_URL,
 } from '@/lib/affiliates';
 import { getEvents } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
 import { CopyLink } from '@/components/CopyLink';
 import { CopyButton } from '@/components/CopyButton';
+import { AffiliateLinkBuilder } from '@/components/AffiliateLinkBuilder';
 import { updateAffiliateContactAction } from './actions';
 
 function formatEventDate(iso: string): string {
@@ -49,6 +52,21 @@ export default async function AffiliateDashboard({
     .sort((a, b) => Date.parse(a.startsAtIso) - Date.parse(b.startsAtIso));
   const program = await getAffiliateProgram();
   const hasResources = Boolean(program.swipeCopy || program.assetsUrl || program.onePagerUrl);
+  const leaderboard = await getLeaderboard(5);
+
+  // Per-campaign (sub-id) performance from this affiliate's own sales.
+  const myCommissions = await listCommissions(aff.id);
+  const subAgg = new Map<string, { sales: number; earnings: number }>();
+  for (const c of myCommissions) {
+    if (c.status === 'void' || c.kind !== 'sale' || !c.sub) continue;
+    const cur = subAgg.get(c.sub) ?? { sales: 0, earnings: 0 };
+    cur.sales += 1;
+    cur.earnings += c.commissionCentavos;
+    subAgg.set(c.sub, cur);
+  }
+  const subRows = [...subAgg.entries()]
+    .map(([sub, v]) => ({ sub, ...v }))
+    .sort((a, b) => b.sales - a.sales);
   const rate =
     aff.commissionType === 'fixed'
       ? `${formatPHP(aff.commissionValue)} per sale`
@@ -78,6 +96,50 @@ export default async function AffiliateDashboard({
             Share it anywhere. The first link someone clicks is the one that gets credited.
           </p>
         </div>
+
+        {/* Link builder — deep links + campaign tags */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+            Build a custom link
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Send people to a specific page and tag your campaign — then see which one converts below.
+          </p>
+          <div className="mt-3">
+            <AffiliateLinkBuilder base={PUBLIC_SITE_URL} code={aff.code} />
+          </div>
+        </div>
+
+        {/* Per-campaign performance */}
+        {subRows.length > 0 && (
+          <div className="mt-6">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+              Your campaigns — what&rsquo;s converting
+            </div>
+            <div className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                    <th className="px-4 py-2">Campaign</th>
+                    <th>Sales</th>
+                    <th className="pr-4 text-right">Earned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subRows.map((r) => (
+                    <tr key={r.sub} className="border-t border-slate-100">
+                      <td className="px-4 py-2 font-mono text-slate-700">{r.sub}</td>
+                      <td className="text-slate-900">{r.sales}</td>
+                      <td className="pr-4 text-right font-medium text-emerald-700">
+                        {formatPHP(r.earnings)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Live events the affiliate is promoting */}
         {upcoming.length > 0 && (
@@ -161,6 +223,40 @@ export default async function AffiliateDashboard({
           <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
           <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
         </div>
+
+        {/* Leaderboard */}
+        {leaderboard.length > 0 && (
+          <div className="mt-6">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+              Top affiliates this season 🏆
+            </div>
+            <div className="mt-2 space-y-1.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              {leaderboard.map((e, i) => {
+                const isMe = e.affiliateId === aff.id;
+                return (
+                  <div
+                    key={e.affiliateId}
+                    className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
+                      isMe ? 'bg-cyan-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-5 text-center font-semibold text-slate-400">
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {isMe ? 'You' : e.name}
+                      </span>
+                    </div>
+                    <span className="text-sm text-slate-500">
+                      {e.sales} sale{e.sales === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Get notified */}
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
