@@ -6,13 +6,16 @@ import {
   createAffiliate,
   updateAffiliate,
   markCommissionPaid,
+  randomAffiliateCode,
   type CommissionType,
 } from '@/lib/affiliates';
 
 export async function createAffiliateAction(formData: FormData): Promise<void> {
   requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
-  const code = String(formData.get('code') ?? '').trim() || name;
+  // Blank code → opaque random code (never derived from the name, so the
+  // referral link doesn't reveal who the affiliate is).
+  const code = String(formData.get('code') ?? '').trim() || randomAffiliateCode();
   const email = String(formData.get('email') ?? '').trim();
   const commissionType = (String(formData.get('commissionType') ?? 'percent') as CommissionType);
   const raw = Number(formData.get('commissionValue') ?? 0);

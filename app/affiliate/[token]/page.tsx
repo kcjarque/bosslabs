@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getAffiliateByToken, getAffiliateStats } from '@/lib/affiliates';
+import { getAffiliateByToken, getAffiliateStats, PUBLIC_SITE_URL } from '@/lib/affiliates';
 import { formatPHP } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -10,10 +10,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function origin(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://www.bosslabs.live';
-}
-
 export default async function AffiliateDashboard({
   params,
 }: {
@@ -22,7 +18,7 @@ export default async function AffiliateDashboard({
   const aff = await getAffiliateByToken(params.token);
   if (!aff) notFound();
   const stats = await getAffiliateStats(aff);
-  const link = `${origin()}/r/${aff.code}`;
+  const link = `${PUBLIC_SITE_URL}/r/${aff.code}`;
   const rate =
     aff.commissionType === 'fixed'
       ? `${formatPHP(aff.commissionValue)} per sale`

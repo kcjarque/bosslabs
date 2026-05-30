@@ -3,6 +3,7 @@ import {
   listAffiliates,
   getAffiliateStats,
   listCommissions,
+  PUBLIC_SITE_URL,
   type Affiliate,
 } from '@/lib/affiliates';
 import { formatPHP } from '@/lib/config';
@@ -14,10 +15,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function origin(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://www.bosslabs.live');
-}
-
 function rate(a: Affiliate): string {
   return a.commissionType === 'fixed'
     ? `${formatPHP(a.commissionValue)} / sale`
@@ -26,7 +23,7 @@ function rate(a: Affiliate): string {
 
 export default async function AffiliatesPage() {
   requireAdmin();
-  const base = origin();
+  const base = PUBLIC_SITE_URL;
   const affiliates = await listAffiliates();
   const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a)));
   const byId = new Map(affiliates.map((a) => [a.id, a]));
@@ -57,7 +54,7 @@ export default async function AffiliatesPage() {
         </div>
         <div>
           <label className="label">Link code</label>
-          <input name="code" className="input font-mono" placeholder="juan (auto)" />
+          <input name="code" className="input font-mono" placeholder="blank = random" />
         </div>
         <div>
           <label className="label">Email</label>

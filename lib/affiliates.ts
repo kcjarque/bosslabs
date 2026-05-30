@@ -12,9 +12,20 @@
  *      a pending row to the commission ledger. Idempotent (unique signup_id).
  */
 
+import crypto from 'crypto';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 export { REF_COOKIE, REF_TOUCH_COOKIE, REF_MAX_AGE_SECONDS } from './ref-cookie';
+
+/** Canonical public domain — affiliate share + dashboard links use this
+ *  (not the *.vercel.app deploy URL). */
+export const PUBLIC_SITE_URL = 'https://www.bosslabs.live';
+
+/** An opaque, non-identifying referral code (so the link never reveals who
+ *  the affiliate is). 8 hex chars. */
+export function randomAffiliateCode(): string {
+  return crypto.randomBytes(4).toString('hex');
+}
 
 export type CommissionType = 'percent' | 'fixed';
 
