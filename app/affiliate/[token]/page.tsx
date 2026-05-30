@@ -1,9 +1,16 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getAffiliateByToken, getAffiliateStats, PUBLIC_SITE_URL } from '@/lib/affiliates';
+import {
+  getAffiliateByToken,
+  getAffiliateStats,
+  getAffiliateProgram,
+  PUBLIC_SITE_URL,
+} from '@/lib/affiliates';
 import { getEvents } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
 import { CopyLink } from '@/components/CopyLink';
+import { CopyButton } from '@/components/CopyButton';
+import { updateAffiliateContactAction } from './actions';
 
 function formatEventDate(iso: string): string {
   const t = Date.parse(iso);
@@ -40,6 +47,8 @@ export default async function AffiliateDashboard({
   const upcoming = (await getEvents())
     .filter((e) => e.active && Date.parse(e.startsAtIso) > now)
     .sort((a, b) => Date.parse(a.startsAtIso) - Date.parse(b.startsAtIso));
+  const program = await getAffiliateProgram();
+  const hasResources = Boolean(program.swipeCopy || program.assetsUrl || program.onePagerUrl);
   const rate =
     aff.commissionType === 'fixed'
       ? `${formatPHP(aff.commissionValue)} per sale`
@@ -95,6 +104,54 @@ export default async function AffiliateDashboard({
           </div>
         )}
 
+        {/* Promo kit */}
+        {hasResources && (
+          <div className="mt-6">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+              Promo kit — everything you need to post
+            </div>
+            <div className="mt-2 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              {program.swipeCopy && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">
+                      Swipe copy &amp; captions
+                    </span>
+                    <CopyButton text={program.swipeCopy} label="Copy caption" />
+                  </div>
+                  <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm leading-relaxed text-slate-700">
+                    {program.swipeCopy}
+                  </pre>
+                </div>
+              )}
+              {(program.assetsUrl || program.onePagerUrl) && (
+                <div className="flex flex-wrap gap-2">
+                  {program.assetsUrl && (
+                    <a
+                      href={program.assetsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+                    >
+                      Images + video pack ↗
+                    </a>
+                  )}
+                  {program.onePagerUrl && (
+                    <a
+                      href={program.onePagerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
+                    >
+                      Why-this-webinar one-pager ↗
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Card label="Clicks" value={String(stats.clicks)} />
@@ -103,6 +160,44 @@ export default async function AffiliateDashboard({
           <Card label="Conversion" value={`${convRate}%`} />
           <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
           <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
+        </div>
+
+        {/* Get notified */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+            Get notified the moment you earn
+          </div>
+          <form action={updateAffiliateContactAction} className="mt-3 space-y-3">
+            <input type="hidden" name="token" value={aff.dashboardToken} />
+            <input
+              name="email"
+              type="email"
+              defaultValue={aff.email}
+              placeholder="your@email.com"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-cyan-500"
+            />
+            <input
+              name="telegramChatId"
+              defaultValue={aff.telegramChatId}
+              placeholder="Telegram chat ID (optional)"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-cyan-500"
+            />
+            <div className="flex flex-wrap gap-4 text-sm text-slate-700">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="notifyEmail" defaultChecked={aff.notifyEmail} /> Email me
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="notifyTelegram" defaultChecked={aff.notifyTelegram} /> Telegram me
+              </label>
+            </div>
+            <button className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700">
+              Save
+            </button>
+          </form>
+          <p className="mt-2 text-[11px] text-slate-400">
+            For Telegram alerts: open Telegram, message <span className="font-mono">@userinfobot</span> to get your
+            chat ID, then paste it above.
+          </p>
         </div>
 
         <p className="mt-6 text-center text-[11px] text-slate-400">

@@ -3,6 +3,7 @@ import {
   listAffiliates,
   getAffiliateStats,
   listCommissions,
+  getAffiliateProgram,
   PUBLIC_SITE_URL,
   type Affiliate,
 } from '@/lib/affiliates';
@@ -11,6 +12,7 @@ import {
   createAffiliateAction,
   toggleAffiliateAction,
   markCommissionPaidAction,
+  saveAffiliateProgramAction,
 } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +30,7 @@ export default async function AffiliatesPage() {
   const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a)));
   const byId = new Map(affiliates.map((a) => [a.id, a]));
   const commissions = await listCommissions();
+  const program = await getAffiliateProgram();
 
   const totalPending = commissions
     .filter((c) => c.status === 'pending')
@@ -73,6 +76,33 @@ export default async function AffiliatesPage() {
             <input name="commissionValue" type="number" step="0.01" min="0" className="input" placeholder="20" required />
           </div>
           <button type="submit" className="btn btn-primary">Add</button>
+        </div>
+      </form>
+
+      {/* Promo kit / resources — shown to all affiliates on their dashboard */}
+      <form action={saveAffiliateProgramAction} className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Promo kit (shown to every affiliate)</h2>
+          <button type="submit" className="btn btn-primary text-xs">Save kit</button>
+        </div>
+        <div>
+          <label className="label">Swipe copy &amp; captions</label>
+          <textarea
+            name="swipeCopy"
+            defaultValue={program.swipeCopy}
+            placeholder="Ready-to-paste captions/hooks affiliates can post…"
+            className="input min-h-[120px] font-mono text-[13px]"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Images + video pack URL</label>
+            <input name="assetsUrl" defaultValue={program.assetsUrl} placeholder="Google Drive / Dropbox folder link" className="input" />
+          </div>
+          <div>
+            <label className="label">One-pager URL</label>
+            <input name="onePagerUrl" defaultValue={program.onePagerUrl} placeholder="Link to the why-this-webinar PDF" className="input" />
+          </div>
         </div>
       </form>
 

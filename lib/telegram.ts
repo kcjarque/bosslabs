@@ -90,6 +90,32 @@ export async function sendTelegramPhoto(
   }
 }
 
+/**
+ * Send a Telegram message to a SPECIFIC chat id (e.g. an affiliate's own
+ * chat), using the configured bot token. Never throws.
+ */
+export async function sendTelegramTo(
+  chatId: string,
+  text: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    if (!chatId) return { ok: false, reason: 'no chat id' };
+    const settings = await getSettings();
+    const token = settings.telegramBotToken;
+    if (!token) return { ok: false, reason: 'telegram not configured' };
+    const res = await fetch(`${BASE}${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+    });
+    const json = (await res.json()) as TgResponse;
+    if (!json.ok) return { ok: false, reason: json.description };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : 'error' };
+  }
+}
+
 /** Escape HTML special chars for Telegram HTML parse mode. */
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

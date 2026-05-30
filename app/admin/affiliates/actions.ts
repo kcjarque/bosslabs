@@ -7,8 +7,19 @@ import {
   updateAffiliate,
   markCommissionPaid,
   randomAffiliateCode,
+  saveAffiliateProgram,
   type CommissionType,
 } from '@/lib/affiliates';
+
+export async function saveAffiliateProgramAction(formData: FormData): Promise<void> {
+  requireAdmin();
+  await saveAffiliateProgram({
+    swipeCopy: String(formData.get('swipeCopy') ?? ''),
+    assetsUrl: String(formData.get('assetsUrl') ?? '').trim(),
+    onePagerUrl: String(formData.get('onePagerUrl') ?? '').trim(),
+  });
+  revalidatePath('/admin/affiliates');
+}
 
 export async function createAffiliateAction(formData: FormData): Promise<void> {
   requireAdmin();

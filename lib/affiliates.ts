@@ -40,6 +40,9 @@ export type Affiliate = {
   dashboardToken: string;
   active: boolean;
   createdAt: string;
+  telegramChatId: string;
+  notifyEmail: boolean;
+  notifyTelegram: boolean;
 };
 
 type AffiliateRow = {
@@ -52,6 +55,9 @@ type AffiliateRow = {
   dashboard_token: string;
   active: boolean;
   created_at: string;
+  telegram_chat_id: string | null;
+  notify_email: boolean | null;
+  notify_telegram: boolean | null;
 };
 
 function rowToAffiliate(r: AffiliateRow): Affiliate {
@@ -65,7 +71,60 @@ function rowToAffiliate(r: AffiliateRow): Affiliate {
     dashboardToken: r.dashboard_token,
     active: r.active,
     createdAt: r.created_at,
+    telegramChatId: r.telegram_chat_id ?? '',
+    notifyEmail: r.notify_email ?? true,
+    notifyTelegram: r.notify_telegram ?? false,
   };
+}
+
+/** Promo-kit / program config (shared across all affiliates). */
+export type AffiliateProgram = {
+  swipeCopy: string;
+  assetsUrl: string;
+  onePagerUrl: string;
+};
+
+export async function getAffiliateProgram(): Promise<AffiliateProgram> {
+  const empty = { swipeCopy: '', assetsUrl: '', onePagerUrl: '' };
+  if (!isSupabaseConfigured()) return empty;
+  const { data } = await getSupabase()
+    .from('affiliate_program')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+  if (!data) return empty;
+  return {
+    swipeCopy: data.swipe_copy ?? '',
+    assetsUrl: data.assets_url ?? '',
+    onePagerUrl: data.onepager_url ?? '',
+  };
+}
+
+export async function saveAffiliateProgram(p: AffiliateProgram): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  await getSupabase().from('affiliate_program').upsert({
+    id: 1,
+    swipe_copy: p.swipeCopy,
+    assets_url: p.assetsUrl,
+    onepager_url: p.onePagerUrl,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+/** Affiliate self-service: update their notification contact details
+ *  (called from the dashboard, keyed by dashboard token — no admin needed). */
+export async function updateAffiliateContact(
+  token: string,
+  patch: { email?: string; telegramChatId?: string; notifyEmail?: boolean; notifyTelegram?: boolean },
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const row: Record<string, unknown> = {};
+  if (patch.email !== undefined) row.email = patch.email;
+  if (patch.telegramChatId !== undefined) row.telegram_chat_id = patch.telegramChatId;
+  if (patch.notifyEmail !== undefined) row.notify_email = patch.notifyEmail;
+  if (patch.notifyTelegram !== undefined) row.notify_telegram = patch.notifyTelegram;
+  if (Object.keys(row).length === 0) return;
+  await getSupabase().from('affiliates').update(row).eq('dashboard_token', token);
 }
 
 /** Slugify a proposed code: lowercase, alnum + dashes only. */
@@ -189,7 +248,7 @@ export async function recordCommission(input: {
   const aff = await getAffiliateByCode(input.affiliateCode);
   if (!aff || !aff.active) return;
   const commission = commissionCentavos(aff, input.saleCentavos);
-  await getSupabase()
+  const { data: inserted } = await getSupabase()
     .from('affiliate_commissions')
     .upsert(
       {
@@ -200,7 +259,48 @@ export async function recordCommission(input: {
         status: 'pending',
       },
       { onConflict: 'signup_id', ignoreDuplicates: true },
-    );
+    )
+    .select('id');
+
+  // Only notify on a genuinely NEW commission (ignoreDuplicates returns no
+  // rows when the signup was already credited).
+  if (inserted && inserted.length > 0) {
+    await notifyAffiliateOfSale(aff, commission).catch(() => {});
+  }
+}
+
+/** Email + Telegram "you just earned ₱X" ping to the affiliate. Best-effort. */
+async function notifyAffiliateOfSale(aff: Affiliate, commissionCent: number): Promise<void> {
+  const amount = formatPHP(commissionCent);
+  const firstName = aff.name.split(' ')[0] || 'there';
+  if (aff.notifyEmail && aff.email) {
+    const { sendEmail } = await import('./email');
+    await sendEmail({
+      to: aff.email,
+      subject: `🎉 You just earned ${amount}!`,
+      html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:28px;color:#0B0D12">
+        <p style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#0093B8;margin:0 0 8px">BOSSLABS AI · Affiliate</p>
+        <h1 style="font-family:Georgia,serif;font-size:30px;margin:0 0 12px">Cha-ching, ${firstName}! 💸</h1>
+        <p style="font-size:16px;line-height:1.6;color:#1F2330">Someone you referred just bought — you earned <strong>${amount}</strong>. It's now pending in your dashboard.</p>
+        <p style="font-size:13px;color:#9BA1AC">Keep sharing your link to earn more.</p>
+      </div>`,
+    }).catch(() => {});
+  }
+  if (aff.notifyTelegram && aff.telegramChatId) {
+    const { sendTelegramTo } = await import('./telegram');
+    await sendTelegramTo(
+      aff.telegramChatId,
+      `🎉 <b>Cha-ching, ${firstName}!</b>\nYou just earned <b>${amount}</b> — someone you referred bought. It's pending in your dashboard.`,
+    ).catch(() => {});
+  }
+}
+
+/** Format centavos as ₱ (local copy to avoid importing lib/config into the
+ *  notification path). */
+function formatPHP(centavos: number): string {
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 0 }).format(
+    centavos / 100,
+  );
 }
 
 /** Void a commission when its sale is refunded. */
