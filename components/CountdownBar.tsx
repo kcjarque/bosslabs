@@ -55,8 +55,11 @@ export function CountdownBar({
   const [target] = useState(() => getTarget(startsAtIso));
   const { mounted, days, hours, mins, secs } = useCountdown(target);
 
-  // Never show the urgency bar inside the admin — it's a public-funnel signal.
-  if (pathname?.startsWith('/admin')) return null;
+  // Never show the urgency bar inside the admin or the affiliate dashboard —
+  // it's a public-funnel signal, not for those internal/partner views.
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/affiliate')) {
+    return null;
+  }
   // No date configured (or already past) → hide the bar entirely rather
   // than show a misleading "+14 days from your page load" timer.
   if (!target) return null;

@@ -1,8 +1,22 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getAffiliateByToken, getAffiliateStats, PUBLIC_SITE_URL } from '@/lib/affiliates';
+import { getEvents } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
 import { CopyLink } from '@/components/CopyLink';
+
+function formatEventDate(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '';
+  return new Intl.DateTimeFormat('en-PH', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Asia/Manila',
+  }).format(t);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +34,12 @@ export default async function AffiliateDashboard({
   if (!aff) notFound();
   const stats = await getAffiliateStats(aff);
   const link = `${PUBLIC_SITE_URL}/r/${aff.code}`;
+
+  // Upcoming events the affiliate is driving signups to.
+  const now = Date.now();
+  const upcoming = (await getEvents())
+    .filter((e) => e.active && Date.parse(e.startsAtIso) > now)
+    .sort((a, b) => Date.parse(a.startsAtIso) - Date.parse(b.startsAtIso));
   const rate =
     aff.commissionType === 'fixed'
       ? `${formatPHP(aff.commissionValue)} per sale`
@@ -49,6 +69,31 @@ export default async function AffiliateDashboard({
             Share it anywhere. The first link someone clicks is the one that gets credited.
           </p>
         </div>
+
+        {/* Live events the affiliate is promoting */}
+        {upcoming.length > 0 && (
+          <div className="mt-6">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+              What&rsquo;s on — events you&rsquo;re promoting
+            </div>
+            <div className="mt-2 space-y-2">
+              {upcoming.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-900">{ev.name}</div>
+                    <div className="text-xs text-slate-500">{formatEventDate(ev.startsAtIso)}</div>
+                  </div>
+                  <span className="flex-none rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                    ● Live
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
