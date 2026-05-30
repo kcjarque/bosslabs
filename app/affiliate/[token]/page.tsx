@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getAffiliateByToken, getAffiliateStats, PUBLIC_SITE_URL } from '@/lib/affiliates';
 import { formatPHP } from '@/lib/config';
+import { CopyLink } from '@/components/CopyLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ export default async function AffiliateDashboard({
         {/* Share link */}
         <div className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm">
           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your link</div>
-          <div className="mt-1 break-all font-mono text-base text-slate-900">{link}</div>
+          <CopyLink url={link} />
           <p className="mt-2 text-xs text-slate-400">
             Share it anywhere. The first link someone clicks is the one that gets credited.
           </p>
