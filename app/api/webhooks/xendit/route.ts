@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup } from '@/lib/db';
+import { recordCommission } from '@/lib/affiliates';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -109,6 +110,16 @@ async function handleMainPaid(event: XenditEvent) {
       paidAmount: event.amount,
     },
   });
+
+  // Affiliate commission — if this buyer was referred, record the payout
+  // (idempotent; computed on the total paid incl. any OTO bump).
+  const refCode = (signup.metadata as { affiliateCode?: string } | undefined)?.affiliateCode;
+  if (refCode) {
+    const saleCentavos = event.amount ? event.amount * 100 : signup.amountCentavos ?? 0;
+    await recordCommission({ affiliateCode: refCode, signupId: signup.id, saleCentavos }).catch(
+      () => {},
+    );
+  }
 
   const webinar = await getWebinarInfo();
   // Resolves the per-event Zoom link from the signup's event, else global.

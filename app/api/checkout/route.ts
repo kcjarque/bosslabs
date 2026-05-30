@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { REF_COOKIE, REF_TOUCH_COOKIE } from '@/lib/ref-cookie';
 import { OFFER } from '@/lib/config';
 import {
   createInvoice,
@@ -107,6 +109,20 @@ export async function POST(req: Request) {
     const icEventId = body.meta?.eventId ?? `ic_${Date.now()}`;
     const purchaseEventId = `purchase_${externalId}`;
 
+    // Affiliate attribution — read the first-touch referral cookie and stamp
+    // it onto the signup so even abandoned carts are credited; the Xendit
+    // webhook turns it into a commission once the invoice clears.
+    const refJar = cookies();
+    const affiliateCode = refJar.get(REF_COOKIE)?.value || undefined;
+    const affiliateMeta = affiliateCode
+      ? {
+          affiliateCode,
+          affiliateFirstTouchAt: new Date(
+            Number(refJar.get(REF_TOUCH_COOKIE)?.value) || Date.now(),
+          ).toISOString(),
+        }
+      : {};
+
     // Free-seat path: skip Xendit entirely. The buyer goes straight to
     // /accepted, we mark them paid for ₱0, and we manually fire the
     // paid_confirmation email + SMS (the Xendit webhook normally does
@@ -116,6 +132,7 @@ export async function POST(req: Request) {
       const existing = await findSignupByEmail(body.email);
       const baseMeta = {
         externalId: acceptedSlug,
+        ...affiliateMeta,
         demo: false as boolean,
         paymentMethodGroup: 'FREE',
         promoCode: promoApplied.code,
@@ -260,6 +277,7 @@ export async function POST(req: Request) {
     const existing = await findSignupByEmail(body.email);
     const sharedMetadata = {
       externalId,
+      ...affiliateMeta,
       demo: invoice.demo,
       paymentMethodGroup: group ?? 'ALL',
       ...(promoApplied

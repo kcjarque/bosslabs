@@ -1,0 +1,85 @@
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { getAffiliateByToken, getAffiliateStats } from '@/lib/affiliates';
+import { formatPHP } from '@/lib/config';
+
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Your affiliate dashboard',
+  robots: { index: false, follow: false },
+};
+
+function origin(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://www.bosslabs.live';
+}
+
+export default async function AffiliateDashboard({
+  params,
+}: {
+  params: { token: string };
+}) {
+  const aff = await getAffiliateByToken(params.token);
+  if (!aff) notFound();
+  const stats = await getAffiliateStats(aff);
+  const link = `${origin()}/r/${aff.code}`;
+  const rate =
+    aff.commissionType === 'fixed'
+      ? `${formatPHP(aff.commissionValue)} per sale`
+      : `${aff.commissionValue}% per sale`;
+  const convRate =
+    stats.clicks > 0 ? ((stats.paidConversions / stats.clicks) * 100).toFixed(1) : '0.0';
+
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-10">
+      <div className="mx-auto max-w-2xl">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-700">
+          BOSSLABS AI · Affiliate
+        </div>
+        <h1 className="mt-2 font-serif text-3xl tracking-tight text-slate-900">
+          Hi {aff.name.split(' ')[0]} 👋
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          You earn <strong className="text-slate-700">{rate}</strong>. Share your link below —
+          you get credited for anyone who buys within 15 days of their first click.
+        </p>
+
+        {/* Share link */}
+        <div className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your link</div>
+          <div className="mt-1 break-all font-mono text-base text-slate-900">{link}</div>
+          <p className="mt-2 text-xs text-slate-400">
+            Share it anywhere. The first link someone clicks is the one that gets credited.
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Card label="Clicks" value={String(stats.clicks)} />
+          <Card label="Signups" value={String(stats.referredSignups)} />
+          <Card label="Sales (paid)" value={String(stats.paidConversions)} />
+          <Card label="Conversion" value={`${convRate}%`} />
+          <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
+          <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
+        </div>
+
+        <p className="mt-6 text-center text-[11px] text-slate-400">
+          Updated live. Questions about a payout? Message the BOSSLABS team.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Card({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        accent ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'
+      }`}
+    >
+      <div className="text-xl font-semibold text-slate-900">{value}</div>
+      <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">{label}</div>
+    </div>
+  );
+}
