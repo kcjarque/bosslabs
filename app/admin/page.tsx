@@ -8,7 +8,6 @@ import {
   type Signup,
 } from '@/lib/db';
 import { formatPHP, OFFER } from '@/lib/config';
-import { CustomDateRange } from '@/components/CustomDateRange';
 import { DailyChart } from '@/components/DailyChart';
 
 export const dynamic = 'force-dynamic';
@@ -55,29 +54,6 @@ function bucketDaily(signups: Signup[], startDate: string, endDate: string) {
     }
   }
   return Array.from(buckets.values());
-}
-
-/* --------------------------------------------------------------------- */
-/* Chart date range presets                                              */
-/* --------------------------------------------------------------------- */
-
-type ChartRange = { key: string; label: string; start: string; end: string };
-
-function chartRanges(): ChartRange[] {
-  const todayStr = manilaToday();
-  const todayD = new Date(todayStr + 'T00:00:00+08:00');
-  const yesterday = new Date(todayD);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = manilaDate(yesterday);
-  const mtdStart = todayStr.slice(0, 8) + '01'; // first of current month
-  const d30 = new Date(todayD);
-  d30.setDate(d30.getDate() - 29);
-  return [
-    { key: 'today', label: 'Today', start: todayStr, end: todayStr },
-    { key: 'yesterday', label: 'Yesterday', start: yesterdayStr, end: yesterdayStr },
-    { key: 'mtd', label: 'MTD', start: mtdStart, end: todayStr },
-    { key: '30d', label: '30 days', start: manilaDate(d30), end: todayStr },
-  ];
 }
 
 /* --------------------------------------------------------------------- */
@@ -148,37 +124,27 @@ function formatDuration(sec: number | null): string {
   return `${(sec / 86400).toFixed(1)}d`;
 }
 
-/** Selectable funnel date ranges. Hours-based so we can compute sinceIso
- *  from a single number. Keep this list short — too many options dilute
- *  the dashboard's at-a-glance value. */
-const FUNNEL_RANGES = [
-  { key: '24h', label: '24h', hours: 24 },
-  { key: '7d', label: '7d', hours: 24 * 7 },
-  { key: '30d', label: '30d', hours: 24 * 30 },
-  { key: '90d', label: '90d', hours: 24 * 90 },
-] as const;
-type FunnelRangeKey = (typeof FUNNEL_RANGES)[number]['key'];
-
 export default async function AdminDashboard({
   searchParams,
 }: {
-  searchParams: { fr?: string; cr?: string; cs?: string; ce?: string; dr?: string };
+  searchParams: { dr?: string };
 }) {
   requireAdmin();
 
-  const frParam = searchParams?.fr;
-  const funnelRange =
-    FUNNEL_RANGES.find((r) => r.key === frParam) ??
-    FUNNEL_RANGES.find((r) => r.key === '7d')!;
-  const funnelSinceMs = Date.now() - funnelRange.hours * 3600 * 1000;
+  // ── ONE global period (?dr=) drives the KPI cards, funnel, AND chart.
+  const now = Date.now();
+  const dashRange = resolveDashRange(searchParams?.dr);
+  const periodLabel = dashRange ? dashRange.label : 'all time';
+
+  // Funnel window derived from the global period. "All time" looks back a
+  // year (bounded so we don't generate thousands of empty buckets).
+  const funnelSinceMs = dashRange ? dashRange.startMs : now - 365 * 86400_000;
+  const lengthMs = Math.max(3600_000, now - funnelSinceMs);
   const funnelSinceIso = new Date(funnelSinceMs).toISOString();
   // Previous period of equal length, for the comparison line in the visits chart.
-  const prevSinceMs = funnelSinceMs - funnelRange.hours * 3600 * 1000;
-  const prevSinceIso = new Date(prevSinceMs).toISOString();
-
-  // Pick bucket size for the visits sparkline: 1h for short ranges,
-  // 1d once the range gets too wide to fit hourly points on the SVG.
-  const bucketMs = funnelRange.hours <= 24 * 7 ? 3600_000 : 86400_000;
+  const prevSinceIso = new Date(funnelSinceMs - lengthMs).toISOString();
+  // 1h buckets for short ranges, 1d once it gets too wide for the SVG.
+  const bucketMs = lengthMs <= 7 * 86400_000 ? 3600_000 : 86400_000;
 
   const [
     signups,
@@ -215,7 +181,6 @@ export default async function AdminDashboard({
       ? prevTotalUnique / visitsBucketsPrev.length
       : 0;
 
-  const now = Date.now();
   const within = (h: number, predicate: (s: Signup) => boolean = () => true) =>
     signups.filter(
       (s) => now - new Date(s.createdAt).getTime() < h * 3600_000 && predicate(s),
@@ -247,9 +212,7 @@ export default async function AdminDashboard({
   const conversionRate =
     funnelEntrants > 0 ? (paid.length / funnelEntrants) * 100 : 0;
 
-  // ── Dashboard date filter (?dr=) — scopes the headline KPI cards by
-  // createdAt. Default (null) = all time, so the cards are unchanged.
-  const dashRange = resolveDashRange(searchParams?.dr);
+  // Headline KPI cards scoped to the global period (by createdAt).
   const scoped = dashRange
     ? signups.filter((s) => {
         const t = new Date(s.createdAt).getTime();
@@ -292,18 +255,10 @@ export default async function AdminDashboard({
     return min === null || age > min ? age : min;
   }, null);
 
-  // Chart date range — defaults to 30 days.
-  const ranges = chartRanges();
-  const crParam = searchParams?.cr;
-  const csParam = searchParams?.cs;
-  const ceParam = searchParams?.ce;
-  let chartRange: ChartRange;
-  if (crParam === 'custom' && csParam && ceParam) {
-    chartRange = { key: 'custom', label: 'Custom', start: csParam, end: ceParam };
-  } else {
-    chartRange = ranges.find((r) => r.key === crParam) ?? ranges.find((r) => r.key === '30d')!;
-  }
-  const daily = bucketDaily(signups, chartRange.start, chartRange.end);
+  // Activity chart scoped to the same global period.
+  const chartStart = manilaDate(new Date(funnelSinceMs));
+  const chartEnd = manilaToday();
+  const daily = bucketDaily(signups, chartStart, chartEnd);
   const dailyMax = Math.max(1, ...daily.map((d) => d.total));
 
   // Channel mix on PAID signups (not stuck) — which method works best.
@@ -433,11 +388,10 @@ export default async function AdminDashboard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">Funnel</h2>
-              <FunnelDateFilter activeKey={funnelRange.key} />
             </div>
             <p className="mt-1 text-[12px] text-slate-500">
-              Unique browser sessions over the last {funnelRange.label}. Tracked
-              since the PageviewTracker shipped — older history isn&rsquo;t in the table.
+              Unique browser sessions · {periodLabel}. Tracked since the
+              PageviewTracker shipped — older history isn&rsquo;t in the table.
             </p>
           </div>
           <div className="sm:text-right">
@@ -483,7 +437,7 @@ export default async function AdminDashboard({
               </div>
               <p className="mt-0.5 text-[11px] text-slate-500">
                 {bucketMs === 3600_000 ? 'Hourly' : 'Daily'} unique sessions ·
-                dashed line = previous {funnelRange.label} avg per{' '}
+                dashed line = previous-period avg per{' '}
                 {bucketMs === 3600_000 ? 'hour' : 'day'}
               </p>
             </div>
@@ -591,18 +545,8 @@ export default async function AdminDashboard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">
-                {chartRange.key === 'today'
-                  ? 'Today'
-                  : chartRange.key === 'yesterday'
-                    ? 'Yesterday'
-                    : chartRange.key === 'mtd'
-                      ? 'Month to date'
-                      : chartRange.key === 'custom'
-                        ? `${chartRange.start} → ${chartRange.end}`
-                        : 'Last 30 days'}{' '}
-                · signups vs paid
+                Signups vs paid · {periodLabel}
               </h2>
-              <ChartDateFilter activeKey={chartRange.key} ranges={ranges} />
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
               All times Asia/Manila (PHT, UTC+8)
@@ -813,81 +757,6 @@ function StatCard({
     </div>
   );
   return href ? <Link href={href}>{body}</Link> : body;
-}
-
-/**
- * ChartDateFilter — server-rendered pill row for the daily chart.
- * Presets: Today, Yesterday, MTD, 30d. Custom opens date inputs.
- */
-function ChartDateFilter({
-  activeKey,
-  ranges,
-}: {
-  activeKey: string;
-  ranges: ChartRange[];
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Chart date range"
-      className="inline-flex flex-wrap items-center gap-1"
-    >
-      <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
-        {ranges.map((r) => {
-          const active = r.key === activeKey;
-          return (
-            <Link
-              key={r.key}
-              href={`/admin?cr=${r.key}`}
-              scroll={false}
-              className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
-                active
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-white hover:text-slate-900'
-              }`}
-            >
-              {r.label}
-            </Link>
-          );
-        })}
-      </div>
-      <CustomDateRange active={activeKey === 'custom'} />
-    </div>
-  );
-}
-
-/**
- * FunnelDateFilter — server-rendered pill row. Each pill is a Link that
- * sets ?fr=<key> on the dashboard. No client JS needed — the dashboard
- * re-renders server-side with the new range. Matches the rest of the
- * dashboard which is also pure RSC.
- */
-function FunnelDateFilter({ activeKey }: { activeKey: FunnelRangeKey }) {
-  return (
-    <div
-      role="group"
-      aria-label="Funnel date range"
-      className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5"
-    >
-      {FUNNEL_RANGES.map((r) => {
-        const active = r.key === activeKey;
-        return (
-          <Link
-            key={r.key}
-            href={`/admin?fr=${r.key}`}
-            scroll={false}
-            className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
-              active
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-white hover:text-slate-900'
-            }`}
-          >
-            {r.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
 }
 
 /**
