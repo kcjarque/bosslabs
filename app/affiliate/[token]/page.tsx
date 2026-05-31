@@ -84,9 +84,19 @@ export default async function AffiliateDashboard({
           Hi {aff.name.split(' ')[0]} 👋
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          You earn <strong className="text-slate-700">{rate}</strong>. Share your link below —
-          you get credited for anyone who buys within 15 days of their first click.
+          You earn <strong className="text-slate-700">{rate}</strong>. You get credited for
+          anyone who buys within 15 days of their first click.
         </p>
+
+        {/* Stats — top priority */}
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Card label="Clicks" value={String(stats.clicks)} />
+          <Card label="Signups" value={String(stats.referredSignups)} />
+          <Card label="Sales (paid)" value={String(stats.paidConversions)} />
+          <Card label="Conversion" value={`${convRate}%`} />
+          <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
+          <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
+        </div>
 
         {/* Share link */}
         <div className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm">
@@ -213,16 +223,6 @@ export default async function AffiliateDashboard({
             </div>
           </div>
         )}
-
-        {/* Stats */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Card label="Clicks" value={String(stats.clicks)} />
-          <Card label="Signups" value={String(stats.referredSignups)} />
-          <Card label="Sales (paid)" value={String(stats.paidConversions)} />
-          <Card label="Conversion" value={`${convRate}%`} />
-          <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
-          <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
-        </div>
 
         {/* Leaderboard */}
         {leaderboard.length > 0 && (
