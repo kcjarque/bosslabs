@@ -921,6 +921,34 @@ export type PageViewCounts = {
 };
 
 /**
+ * Count paid orders for the Telegram sales alerts: all-time total + today.
+ * "Paid" = signups.status === 'paid'. "Today" is by created_at in
+ * Asia/Manila, matching the daily-summary convention. Best-effort — returns
+ * zeros if Supabase isn't configured or a query errors, so it can never
+ * block (or break) a payment notification.
+ */
+export async function countPaidOrders(): Promise<{ total: number; today: number }> {
+  if (!isSupabaseConfigured()) return { total: 0, today: 0 };
+  try {
+    const sb = getSupabase();
+    const { count: total } = await sb
+      .from('signups')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'paid');
+    // Manila calendar date (YYYY-MM-DD) → start-of-day at +08:00.
+    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
+    const { count: today } = await sb
+      .from('signups')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'paid')
+      .gte('created_at', `${todayStr}T00:00:00+08:00`);
+    return { total: total ?? 0, today: today ?? 0 };
+  } catch {
+    return { total: 0, today: 0 };
+  }
+}
+
+/**
  * Count pageviews (total + distinct sessions) matching a path prefix
  * inside a time window. Used by the admin funnel — Visits = unique
  * sessions that hit /checkout in the period.

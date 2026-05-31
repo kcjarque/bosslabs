@@ -20,7 +20,7 @@
 
 import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
-import { findSignupByExternalId, updateSignup } from '@/lib/db';
+import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
@@ -170,12 +170,16 @@ async function handleMainPaid(event: XenditEvent) {
   // returns. The ~200ms latency cost is fine — Xendit doesn't care about
   // webhook response time as long as we return 200.
   const amtFmt = `₱${amountPhp.toLocaleString()}`;
+  // Running tally of paid orders (includes this one — status was set to
+  // 'paid' above). Best-effort; never blocks the alert.
+  const orders = await countPaidOrders();
   await sendTelegram(
     `💰 <b>New payment!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
-    `Invoice: <code>${externalId}</code>`,
+    `Invoice: <code>${externalId}</code>\n` +
+    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,
   );
 
   return NextResponse.json({ ok: true, emailOk: emailRes.ok });

@@ -11,6 +11,7 @@ import {
 import {
   addSignup,
   computeDiscountCentavos,
+  countPaidOrders,
   findPromoCode,
   findSignupByEmail,
   redeemPromoCode,
@@ -236,12 +237,14 @@ export async function POST(req: Request) {
 
       // TG notification — free-seat promo purchase (already marked paid).
       // Awaited to guarantee delivery before the serverless function exits.
+      const orders = await countPaidOrders();
       await sendTelegram(
         `💰 <b>Free promo purchase!</b>\n\n` +
         `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
         `${esc(body.email)}\n` +
         `Promo: <code>${esc(promoApplied.code)}</code>\n` +
-        `Amount: <b>₱0</b>${bumped ? ' (with bump)' : ''}`,
+        `Amount: <b>₱0</b>${bumped ? ' (with bump)' : ''}\n` +
+        `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,
       );
 
       return NextResponse.json({
