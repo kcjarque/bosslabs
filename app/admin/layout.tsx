@@ -43,6 +43,7 @@ const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[
     heading: 'Operations',
     items: [
       { href: '/admin/pending-payments', label: 'Pending payments' },
+      { href: '/admin/crm', label: 'Order-bump CRM' },
       { href: '/admin/recordings', label: 'Recordings' },
       { href: '/admin/capi-status', label: 'CAPI status' },
     ],
