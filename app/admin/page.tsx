@@ -9,6 +9,7 @@ import {
 } from '@/lib/db';
 import { formatPHP, OFFER } from '@/lib/config';
 import { DailyChart } from '@/components/DailyChart';
+import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,23 +69,33 @@ const DASH_RANGES = [
   { key: 'mtd', label: 'This month' },
 ] as const;
 
-type DashRange = { key: string; label: string; startMs: number } | null;
+type DashRange = { key: string; label: string; startMs: number; endMs: number } | null;
 
-/** Resolve the ?dr= preset into a start cutoff (ms). null = all time. */
-function resolveDashRange(dr?: string): DashRange {
+/** Resolve the ?dr= preset (or a custom from/to range) into a start+end
+ *  cutoff (ms). null = all time. Presets end "now"; custom uses Manila
+ *  calendar dates [from 00:00, to 23:59:59], capped at now. */
+function resolveDashRange(dr?: string, from?: string, to?: string): DashRange {
   const now = Date.now();
   const todayStr = manilaToday();
   const midnight = new Date(todayStr + 'T00:00:00+08:00').getTime();
   const monthStart = new Date(todayStr.slice(0, 8) + '01T00:00:00+08:00').getTime();
   switch (dr) {
     case 'today':
-      return { key: 'today', label: 'today', startMs: midnight };
+      return { key: 'today', label: 'today', startMs: midnight, endMs: now };
     case '7d':
-      return { key: '7d', label: 'the last 7 days', startMs: now - 7 * 86400_000 };
+      return { key: '7d', label: 'the last 7 days', startMs: now - 7 * 86400_000, endMs: now };
     case '30d':
-      return { key: '30d', label: 'the last 30 days', startMs: now - 30 * 86400_000 };
+      return { key: '30d', label: 'the last 30 days', startMs: now - 30 * 86400_000, endMs: now };
     case 'mtd':
-      return { key: 'mtd', label: 'this month', startMs: monthStart };
+      return { key: 'mtd', label: 'this month', startMs: monthStart, endMs: now };
+    case 'custom': {
+      const valid = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
+      if (!valid(from) || !valid(to)) return null;
+      const startMs = new Date(`${from}T00:00:00+08:00`).getTime();
+      const endMs = Math.min(now, new Date(`${to}T23:59:59.999+08:00`).getTime());
+      if (!(endMs > startMs)) return null;
+      return { key: 'custom', label: `${from} – ${to}`, startMs, endMs };
+    }
     default:
       return null;
   }
@@ -127,20 +138,23 @@ function formatDuration(sec: number | null): string {
 export default async function AdminDashboard({
   searchParams,
 }: {
-  searchParams: { dr?: string };
+  searchParams: { dr?: string; from?: string; to?: string };
 }) {
   requireAdmin();
 
   // ── ONE global period (?dr=) drives the KPI cards, funnel, AND chart.
   const now = Date.now();
-  const dashRange = resolveDashRange(searchParams?.dr);
+  const dashRange = resolveDashRange(searchParams?.dr, searchParams?.from, searchParams?.to);
   const periodLabel = dashRange ? dashRange.label : 'all time';
+  // End of the window — "now" for presets, the chosen end for a custom range.
+  const rangeEnd = dashRange ? dashRange.endMs : now;
 
   // Funnel window derived from the global period. "All time" looks back a
   // year (bounded so we don't generate thousands of empty buckets).
   const funnelSinceMs = dashRange ? dashRange.startMs : now - 365 * 86400_000;
-  const lengthMs = Math.max(3600_000, now - funnelSinceMs);
+  const lengthMs = Math.max(3600_000, rangeEnd - funnelSinceMs);
   const funnelSinceIso = new Date(funnelSinceMs).toISOString();
+  const funnelUntilIso = new Date(rangeEnd).toISOString();
   // Previous period of equal length, for the comparison line in the visits chart.
   const prevSinceIso = new Date(funnelSinceMs - lengthMs).toISOString();
   // 1h buckets for short ranges, 1d once it gets too wide for the SVG.
@@ -157,11 +171,11 @@ export default async function AdminDashboard({
     getSignups(),
     getSettings(),
     // Top of funnel = anyone who landed on any public page.
-    countPageViews({ sinceIso: funnelSinceIso }),
+    countPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
     // Mid-funnel hint = sessions that made it to /checkout.
-    countPageViews({ sinceIso: funnelSinceIso, pathPrefix: '/checkout' }),
+    countPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
     // Hourly/daily buckets for the visits sparkline.
-    getVisitBuckets({ sinceIso: funnelSinceIso, bucketMs }),
+    getVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
     // Same-length previous window, for the dashed comparison line.
     getVisitBuckets({
       sinceIso: prevSinceIso,
@@ -216,7 +230,7 @@ export default async function AdminDashboard({
   const scoped = dashRange
     ? signups.filter((s) => {
         const t = new Date(s.createdAt).getTime();
-        return t >= dashRange.startMs && t <= now;
+        return t >= dashRange.startMs && t <= rangeEnd;
       })
     : signups;
   const sPaid = scoped.filter((s) => s.status === 'paid' || s.status === 'attended');
@@ -257,7 +271,7 @@ export default async function AdminDashboard({
 
   // Activity chart scoped to the same global period.
   const chartStart = manilaDate(new Date(funnelSinceMs));
-  const chartEnd = manilaToday();
+  const chartEnd = manilaDate(new Date(rangeEnd));
   const daily = bucketDaily(signups, chartStart, chartEnd);
   const dailyMax = Math.max(1, ...daily.map((d) => d.total));
 
@@ -329,6 +343,11 @@ export default async function AdminDashboard({
           Period
         </span>
         <DashboardDateFilter activeKey={dashRange?.key ?? 'all'} />
+        <CustomPeriodPicker
+          active={dashRange?.key === 'custom'}
+          from={searchParams?.from}
+          to={searchParams?.to}
+        />
       </div>
 
       {/* Revenue + headline metrics — these are the numbers that matter */}

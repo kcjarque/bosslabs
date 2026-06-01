@@ -1000,6 +1000,7 @@ export async function countPaidOrders(): Promise<{ total: number; today: number 
  */
 export async function countPageViews(opts: {
   sinceIso: string;
+  untilIso?: string;
   pathPrefix?: string | string[] | null;
 }): Promise<PageViewCounts> {
   if (isSupabaseConfigured()) {
@@ -1011,6 +1012,7 @@ export async function countPageViews(opts: {
         : null;
     // Build a query with path-prefix OR-of-likes when filtering.
     let q = sb.from('page_views').select('path, session_id', { count: 'exact' }).gte('created_at', opts.sinceIso);
+    if (opts.untilIso) q = q.lte('created_at', opts.untilIso);
     if (prefixes && prefixes.length > 0) {
       const orClause = prefixes.map((p) => `path.ilike.${p}%`).join(',');
       q = q.or(orClause);
@@ -1026,13 +1028,15 @@ export async function countPageViews(opts: {
   // JSON fallback for local dev.
   const list = await readJson<Array<PageViewInsert & { createdAt: string }>>('page_views.json', []);
   const since = new Date(opts.sinceIso).getTime();
+  const until = opts.untilIso ? new Date(opts.untilIso).getTime() : Infinity;
   const prefixes = Array.isArray(opts.pathPrefix)
     ? opts.pathPrefix
     : opts.pathPrefix
       ? [opts.pathPrefix]
       : null;
   const filtered = list.filter((v) => {
-    if (new Date(v.createdAt).getTime() < since) return false;
+    const t = new Date(v.createdAt).getTime();
+    if (t < since || t > until) return false;
     if (!prefixes) return true;
     return prefixes.some((p) => v.path.startsWith(p));
   });
