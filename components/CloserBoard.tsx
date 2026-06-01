@@ -13,6 +13,7 @@ type Lead = {
   claimedAt: string;
   closedAt: string | null;
   commissionCentavos: number | null;
+  remarks: string;
 };
 
 const peso = (c: number) => `₱${(c / 100).toLocaleString()}`;
@@ -58,6 +59,10 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
     await api({ action: 'release', leadId });
     await load();
     setBusy(null);
+  }
+  function saveRemark(signupId: string, remarks: string) {
+    setLeads((ls) => ls.map((l) => (l.signupId === signupId ? { ...l, remarks } : l)));
+    void api({ action: 'remark', signupId, remarks });
   }
 
   if (loading) return <div className="card text-sm text-slate-500">Loading your board…</div>;
@@ -162,6 +167,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
                   <a href={`sms:${l.phone}`} className="flex-1 rounded-md border border-cyan-200 px-2 py-1.5 text-center text-xs font-medium text-cyan-700 hover:bg-cyan-50">💬 Text</a>
                 </div>
               )}
+              <CardRemark value={l.remarks} onSave={(t) => saveRemark(l.signupId, t)} />
             </div>
           ))}
           {working.length === 0 && <Empty>Claim a lead from the left to start calling.</Empty>}
@@ -176,6 +182,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                 +{peso(l.commissionCentavos ?? 0)} commission
               </div>
+              <CardRemark value={l.remarks} onSave={(t) => saveRemark(l.signupId, t)} />
             </div>
           ))}
           {closed.length > 0 && (
@@ -235,4 +242,60 @@ function Column({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="px-1 py-3 text-center text-[11px] text-slate-300">{children}</div>;
+}
+
+/** Inline remark on a lead card — same idea as the order-bump board. Saving
+ *  writes to the customer's shared remark. Stops drag while editing. */
+function CardRemark({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  if (editing) {
+    return (
+      <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Add a remark…"
+          style={{ minHeight: '48px' }}
+          className="input w-full text-xs"
+          draggable={false}
+        />
+        <div className="mt-1 flex gap-1.5">
+          <button
+            onClick={() => {
+              onSave(draft.trim());
+              setEditing(false);
+            }}
+            className="rounded-md bg-slate-800 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-700"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => {
+              setDraft(value);
+              setEditing(false);
+            }}
+            className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="mt-2 block w-full rounded-md border border-dashed border-slate-200 px-2 py-1 text-left text-[11px] transition hover:border-amber-300 hover:bg-amber-50/40"
+    >
+      {value ? <span className="text-slate-600">📝 {value}</span> : <span className="text-slate-400">📝 Add remark…</span>}
+    </button>
+  );
 }

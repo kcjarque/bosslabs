@@ -7,6 +7,7 @@
  */
 import crypto from 'crypto';
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { setSignupRemarks } from './db';
 
 export type Closer = {
   id: string;
@@ -183,6 +184,9 @@ export type CloserLead = {
   claimedAt: string;
   closedAt: string | null;
   commissionCentavos: number | null;
+  /** Free-text remark — shared store with the order-bump board + customer
+   *  profile (signup metadata.remarks). */
+  remarks: string;
 };
 
 export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
@@ -205,6 +209,7 @@ export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
   const commMap = new Map(((comms ?? []) as Array<{ signup_id: string; amount_centavos: number }>).map((c) => [c.signup_id, c.amount_centavos]));
   return rows.map((r) => {
     const s = (sigMap.get(r.signup_id) ?? {}) as Record<string, unknown>;
+    const meta = (s.metadata as { remarks?: string } | null) ?? {};
     return {
       leadId: r.id,
       signupId: r.signup_id,
@@ -215,8 +220,28 @@ export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
       claimedAt: r.claimed_at,
       closedAt: r.closed_at,
       commissionCentavos: commMap.get(r.signup_id) ?? null,
+      remarks: meta.remarks ?? '',
     };
   });
+}
+
+/** Set a remark on a lead — only if this closer owns it. Writes to the shared
+ *  signup store (so it also shows on the order-bump board + customer profile). */
+export async function setLeadRemark(
+  signupId: string,
+  closerId: string,
+  remarks: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not configured' };
+  const { data } = await getSupabase()
+    .from('closer_leads')
+    .select('id')
+    .eq('signup_id', signupId)
+    .eq('closer_id', closerId)
+    .maybeSingle();
+  if (!data) return { ok: false, error: 'Not your lead.' };
+  await setSignupRemarks(signupId, remarks);
+  return { ok: true };
 }
 
 /** Claim an abandoned cart. The unique signup_id index makes this atomic —

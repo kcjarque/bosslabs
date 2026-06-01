@@ -6,6 +6,7 @@ import {
   claimLead,
   releaseLead,
   setLeadStage,
+  setLeadRemark,
 } from '@/lib/closers';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,10 @@ export async function POST(req: Request) {
       case 'stage':
         await setLeadStage(String(body.leadId), closer.id, String(body.stage));
         return NextResponse.json({ ok: true });
+      case 'remark': {
+        const res = await setLeadRemark(String(body.signupId), closer.id, String(body.remarks ?? ''));
+        return NextResponse.json(res, { status: res.ok ? 200 : 403 });
+      }
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });
     }
