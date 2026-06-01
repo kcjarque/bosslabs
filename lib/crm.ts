@@ -31,19 +31,56 @@ function rowToCard(r: CrmRow): CrmCard {
     position: r.position ?? 0,
     signupId: r.signup_id,
     createdAt: r.created_at,
+    amountCentavos: null,
   };
 }
 
+/**
+ * Order-bump board: ONLY customers who actually took the OTO, each with the
+ * total they paid (main + OTO). We resolve bump status + amount from the
+ * linked signup at read time, then drop anyone who didn't bump — so the board
+ * is a live check of order-bump buyers. (Same otoConfirmed gate the dashboard
+ * + customer table use, so amounts agree.)
+ */
 export async function listCrmCards(): Promise<CrmCard[]> {
   if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
+  const sb = getSupabase();
+  const { data, error } = await sb
     .from('crm_cards')
     .select('*')
     .order('stage', { ascending: true })
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw new Error(`listCrmCards: ${error.message}`);
-  return (data as CrmRow[]).map(rowToCard);
+  const rows = (data as CrmRow[]) ?? [];
+
+  const signupIds = [...new Set(rows.map((r) => r.signup_id).filter(Boolean))] as string[];
+  const bump = new Map<string, { total: number }>();
+  if (signupIds.length) {
+    const { data: sigs } = await sb
+      .from('signups')
+      .select('id, bumped, amount_centavos, metadata')
+      .in('id', signupIds);
+    for (const s of (sigs ?? []) as Array<{
+      id: string;
+      bumped: boolean | null;
+      amount_centavos: number | null;
+      metadata: Record<string, unknown> | null;
+    }>) {
+      if (!s.bumped) continue; // only order-bump buyers land on this board
+      const meta = (s.metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number };
+      const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+      bump.set(s.id, { total: (s.amount_centavos ?? 0) + otoExtra });
+    }
+  }
+
+  return rows
+    .filter((r) => r.signup_id && bump.has(r.signup_id))
+    .map((r) => {
+      const card = rowToCard(r);
+      card.amountCentavos = bump.get(r.signup_id!)!.total;
+      return card;
+    });
 }
 
 export async function addCrmCard(input: {

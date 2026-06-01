@@ -211,6 +211,12 @@ export function CrmBoard() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">{c.name}</div>
                         {c.phone && <div className="text-[11px] text-slate-400">{c.phone}</div>}
+                        {c.amountCentavos != null && (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            ₱{(c.amountCentavos / 100).toLocaleString()}
+                            <span className="font-normal text-emerald-600/70">· incl. OTO</span>
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => removeCard(c.id)}

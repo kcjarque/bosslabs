@@ -14,9 +14,9 @@ export default function CrmPage() {
           Order-bump CRM
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          A follow-up board for the order bump. Drag people across stages, and tap{' '}
-          <strong>Text</strong> on a card to open your phone&rsquo;s Messages app with your saved
-          template already filled in with their name.
+          Only customers who took the <strong>order bump (OTO)</strong> show here, each with the
+          total they paid — your live check of order-bump buyers. Drag across stages, and tap{' '}
+          <strong>Text</strong> to message them from your phone with your saved template.
         </p>
       </header>
 

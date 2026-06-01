@@ -21,4 +21,7 @@ export type CrmCard = {
   position: number;
   signupId: string | null;
   createdAt: string;
+  /** Total the customer paid (main + OTO), in centavos. Null for cards with
+   *  no linked paid signup. Drives the order-bump amount shown on the card. */
+  amountCentavos: number | null;
 };
