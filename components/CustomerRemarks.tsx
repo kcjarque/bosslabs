@@ -4,9 +4,8 @@ import { useState } from 'react';
 import { setRemarksAction } from '@/app/admin/customers/actions';
 
 /**
- * Editable remarks for a customer. Shared store with the order-bump CRM
- * board (signup metadata.remarks), so a remark added on either surface shows
- * on the other.
+ * Compact, embeddable remarks editor — sits at the bottom of the Profile
+ * card. Shared store with the order-bump CRM board (signup metadata.remarks).
  */
 export function CustomerRemarks({
   signupId,
@@ -31,29 +30,28 @@ export function CustomerRemarks({
   }
 
   return (
-    <section className="card">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Remarks</h2>
-        <span className="text-xs text-slate-400">Synced with the order-bump board</span>
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs uppercase tracking-[0.06em] text-slate-500">Remarks</span>
+        <span className="text-[10px] text-slate-400">Synced with order-bump board</span>
       </div>
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Add a remark about this customer…"
-        className="input mt-3 min-h-[80px] w-full text-sm"
+        placeholder="Add a remark…"
+        style={{ minHeight: '56px' }}
+        className="input mt-2 w-full text-sm"
       />
-      <div className="mt-2 flex items-center gap-3">
+      <div className="mt-1.5 flex items-center gap-2">
         <button
           onClick={save}
           disabled={!dirty || state === 'saving'}
-          className="btn btn-primary text-xs disabled:opacity-50"
+          className="btn btn-secondary text-xs disabled:opacity-50"
         >
-          {state === 'saving' ? 'Saving…' : state === 'done' ? 'Saved ✓' : 'Save remark'}
+          {state === 'saving' ? 'Saving…' : state === 'done' ? 'Saved ✓' : 'Save'}
         </button>
-        {dirty && state === 'idle' && (
-          <span className="text-[11px] text-amber-600">Unsaved changes</span>
-        )}
+        {dirty && state === 'idle' && <span className="text-[10px] text-amber-600">Unsaved</span>}
       </div>
-    </section>
+    </div>
   );
 }

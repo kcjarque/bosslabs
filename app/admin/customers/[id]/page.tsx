@@ -398,15 +398,14 @@ export default async function CustomerProfilePage({
               />
             )}
           </dl>
-        </section>
-
-        {/* Send + sequences + comms (right) */}
-        <div className="space-y-6 lg:col-span-2">
           <CustomerRemarks
             signupId={customer.id}
             initial={typeof meta.remarks === 'string' ? meta.remarks : ''}
           />
+        </section>
 
+        {/* Send + sequences + comms (right) */}
+        <div className="space-y-6 lg:col-span-2">
           <CustomerSequences
             signupId={customer.id}
             allSequences={sequences}
