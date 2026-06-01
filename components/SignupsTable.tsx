@@ -45,6 +45,20 @@ function methodPillClass(s: Signup): string {
   return 'pill';
 }
 
+/** Total the customer actually paid = main amount + any confirmed OTO upsell.
+ *  The OTO is a separate invoice, so its (PHP) amount lives in
+ *  metadata.otoAmount — amountCentavos only ever holds the main ticket price.
+ *  Same gate (otoConfirmed) the dashboard uses for revenue, so totals match. */
+function totalPaidCentavos(s: Signup): number | null {
+  if (s.amountCentavos == null) return null;
+  const meta = s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined;
+  const otoCentavos =
+    meta?.otoConfirmed && typeof meta.otoAmount === 'number'
+      ? Math.round(meta.otoAmount * 100)
+      : 0;
+  return s.amountCentavos + otoCentavos;
+}
+
 type TemplateRef = { id: string; name: string };
 
 export function SignupsTable({
@@ -396,8 +410,8 @@ export function SignupsTable({
                 <div className="text-xs text-slate-400">{s.phone}</div>
                 {s.amountCentavos != null && (
                   <div className="mt-1 text-xs text-slate-700">
-                    ₱{(s.amountCentavos / 100).toLocaleString()}
-                    {s.bumped && ' · bumped'}
+                    ₱{(totalPaidCentavos(s)! / 100).toLocaleString()}
+                    {s.bumped && ' · incl. OTO'}
                   </div>
                 )}
               </div>
@@ -507,7 +521,7 @@ export function SignupsTable({
                   <td className="tabular-nums text-slate-700">
                     {s.amountCentavos != null ? (
                       <>
-                        ₱{(s.amountCentavos / 100).toLocaleString()}
+                        ₱{(totalPaidCentavos(s)! / 100).toLocaleString()}
                         {s.bumped && (
                           <span className="ml-1 text-[10px] text-cyan-600">
                             +OTO
