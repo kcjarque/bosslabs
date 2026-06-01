@@ -1,13 +1,13 @@
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
-import { FREE_GIFT, MESSENGER_GROUP_URL } from '@/lib/config';
+import { FREE_GIFT, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getWebinarInfo } from '@/lib/webinar';
 
 export const metadata = { title: "You're In — BOSSLABS AI" };
 
 export default async function RegisteredPage() {
   const webinar = await getWebinarInfo();
-  const messengerUrl = webinar.messengerGroupUrl || MESSENGER_GROUP_URL;
+  const groupUrl = FACEBOOK_GROUP_URL;
   return (
     <>
       <header className="border-b border-white/[0.05] bg-[#06070A]/80 backdrop-blur-md">
@@ -46,7 +46,7 @@ export default async function RegisteredPage() {
             </p>
           </div>
 
-          {/* Messenger lock — the conversion focal point */}
+          {/* Facebook group lock — the conversion focal point */}
           <div className="mx-auto mt-12 max-w-2xl overflow-hidden rounded-3xl border border-cyan-500/35 bg-gradient-to-b from-cyan-500/[0.08] to-transparent shadow-glow">
             {/* Top strip — Free Gift name + value */}
             <div className="flex items-center justify-between border-b border-cyan-500/20 bg-cyan-500/[0.06] px-6 py-3 sm:px-8">
@@ -61,7 +61,7 @@ export default async function RegisteredPage() {
             <div className="px-6 py-8 sm:px-10 sm:py-10">
               <h2 className="font-serif text-2xl leading-snug text-white sm:text-3xl md:text-4xl">
                 One more step. Join the BOSSLABS{' '}
-                <span className="accent-italic">Messenger group</span> to unlock your free gift.
+                <span className="accent-italic">Facebook group</span> to unlock your free gift.
               </h2>
               <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
                 The Claude Code Skills Pack is dropped in the group the moment you join.
@@ -70,12 +70,12 @@ export default async function RegisteredPage() {
               </p>
 
               <a
-                href={messengerUrl}
+                href={groupUrl}
                 target="_blank"
                 rel="noopener"
-                className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-full bg-[#0084FF] px-7 py-4 font-sans text-base font-medium text-white shadow-[0_10px_30px_-10px_rgba(0,132,255,0.7)] transition hover:bg-[#1a8eff] sm:w-auto"
+                className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-full bg-[#1877F2] px-7 py-4 font-sans text-base font-medium text-white shadow-[0_10px_30px_-10px_rgba(24,119,242,0.7)] transition hover:bg-[#2a86ff] sm:w-auto"
               >
-                <MessengerIcon /> Join the Messenger Group
+                <FacebookIcon /> Join the Facebook Group
               </a>
 
               {/* Member-count style proof line */}
@@ -109,7 +109,7 @@ export default async function RegisteredPage() {
             </div>
             <ol className="mt-5 space-y-3 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
               <Step n={1} text="Open your email and confirm the Zoom registration link." />
-              <Step n={2} text="Join the Messenger group above. We drop the free gift the moment you join." />
+              <Step n={2} text="Join the Facebook group above. We drop the free gift the moment you join." />
               <Step n={3} text="Show up 5 minutes early. Bring one workflow you want to automate." />
             </ol>
           </div>
@@ -153,10 +153,10 @@ function Step({ n, text }: { n: number; text: string }) {
   );
 }
 
-function MessengerIcon() {
+function FacebookIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.8 1.3 5.3 3.4 7v3.6l3.2-1.8c1 .3 2.2.5 3.4.5 5.5 0 10-4.1 10-9.3S17.5 2 12 2zm1.1 12.4l-2.6-2.7-4.9 2.7 5.4-5.7 2.6 2.7 4.9-2.7-5.4 5.7z" />
+      <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07c0 6.02 4.39 11.01 10.13 11.93v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8v8.44C19.61 23.08 24 18.09 24 12.07z" />
     </svg>
   );
 }

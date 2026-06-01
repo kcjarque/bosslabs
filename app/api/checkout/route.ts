@@ -252,6 +252,7 @@ export async function POST(req: Request) {
         `💰 <b>Free promo purchase!</b>\n\n` +
         `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
         `${esc(body.email)}\n` +
+        `📱 ${body.mobile ? esc(body.mobile) : '—'}\n` +
         `Promo: <code>${esc(promoApplied.code)}</code>\n` +
         `Amount: <b>₱0</b>${bumped ? ' (with bump)' : ''}\n` +
         `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,

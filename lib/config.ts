@@ -370,6 +370,11 @@ export const OUR_APPS: AppShowcase[] = [
 export const MESSENGER_GROUP_URL =
   process.env.NEXT_PUBLIC_MESSENGER_GROUP_URL || '';
 
+/* Facebook community group — where we now funnel signups (replaces the
+ * old Messenger group). Override via env; defaults to the live group. */
+export const FACEBOOK_GROUP_URL =
+  process.env.NEXT_PUBLIC_FACEBOOK_GROUP_URL || 'https://www.facebook.com/share/g/18iYKmoNPc/';
+
 export function formatPHP(centavos: number) {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',

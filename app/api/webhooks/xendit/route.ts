@@ -187,6 +187,7 @@ async function handleMainPaid(event: XenditEvent) {
     `💰 <b>New payment!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
+    `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
     `Invoice: <code>${externalId}</code>\n` +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,
@@ -272,6 +273,7 @@ async function handleOtoPaid(event: XenditEvent) {
     `💰 <b>OTO upsell paid!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
+    `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
     `OTO invoice: <code>${event.external_id}</code>`,
   );
