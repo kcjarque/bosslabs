@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MarkPaidButton } from '@/components/MarkPaidButton';
 
 type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
@@ -15,6 +15,7 @@ type Lead = {
   closedAt: string | null;
   commissionCentavos: number | null;
   remarks: string;
+  expiresAt: string | null;
 };
 
 const peso = (c: number) => `₱${(c / 100).toLocaleString()}`;
@@ -161,7 +162,10 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
                   ×
                 </button>
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">Cart: {peso(l.amountCentavos)}</div>
+              <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Cart: {peso(l.amountCentavos)}</span>
+                {l.expiresAt && <ReleaseTimer expiresAt={l.expiresAt} onExpire={load} />}
+              </div>
               {l.phone && (
                 <div className="mt-2 flex gap-1.5">
                   <a href={`tel:${l.phone}`} className="flex-1 rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white hover:bg-cyan-500">📞 Call</a>
@@ -246,6 +250,38 @@ function Column({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="px-1 py-3 text-center text-[11px] text-slate-300">{children}</div>;
+}
+
+/** Live countdown until a claim auto-releases. Refreshes the board when it
+ *  hits zero (which triggers the server-side release). */
+function ReleaseTimer({ expiresAt, onExpire }: { expiresAt: string; onExpire: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  const fired = useRef(false);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const ms = new Date(expiresAt).getTime() - now;
+  useEffect(() => {
+    if (ms <= 0 && !fired.current) {
+      fired.current = true;
+      onExpire();
+    }
+  }, [ms, onExpire]);
+
+  if (ms <= 0) {
+    return <span className="font-medium text-rose-600">⏱ Releasing…</span>;
+  }
+  const totalMin = Math.floor(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const urgent = ms < 15 * 60_000;
+  return (
+    <span className={`font-medium ${urgent ? 'text-rose-600' : 'text-amber-600'}`} title="Releases back to the pool if not closed">
+      ⏱ {label} left
+    </span>
+  );
 }
 
 /** Inline remark on a lead card — same idea as the order-bump board. Saving

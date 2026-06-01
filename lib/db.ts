@@ -144,6 +144,8 @@ export type Settings = {
   telegramChatId: string;
   /* Email on the admin account */
   adminEmail: string;
+  /* Closers — hours a claimed lead is held before auto-release to the pool */
+  closerClaimHoldHours: number;
   /* Multi-event */
   /** Which event new signups attach to. Null = no active event (signups
    *  not tagged with an event). Settable from /admin/settings. */
@@ -178,6 +180,7 @@ const DEFAULT_SETTINGS: Settings = {
   telegramBotToken: '',
   telegramChatId: '',
   adminEmail: '',
+  closerClaimHoldHours: 6,
   activeEventId: null,
 };
 
@@ -260,6 +263,7 @@ type SettingsRow = {
   telegram_bot_token: string;
   telegram_chat_id: string;
   admin_email: string;
+  closer_claim_hold_hours: number | string;
   active_event_id: string | null;
 };
 
@@ -286,6 +290,7 @@ function rowToSettings(r: SettingsRow): Settings {
     telegramBotToken: r.telegram_bot_token ?? '',
     telegramChatId: r.telegram_chat_id ?? '',
     adminEmail: r.admin_email ?? '',
+    closerClaimHoldHours: r.closer_claim_hold_hours != null ? Number(r.closer_claim_hold_hours) : 6,
     activeEventId: r.active_event_id ?? null,
   };
 }
@@ -313,6 +318,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.telegramBotToken !== undefined) out.telegram_bot_token = s.telegramBotToken;
   if (s.telegramChatId !== undefined) out.telegram_chat_id = s.telegramChatId;
   if (s.adminEmail !== undefined) out.admin_email = s.adminEmail;
+  if (s.closerClaimHoldHours !== undefined) out.closer_claim_hold_hours = s.closerClaimHoldHours;
   if (s.activeEventId !== undefined) out.active_event_id = s.activeEventId;
   return out;
 }

@@ -187,9 +187,28 @@ export type CloserLead = {
   /** Free-text remark — shared store with the order-bump board + customer
    *  profile (signup metadata.remarks). */
   remarks: string;
+  /** When this claim auto-releases back to the pool (null once closed). */
+  expiresAt: string | null;
 };
 
-export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
+/**
+ * Release every claim that's been held past the hold window (and isn't
+ * closed) back to the pool. Lazy-expiry: called whenever the board loads, so
+ * a lead a closer sat on too long becomes available to everyone again.
+ */
+export async function releaseExpiredClaims(holdHours: number): Promise<number> {
+  if (!isSupabaseConfigured() || !(holdHours > 0)) return 0;
+  const cutoff = new Date(Date.now() - holdHours * 3600_000).toISOString();
+  const { data } = await getSupabase()
+    .from('closer_leads')
+    .delete()
+    .neq('stage', 'closed')
+    .lt('claimed_at', cutoff)
+    .select('id');
+  return data?.length ?? 0;
+}
+
+export async function listCloserLeads(closerId: string, holdHours = 6): Promise<CloserLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
   const { data: leads } = await sb
@@ -221,6 +240,10 @@ export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
       closedAt: r.closed_at,
       commissionCentavos: commMap.get(r.signup_id) ?? null,
       remarks: meta.remarks ?? '',
+      expiresAt:
+        r.stage === 'closed'
+          ? null
+          : new Date(new Date(r.claimed_at).getTime() + holdHours * 3600_000).toISOString(),
     };
   });
 }

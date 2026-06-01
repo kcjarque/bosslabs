@@ -3,6 +3,15 @@
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
 import { createCloser, updateCloser } from '@/lib/closers';
+import { saveSettings } from '@/lib/db';
+
+export async function saveCloserSettingsAction(holdHours: number): Promise<{ ok: boolean; error?: string }> {
+  requireAdmin();
+  if (!(holdHours > 0)) return { ok: false, error: 'Hours must be greater than 0.' };
+  await saveSettings({ closerClaimHoldHours: holdHours });
+  revalidatePath('/admin/closers');
+  return { ok: true };
+}
 
 export async function createCloserAction(input: {
   name: string;

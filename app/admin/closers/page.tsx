@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { listClosers } from '@/lib/closers';
+import { getSettings } from '@/lib/db';
 import { CloserManager } from '@/components/CloserManager';
+import { CloserSettingsForm } from '@/components/CloserSettingsForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Closers · BOSSLABS AI' };
 
 export default async function ClosersAdminPage() {
   requireAdmin();
-  const closers = await listClosers();
+  const [closers, settings] = await Promise.all([listClosers(), getSettings()]);
 
   return (
     <div className="space-y-6">
@@ -22,6 +24,8 @@ export default async function ClosersAdminPage() {
           to work abandoned-cart leads. Set their password and commission rate here.
         </p>
       </header>
+
+      <CloserSettingsForm initialHours={settings.closerClaimHoldHours} />
 
       <CloserManager closers={closers} />
     </div>
