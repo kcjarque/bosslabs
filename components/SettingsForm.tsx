@@ -125,10 +125,23 @@ export function SettingsForm({
       </Section>
 
       <Section
-        title="Email · Resend"
-        description="Free tier: 3,000 emails / month, 100 / day. Create a key at resend.com/api-keys."
+        title="Email"
+        description="Choose who sends outbound mail. From name/email apply to both providers."
       >
-        <Field label="API Key" hint="re_… · leave blank to keep current">
+        <Field
+          label="Provider"
+          hint="Amazon SES uses env vars (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION) — no key needed here."
+        >
+          <select
+            className="input"
+            value={values.emailProvider === 'ses' ? 'ses' : 'resend'}
+            onChange={(e) => update('emailProvider', e.target.value)}
+          >
+            <option value="resend">Resend</option>
+            <option value="ses">Amazon SES</option>
+          </select>
+        </Field>
+        <Field label="Resend API Key" hint="re_… · only used when provider is Resend · blank to keep current">
           <input
             type="password"
             autoComplete="new-password"

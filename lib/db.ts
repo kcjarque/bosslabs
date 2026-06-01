@@ -120,6 +120,8 @@ export type Settings = {
   webinarTime: string;
   webinarTimezone: string;
   webinarStartsAtIso: string;
+  /* Email — provider toggle ('resend' | 'ses'); SES creds come from env vars */
+  emailProvider: string;
   /* Email — Resend */
   resendApiKey: string;
   resendFromEmail: string;
@@ -158,6 +160,7 @@ const DEFAULT_SETTINGS: Settings = {
   webinarTime: '8:00 PM',
   webinarTimezone: 'PHT',
   webinarStartsAtIso: '',
+  emailProvider: 'resend',
   resendApiKey: '',
   resendFromEmail: 'hello@bosslabs.ai',
   resendFromName: 'BOSSLABS AI',
@@ -247,6 +250,7 @@ type SettingsRow = {
   webinar_time: string;
   webinar_timezone: string;
   webinar_starts_at_iso: string;
+  email_provider: string;
   resend_api_key: string;
   resend_from_email: string;
   resend_from_name: string;
@@ -274,6 +278,7 @@ function rowToSettings(r: SettingsRow): Settings {
     webinarTime: r.webinar_time ?? '',
     webinarTimezone: r.webinar_timezone ?? '',
     webinarStartsAtIso: r.webinar_starts_at_iso ?? '',
+    emailProvider: r.email_provider ?? 'resend',
     resendApiKey: r.resend_api_key ?? '',
     resendFromEmail: r.resend_from_email ?? '',
     resendFromName: r.resend_from_name ?? '',
@@ -302,6 +307,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.webinarTime !== undefined) out.webinar_time = s.webinarTime;
   if (s.webinarTimezone !== undefined) out.webinar_timezone = s.webinarTimezone;
   if (s.webinarStartsAtIso !== undefined) out.webinar_starts_at_iso = s.webinarStartsAtIso;
+  if (s.emailProvider !== undefined) out.email_provider = s.emailProvider;
   if (s.resendApiKey !== undefined) out.resend_api_key = s.resendApiKey;
   if (s.resendFromEmail !== undefined) out.resend_from_email = s.resendFromEmail;
   if (s.resendFromName !== undefined) out.resend_from_name = s.resendFromName;

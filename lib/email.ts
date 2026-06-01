@@ -24,7 +24,7 @@ import { signUnsubscribeToken } from './admin-auth';
 import { renderEmailMarkdown } from './email-markdown';
 
 export type SendEmailResult =
-  | { ok: true; id: string; provider: 'resend' | 'demo' }
+  | { ok: true; id: string; provider: 'resend' | 'ses' | 'demo' }
   | { ok: false; error: string };
 
 /** Show only the local-part initial + domain ending so logs aren't a PII leak. */
@@ -115,6 +115,33 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   if (!subject || !html) {
     return { ok: false, error: 'subject and html are required' };
+  }
+
+  // ---- Provider: Amazon SES (opt-in via settings.emailProvider = 'ses') ----
+  // Same from identity + deliverability headers as the Resend path; the AWS
+  // SDK is imported lazily so the Resend path never loads it.
+  if (settings.emailProvider === 'ses') {
+    const from = `${settings.resendFromName} <${settings.resendFromEmail}>`;
+    const replyTo = settings.resendReplyTo || settings.resendFromEmail;
+    const { isSesConfigured, sendViaSes } = await import('./ses');
+    // Demo no-op when AWS creds aren't set — mirrors the Resend demo path so
+    // local/dev flows keep working without secrets.
+    if (!isSesConfigured()) {
+      console.log('[email/demo-ses]', { to: redactEmail(args.to), subject, htmlLen: html.length });
+      return { ok: true, id: `demo_${Date.now()}`, provider: 'demo' };
+    }
+    const r = await sendViaSes({
+      from,
+      to: args.to,
+      subject,
+      html,
+      replyTo,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${replyTo}?subject=Unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+    return r.ok ? { ok: true, id: r.id, provider: 'ses' } : { ok: false, error: `SES: ${r.error}` };
   }
 
   // Demo fallback — log redacted info and return ok so the funnel keeps moving.
