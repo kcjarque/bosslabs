@@ -135,3 +135,235 @@ export async function updateCloser(
   const { error } = await getSupabase().from('closer_accounts').update(row).eq('id', id);
   if (error) throw new Error(`updateCloser: ${error.message}`);
 }
+
+/* ===================================================================== */
+/* LEADS — abandoned-cart pool + per-closer pipeline                     */
+/* ===================================================================== */
+
+/** Total a customer paid / would pay (main + confirmed OTO), in centavos. */
+function totalCentavos(amountCentavos: number | null, metadata: Record<string, unknown> | null): number {
+  const meta = (metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number };
+  const oto = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+  return (amountCentavos ?? 99900) + oto;
+}
+
+/** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
+ *  No phone is returned — the pool is intentionally private until claimed. */
+export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
+
+export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data: claimed } = await sb.from('closer_leads').select('signup_id');
+  const taken = new Set(((claimed ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
+  const { data } = await sb
+    .from('signups')
+    .select('id, first_name, last_name, amount_centavos, created_at')
+    .eq('source', 'paid')
+    .eq('status', 'registered')
+    .order('created_at', { ascending: false });
+  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string }>)
+    .filter((s) => !taken.has(s.id))
+    .map((s) => ({
+      signupId: s.id,
+      name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
+      amountDueCentavos: s.amount_centavos ?? 99900,
+      createdAt: s.created_at,
+    }));
+}
+
+/** A closer's own leads — phone REVEALED (only ever fetched for the owner). */
+export type CloserLead = {
+  leadId: string;
+  signupId: string;
+  name: string;
+  phone: string;
+  amountCentavos: number;
+  stage: string;
+  claimedAt: string;
+  closedAt: string | null;
+  commissionCentavos: number | null;
+};
+
+export async function listCloserLeads(closerId: string): Promise<CloserLead[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data: leads } = await sb
+    .from('closer_leads')
+    .select('id, signup_id, stage, claimed_at, closed_at')
+    .eq('closer_id', closerId)
+    .order('claimed_at', { ascending: false });
+  const rows = (leads ?? []) as Array<{ id: string; signup_id: string; stage: string; claimed_at: string; closed_at: string | null }>;
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.signup_id);
+  const { data: sigs } = await sb
+    .from('signups')
+    .select('id, first_name, last_name, phone, amount_centavos, metadata')
+    .in('id', ids);
+  const sigMap = new Map(((sigs ?? []) as Array<Record<string, unknown>>).map((s) => [s.id as string, s]));
+  const { data: comms } = await sb.from('closer_commissions').select('signup_id, amount_centavos').in('signup_id', ids);
+  const commMap = new Map(((comms ?? []) as Array<{ signup_id: string; amount_centavos: number }>).map((c) => [c.signup_id, c.amount_centavos]));
+  return rows.map((r) => {
+    const s = (sigMap.get(r.signup_id) ?? {}) as Record<string, unknown>;
+    return {
+      leadId: r.id,
+      signupId: r.signup_id,
+      name: `${(s.first_name as string) ?? ''} ${(s.last_name as string) ?? ''}`.trim() || 'Customer',
+      phone: (s.phone as string) ?? '',
+      amountCentavos: totalCentavos((s.amount_centavos as number) ?? null, (s.metadata as Record<string, unknown>) ?? null),
+      stage: r.stage,
+      claimedAt: r.claimed_at,
+      closedAt: r.closed_at,
+      commissionCentavos: commMap.get(r.signup_id) ?? null,
+    };
+  });
+}
+
+/** Claim an abandoned cart. The unique signup_id index makes this atomic —
+ *  a second closer claiming the same lead gets a clean "already claimed". */
+export async function claimLead(signupId: string, closerId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not configured' };
+  const { error } = await getSupabase()
+    .from('closer_leads')
+    .insert({ signup_id: signupId, closer_id: closerId, stage: 'new' });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) return { ok: false, error: 'Already claimed.' };
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** Release a lead back to the pool (owner only, never if already closed). */
+export async function releaseLead(leadId: string, closerId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  await getSupabase()
+    .from('closer_leads')
+    .delete()
+    .eq('id', leadId)
+    .eq('closer_id', closerId)
+    .neq('stage', 'closed');
+}
+
+/** Move a lead within the owner's own stages (new ↔ contacted). Closed is
+ *  payment-driven only, so we never let a manual stage clobber it. */
+export async function setLeadStage(leadId: string, closerId: string, stage: string): Promise<void> {
+  if (!isSupabaseConfigured() || stage === 'closed') return;
+  await getSupabase()
+    .from('closer_leads')
+    .update({ stage, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
+    .eq('closer_id', closerId)
+    .neq('stage', 'closed');
+}
+
+/* ===================================================================== */
+/* COMMISSIONS                                                           */
+/* ===================================================================== */
+
+export type CloserCommissionRow = {
+  id: string;
+  signupId: string;
+  name: string;
+  saleCentavos: number;
+  percent: number;
+  amountCentavos: number;
+  status: string;
+  createdAt: string;
+};
+
+export async function listCloserCommissions(closerId: string): Promise<CloserCommissionRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data } = await sb
+    .from('closer_commissions')
+    .select('*')
+    .eq('closer_id', closerId)
+    .order('created_at', { ascending: false });
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const ids = rows.map((r) => r.signup_id as string);
+  const sigMap = new Map<string, string>();
+  if (ids.length) {
+    const { data: sigs } = await sb.from('signups').select('id, first_name, last_name').in('id', ids);
+    for (const s of (sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>) {
+      sigMap.set(s.id, `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer');
+    }
+  }
+  return rows.map((r) => ({
+    id: r.id as string,
+    signupId: r.signup_id as string,
+    name: sigMap.get(r.signup_id as string) ?? 'Customer',
+    saleCentavos: Number(r.sale_centavos),
+    percent: Number(r.percent),
+    amountCentavos: Number(r.amount_centavos),
+    status: r.status as string,
+    createdAt: r.created_at as string,
+  }));
+}
+
+/**
+ * Called from the payment webhook. If this customer's lead was claimed by a
+ * closer, mark it closed and record (or top-up, when the OTO lands later) the
+ * commission on the total they paid. No-op if no closer claimed them. Never
+ * throws — a CRM hiccup must not break a payment.
+ */
+export async function closeLeadAndRecordCommission(signupId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const sb = getSupabase();
+    const { data: lead } = await sb
+      .from('closer_leads')
+      .select('id, closer_id')
+      .eq('signup_id', signupId)
+      .maybeSingle();
+    if (!lead) return; // not a closer's lead
+    const l = lead as { id: string; closer_id: string };
+
+    const { data: sig } = await sb
+      .from('signups')
+      .select('amount_centavos, metadata')
+      .eq('id', signupId)
+      .maybeSingle();
+    const total = totalCentavos(
+      (sig as { amount_centavos: number | null } | null)?.amount_centavos ?? null,
+      (sig as { metadata: Record<string, unknown> | null } | null)?.metadata ?? null,
+    );
+
+    const { data: closer } = await sb
+      .from('closer_accounts')
+      .select('commission_percent')
+      .eq('id', l.closer_id)
+      .maybeSingle();
+    const pct = Number((closer as { commission_percent: number } | null)?.commission_percent ?? 20);
+    const amount = Math.round((total * pct) / 100);
+
+    await sb
+      .from('closer_leads')
+      .update({ stage: 'closed', closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', l.id);
+
+    // Upsert the commission, preserving an existing status (so a later OTO
+    // top-up doesn't flip an already-paid commission back to pending).
+    const { data: existing } = await sb
+      .from('closer_commissions')
+      .select('id')
+      .eq('signup_id', signupId)
+      .maybeSingle();
+    if (existing) {
+      await sb
+        .from('closer_commissions')
+        .update({ sale_centavos: total, percent: pct, amount_centavos: amount })
+        .eq('id', (existing as { id: string }).id);
+    } else {
+      await sb.from('closer_commissions').insert({
+        closer_id: l.closer_id,
+        signup_id: signupId,
+        sale_centavos: total,
+        percent: pct,
+        amount_centavos: amount,
+        status: 'pending',
+      });
+    }
+  } catch (err) {
+    console.warn('[closers] closeLeadAndRecordCommission skipped:', err instanceof Error ? err.message : err);
+  }
+}

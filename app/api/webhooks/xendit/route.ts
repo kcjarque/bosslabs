@@ -23,6 +23,7 @@ import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
+import { closeLeadAndRecordCommission } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -179,6 +180,10 @@ async function handleMainPaid(event: XenditEvent) {
     email: signup.email,
   });
 
+  // If a sales closer claimed this lead, auto-close it + record their
+  // commission (no-op otherwise; never throws).
+  await closeLeadAndRecordCommission(signup.id);
+
   const amtFmt = `₱${amountPhp.toLocaleString()}`;
   // Running tally of paid orders (includes this one — status was set to
   // 'paid' above). Best-effort; never blocks the alert.
@@ -238,6 +243,10 @@ async function handleOtoPaid(event: XenditEvent) {
       otoAmount: event.amount,
     },
   });
+
+  // Top up the closer's commission to include the OTO (no-op if no closer
+  // claimed this lead; recomputes against the now-larger total paid).
+  await closeLeadAndRecordCommission(signup.id);
 
   // Fire a separate CAPI Purchase for the OTO so Meta attributes the
   // upsell revenue. Distinct eventId from the main invoice — these are

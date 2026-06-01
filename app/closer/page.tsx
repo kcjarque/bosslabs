@@ -1,4 +1,5 @@
 import { requireCloser } from '@/lib/closer-auth';
+import { CloserBoard } from '@/components/CloserBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,14 +12,12 @@ export default async function CloserHomePage() {
           Hi {closer.name.split(' ')[0]} 👋
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Your leads board is on the way. Claim an abandoned cart, call the customer, and close —
-          you earn <strong>{closer.commissionPercent}%</strong> of everything you close.
+          Claim an abandoned cart to reveal the number, call to close — and earn{' '}
+          <strong>{closer.commissionPercent}%</strong>. Claimed leads (and their numbers) are
+          yours alone.
         </p>
       </header>
-      <div className="card text-sm text-slate-500">
-        Leads kanban coming next. You&rsquo;re signed in as{' '}
-        <strong className="text-slate-700">{closer.username}</strong>.
-      </div>
+      <CloserBoard commissionPercent={closer.commissionPercent} />
     </div>
   );
 }
