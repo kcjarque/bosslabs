@@ -27,8 +27,8 @@ async function main() {
   let cards = await crm.listCrmCards();
   console.log('   → count', cards.length, '| has new?', cards.some((c) => c.id === card.id));
 
-  console.log('4) updateCrmCard → move to "messaged":');
-  await crm.updateCrmCard(card.id, { stage: 'messaged' });
+  console.log('4) updateCrmCard → move to "contacted":');
+  await crm.updateCrmCard(card.id, { stage: 'contacted' });
   cards = await crm.listCrmCards();
   console.log('   → stage now', cards.find((c) => c.id === card.id)?.stage);
 
