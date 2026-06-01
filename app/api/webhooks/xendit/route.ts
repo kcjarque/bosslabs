@@ -22,6 +22,7 @@ import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
+import { syncCrmCardForSignup } from '@/lib/crm';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -169,6 +170,15 @@ async function handleMainPaid(event: XenditEvent) {
   // function, void promises can be killed mid-flight when the response
   // returns. The ~200ms latency cost is fine — Xendit doesn't care about
   // webhook response time as long as we return 200.
+  // Auto-add this new paid customer to the order-bump CRM board (idempotent;
+  // never throws). Keeps the board in sync without a manual import.
+  await syncCrmCardForSignup({
+    signupId: signup.id,
+    name: `${signup.firstName} ${signup.lastName ?? ''}`.trim(),
+    phone: signup.phone ?? '',
+    email: signup.email,
+  });
+
   const amtFmt = `₱${amountPhp.toLocaleString()}`;
   // Running tally of paid orders (includes this one — status was set to
   // 'paid' above). Best-effort; never blocks the alert.

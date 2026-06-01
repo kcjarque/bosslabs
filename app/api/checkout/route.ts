@@ -23,6 +23,7 @@ import { sendSms } from '@/lib/sms';
 import { getWebinarInfo } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
 import { sendTelegram, esc } from '@/lib/telegram';
+import { syncCrmCardForSignup } from '@/lib/crm';
 
 export const runtime = 'nodejs';
 
@@ -233,6 +234,15 @@ export async function POST(req: Request) {
           contentName: `${OFFER.main.name} (promo: ${promoApplied.code})`,
           contentIds: [OFFER.main.sku],
         },
+      });
+
+      // Auto-add this paid customer to the order-bump CRM board (idempotent;
+      // never throws). Keeps the board in sync without a manual import.
+      await syncCrmCardForSignup({
+        signupId,
+        name: `${firstName} ${rest.join(' ')}`.trim(),
+        phone: body.mobile || '',
+        email: body.email,
       });
 
       // TG notification — free-seat promo purchase (already marked paid).

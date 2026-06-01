@@ -101,6 +101,38 @@ export async function saveCrmTemplate(template: string): Promise<void> {
   await getSupabase().from('crm_config').upsert({ id: 1, sms_template: template });
 }
 
+/**
+ * Auto-add a single new paid customer to the board the moment they pay.
+ * Idempotent (deduped by signup_id) and NEVER throws — it's called from the
+ * payment webhook / checkout, so a CRM hiccup must never break a payment.
+ */
+export async function syncCrmCardForSignup(input: {
+  signupId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const sb = getSupabase();
+    const { data: existing } = await sb
+      .from('crm_cards')
+      .select('id')
+      .eq('signup_id', input.signupId)
+      .maybeSingle();
+    if (existing) return; // already on the board
+    await sb.from('crm_cards').insert({
+      name: input.name.trim() || 'Customer',
+      phone: input.phone ?? '',
+      email: input.email ?? '',
+      stage: 'new',
+      signup_id: input.signupId,
+    });
+  } catch (err) {
+    console.warn('[crm] syncCrmCardForSignup skipped:', err instanceof Error ? err.message : err);
+  }
+}
+
 /** Pull paid customers onto the board (deduped by signup_id). Returns added count. */
 export async function importPaidCustomers(): Promise<number> {
   if (!isSupabaseConfigured()) return 0;

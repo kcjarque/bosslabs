@@ -29,7 +29,8 @@ export function CrmBoard() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [savedTpl, setSavedTpl] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -68,18 +69,28 @@ export function CrmBoard() {
     setTimeout(() => setSavedTpl(false), 1600);
   }
 
-  async function importCustomers() {
-    setImporting(true);
-    const res = await api({ action: 'import' });
-    if (typeof res.added === 'number') {
+  /** Pull in any new paid customers + reload the board. Doesn't touch the
+   *  template field so an in-progress edit isn't clobbered. */
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await api({ action: 'import' }); // sync new paid customers (idempotent)
       const r = await fetch('/api/admin/crm');
       const d = await r.json();
       setCards(d.cards ?? []);
+    } finally {
+      setRefreshing(false);
     }
-    setImporting(false);
   }
 
   if (loading) return <div className="card text-sm text-slate-500">Loading board…</div>;
+
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? cards.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q),
+      )
+    : cards;
 
   return (
     <div className="space-y-4">
@@ -102,17 +113,44 @@ export function CrmBoard() {
             </button>
           </div>
         </div>
-        <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-end sm:justify-between">
-          <form onSubmit={addCard} className="flex flex-1 flex-wrap items-end gap-2">
-            <div className="flex-1">
-              <label className="label">Add person</label>
-              <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <input className="input sm:w-44" placeholder="09xx… (for SMS)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <button type="submit" className="btn btn-secondary">Add card</button>
-          </form>
-          <button onClick={importCustomers} disabled={importing} className="btn btn-secondary text-xs">
-            {importing ? 'Importing…' : 'Import paid customers'}
+        <form onSubmit={addCard} className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+          <div className="flex-1">
+            <label className="label">Add person</label>
+            <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <input className="input sm:w-44" placeholder="09xx… (for SMS)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <button type="submit" className="btn btn-secondary">Add card</button>
+        </form>
+      </div>
+
+      {/* Search + Refresh toolbar */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+          <input
+            className="input pl-9"
+            placeholder="Search name or number…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {q && (
+            <span className="text-xs text-slate-500">
+              {visible.length} match{visible.length === 1 ? '' : 'es'}
+            </span>
+          )}
+          <button onClick={refresh} disabled={refreshing} className="btn btn-secondary whitespace-nowrap text-xs">
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
       </div>
@@ -121,7 +159,7 @@ export function CrmBoard() {
       <div className="grid gap-3 md:grid-cols-5">
         {CRM_STAGES.map((stage) => {
           const meta = CRM_STAGE_META[stage];
-          const col = cards.filter((c) => c.stage === stage);
+          const col = visible.filter((c) => c.stage === stage);
           const isOver = dragOver === stage;
           return (
             <div
