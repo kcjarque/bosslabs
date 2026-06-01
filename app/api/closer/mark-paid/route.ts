@@ -27,14 +27,24 @@ export async function POST(req: Request) {
   }
 
   let proofUrl: string | null = null;
+  let proofBytes: ArrayBuffer | null = null;
+  let proofFilename: string | undefined;
   if (file instanceof Blob && file.size > 0) {
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image must be under 8MB.' }, { status: 413 });
     if (file.type && !file.type.startsWith('image/')) {
       return NextResponse.json({ error: 'Please upload an image (screenshot).' }, { status: 415 });
     }
-    proofUrl = await uploadPaymentProof(file, (file as File).name || 'proof.jpg');
+    proofBytes = await file.arrayBuffer();
+    proofFilename = (file as File).name || 'proof.jpg';
+    proofUrl = await uploadPaymentProof(new Blob([proofBytes], { type: file.type }), proofFilename);
   }
 
-  const res = await markAbandonedCartPaid(signupId, { proofUrl, paidBy: closer.name, method: 'closer' });
+  const res = await markAbandonedCartPaid(signupId, {
+    proofUrl,
+    proofBytes,
+    proofFilename,
+    paidBy: closer.name,
+    method: 'closer',
+  });
   return NextResponse.json(res, { status: res.ok ? 200 : 409 });
 }

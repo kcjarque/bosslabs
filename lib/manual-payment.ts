@@ -12,7 +12,7 @@ import { getSignupById, updateSignup, countPaidOrders } from './db';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
-import { sendTelegram, esc } from './telegram';
+import { sendTelegram, sendTelegramPhoto, esc } from './telegram';
 import { getWebinarInfo, templateVarsForSignup } from './webinar';
 import { syncCrmCardForSignup } from './crm';
 import { closeLeadAndRecordCommission } from './closers';
@@ -38,7 +38,15 @@ export async function uploadPaymentProof(file: Blob, name: string): Promise<stri
 
 export async function markAbandonedCartPaid(
   signupId: string,
-  opts: { proofUrl?: string | null; paidBy?: string; method?: string } = {},
+  opts: {
+    proofUrl?: string | null;
+    /** Raw screenshot bytes — sent to Telegram as a photo so the team can
+     *  eyeball the actual proof inline. */
+    proofBytes?: ArrayBuffer | null;
+    proofFilename?: string;
+    paidBy?: string;
+    method?: string;
+  } = {},
 ): Promise<{ ok: boolean; error?: string; alreadyPaid?: boolean }> {
   const signup = await getSignupById(signupId);
   if (!signup) return { ok: false, error: 'Customer not found.' };
@@ -96,18 +104,23 @@ export async function markAbandonedCartPaid(
     await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars }).catch(() => {});
   }
 
-  // 5) Telegram alert.
+  // 5) Telegram alert — send the actual proof screenshot as a photo (caption
+  //    carries the details) so the team can verify it inline. Falls back to a
+  //    text message + link when no image is available.
   const orders = await countPaidOrders();
-  await sendTelegram(
+  const caption =
     `💰 <b>Manual payment confirmed!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
     `Confirmed by: <b>${esc(opts.paidBy ?? 'admin')}</b>${opts.method ? ` · ${esc(opts.method)}` : ''}\n` +
-    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
-    (opts.proofUrl ? `\n📎 <a href="${esc(opts.proofUrl)}">View proof</a>` : ''),
-  );
+    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`;
+  if (opts.proofBytes) {
+    await sendTelegramPhoto(opts.proofBytes, opts.proofFilename || 'payment-proof.jpg', caption);
+  } else {
+    await sendTelegram(caption + (opts.proofUrl ? `\n📎 <a href="${esc(opts.proofUrl)}">View proof</a>` : ''));
+  }
 
   return { ok: true };
 }
