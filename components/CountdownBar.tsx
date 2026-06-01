@@ -57,7 +57,11 @@ export function CountdownBar({
 
   // Never show the urgency bar inside the admin or the affiliate dashboard —
   // it's a public-funnel signal, not for those internal/partner views.
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/affiliate')) {
+  if (
+    pathname?.startsWith('/admin') ||
+    pathname?.startsWith('/affiliate') ||
+    pathname?.startsWith('/closer')
+  ) {
     return null;
   }
   // No date configured (or already past) → hide the bar entirely rather

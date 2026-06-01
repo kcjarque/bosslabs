@@ -292,6 +292,18 @@ export function SettingsForm({
         <TelegramTestPanel />
       </Section>
 
+      <Section title="Admin account" description="Email tied to this admin login.">
+        <Field label="Admin email" hint="Email associated with this admin account.">
+          <input
+            type="email"
+            className="input"
+            value={values.adminEmail}
+            onChange={(e) => update('adminEmail', e.target.value)}
+            placeholder="you@bosslabs.live"
+          />
+        </Field>
+      </Section>
+
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}

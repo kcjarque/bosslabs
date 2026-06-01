@@ -37,6 +37,7 @@ const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[
       { href: '/admin/templates', label: 'Templates' },
       { href: '/admin/promo-codes', label: 'Promo codes' },
       { href: '/admin/affiliates', label: 'Affiliates' },
+      { href: '/admin/closers', label: 'Closers' },
     ],
   },
   {

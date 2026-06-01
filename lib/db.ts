@@ -142,6 +142,8 @@ export type Settings = {
   /* Telegram bot */
   telegramBotToken: string;
   telegramChatId: string;
+  /* Email on the admin account */
+  adminEmail: string;
   /* Multi-event */
   /** Which event new signups attach to. Null = no active event (signups
    *  not tagged with an event). Settable from /admin/settings. */
@@ -175,6 +177,7 @@ const DEFAULT_SETTINGS: Settings = {
   recordingEnabled: false,
   telegramBotToken: '',
   telegramChatId: '',
+  adminEmail: '',
   activeEventId: null,
 };
 
@@ -256,6 +259,7 @@ type SettingsRow = {
   recording_enabled: boolean;
   telegram_bot_token: string;
   telegram_chat_id: string;
+  admin_email: string;
   active_event_id: string | null;
 };
 
@@ -281,6 +285,7 @@ function rowToSettings(r: SettingsRow): Settings {
     recordingEnabled: r.recording_enabled ?? false,
     telegramBotToken: r.telegram_bot_token ?? '',
     telegramChatId: r.telegram_chat_id ?? '',
+    adminEmail: r.admin_email ?? '',
     activeEventId: r.active_event_id ?? null,
   };
 }
@@ -307,6 +312,7 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.recordingEnabled !== undefined) out.recording_enabled = s.recordingEnabled;
   if (s.telegramBotToken !== undefined) out.telegram_bot_token = s.telegramBotToken;
   if (s.telegramChatId !== undefined) out.telegram_chat_id = s.telegramChatId;
+  if (s.adminEmail !== undefined) out.admin_email = s.adminEmail;
   if (s.activeEventId !== undefined) out.active_event_id = s.activeEventId;
   return out;
 }
