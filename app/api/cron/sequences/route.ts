@@ -46,6 +46,10 @@ import { sendSms } from '@/lib/sms';
 import { verifyCronAuth } from '@/lib/cron';
 
 export const runtime = 'nodejs';
+// Cron route — always dynamic. Auth is read via verifyCronAuth() (a helper),
+// which Next's static analysis can't see, so without this it tries to
+// prerender the route and its no-store fetch throws at build time.
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /** ±15 min tolerance — matches the 10-min cron cadence with safety margin. */
