@@ -9,6 +9,7 @@ import {
   saveCrmTemplate,
   importPaidCustomers,
 } from '@/lib/crm';
+import { setSignupRemarks } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,14 @@ export async function POST(req: Request) {
       case 'import': {
         const added = await importPaidCustomers();
         return NextResponse.json({ added });
+      }
+      case 'remark': {
+        // Writes to the linked signup so the remark also shows on the
+        // customer profile (single source of truth).
+        const signupId = String(body.signupId ?? '');
+        if (!signupId) return NextResponse.json({ error: 'signupId required' }, { status: 400 });
+        await setSignupRemarks(signupId, String(body.remarks ?? ''));
+        return NextResponse.json({ ok: true });
       }
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });

@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import {
   deleteSignups,
   getSignupById,
+  setSignupRemarks,
   subscribeManyToSequence,
   updateSignup,
   type Signup,
@@ -146,6 +147,20 @@ export async function bulkSendAction(
 
   revalidatePath('/admin/customers');
   return { sent, failed, noPhone };
+}
+
+/**
+ * Save the customer's free-text remark. Same store (signup metadata.remarks)
+ * the order-bump CRM board writes to, so the two stay in sync.
+ */
+export async function setRemarksAction(
+  signupId: string,
+  remarks: string,
+): Promise<{ ok: boolean }> {
+  requireAdmin();
+  await setSignupRemarks(signupId, remarks);
+  revalidatePath(`/admin/customers/${signupId}`);
+  return { ok: true };
 }
 
 /**

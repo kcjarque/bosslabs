@@ -19,6 +19,7 @@ import {
 import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
 import { CustomerSequences } from '@/components/CustomerSequences';
+import { CustomerRemarks } from '@/components/CustomerRemarks';
 import { ResendButton } from '@/components/ResendButton';
 import {
   subscribeCustomerAction,
@@ -401,6 +402,11 @@ export default async function CustomerProfilePage({
 
         {/* Send + sequences + comms (right) */}
         <div className="space-y-6 lg:col-span-2">
+          <CustomerRemarks
+            signupId={customer.id}
+            initial={typeof meta.remarks === 'string' ? meta.remarks : ''}
+          />
+
           <CustomerSequences
             signupId={customer.id}
             allSequences={sequences}

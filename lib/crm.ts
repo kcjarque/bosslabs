@@ -32,6 +32,7 @@ function rowToCard(r: CrmRow): CrmCard {
     signupId: r.signup_id,
     createdAt: r.created_at,
     amountCentavos: null,
+    remarks: '',
   };
 }
 
@@ -55,7 +56,7 @@ export async function listCrmCards(): Promise<CrmCard[]> {
   const rows = (data as CrmRow[]) ?? [];
 
   const signupIds = [...new Set(rows.map((r) => r.signup_id).filter(Boolean))] as string[];
-  const bump = new Map<string, { total: number }>();
+  const bump = new Map<string, { total: number; remarks: string }>();
   if (signupIds.length) {
     const { data: sigs } = await sb
       .from('signups')
@@ -68,9 +69,9 @@ export async function listCrmCards(): Promise<CrmCard[]> {
       metadata: Record<string, unknown> | null;
     }>) {
       if (!s.bumped) continue; // only order-bump buyers land on this board
-      const meta = (s.metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number };
+      const meta = (s.metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number; remarks?: string };
       const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-      bump.set(s.id, { total: (s.amount_centavos ?? 0) + otoExtra });
+      bump.set(s.id, { total: (s.amount_centavos ?? 0) + otoExtra, remarks: meta.remarks ?? '' });
     }
   }
 
@@ -78,7 +79,9 @@ export async function listCrmCards(): Promise<CrmCard[]> {
     .filter((r) => r.signup_id && bump.has(r.signup_id))
     .map((r) => {
       const card = rowToCard(r);
-      card.amountCentavos = bump.get(r.signup_id!)!.total;
+      const b = bump.get(r.signup_id!)!;
+      card.amountCentavos = b.total;
+      card.remarks = b.remarks;
       return card;
     });
 }

@@ -765,6 +765,24 @@ export async function updateSignup(id: string, patch: Partial<Signup>): Promise<
   return list[i];
 }
 
+/**
+ * Set the free-text remark on a customer. Stored on the signup
+ * (metadata.remarks) so it's a single source of truth shared by the
+ * customer profile and the order-bump CRM board. Merges into existing
+ * metadata rather than clobbering it.
+ */
+export async function setSignupRemarks(signupId: string, remarks: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const { data } = await sb.from('signups').select('metadata').eq('id', signupId).maybeSingle();
+  const meta = ((data?.metadata as Record<string, unknown> | null) ?? {});
+  const { error } = await sb
+    .from('signups')
+    .update({ metadata: { ...meta, remarks } })
+    .eq('id', signupId);
+  if (error) throw new Error(`setSignupRemarks: ${error.message}`);
+}
+
 export async function deleteSignup(id: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     const { error } = await getSupabase().from('signups').delete().eq('id', id);

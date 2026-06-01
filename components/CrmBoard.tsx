@@ -63,6 +63,13 @@ export function CrmBoard() {
     void api({ action: 'delete', id });
   }
 
+  /** Save a remark — writes to the linked signup so it also lands on the
+   *  customer profile. Optimistic local update. */
+  async function saveRemark(card: CrmCard, remarks: string) {
+    setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, remarks } : c)));
+    if (card.signupId) await api({ action: 'remark', signupId: card.signupId, remarks });
+  }
+
   async function saveTemplate() {
     await api({ action: 'template', template });
     setSavedTpl(true);
@@ -226,6 +233,8 @@ export function CrmBoard() {
                         ×
                       </button>
                     </div>
+                    <CardRemark card={c} onSave={(text) => saveRemark(c, text)} />
+
                     {c.phone ? (
                       <a
                         href={smsHref(c.phone, template, c.name)}
@@ -238,6 +247,14 @@ export function CrmBoard() {
                         No phone
                       </span>
                     )}
+                    {c.signupId && (
+                      <a
+                        href={`/admin/customers/${c.signupId}`}
+                        className="mt-1.5 block text-center text-[11px] text-slate-400 transition hover:text-cyan-600"
+                      >
+                        Open profile ↗
+                      </a>
+                    )}
                   </div>
                 ))}
                 {col.length === 0 && (
@@ -249,5 +266,69 @@ export function CrmBoard() {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * Inline remark editor on a card. Collapsed → shows the remark (or an "Add
+ * remark" affordance); click to edit in a textarea. Saving writes through to
+ * the customer's profile (same metadata.remarks). Stops drag/propagation so
+ * editing doesn't start a card drag.
+ */
+function CardRemark({ card, onSave }: { card: CrmCard; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(card.remarks);
+
+  // Keep the draft in sync if the card's remark changes underneath us.
+  useEffect(() => {
+    if (!editing) setDraft(card.remarks);
+  }, [card.remarks, editing]);
+
+  if (editing) {
+    return (
+      <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Add a remark…"
+          className="input min-h-[52px] w-full text-xs"
+          draggable={false}
+        />
+        <div className="mt-1 flex gap-1.5">
+          <button
+            onClick={() => {
+              onSave(draft.trim());
+              setEditing(false);
+            }}
+            className="rounded-md bg-slate-800 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-700"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => {
+              setDraft(card.remarks);
+              setEditing(false);
+            }}
+            className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="mt-2 block w-full rounded-md border border-dashed border-slate-200 px-2 py-1 text-left text-[11px] transition hover:border-amber-300 hover:bg-amber-50/40"
+    >
+      {card.remarks ? (
+        <span className="text-slate-600">📝 {card.remarks}</span>
+      ) : (
+        <span className="text-slate-400">📝 Add remark…</span>
+      )}
+    </button>
   );
 }
