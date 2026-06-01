@@ -176,7 +176,7 @@ export function CrmBoard() {
       </div>
 
       {/* Board */}
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-6">
         {CRM_STAGES.map((stage) => {
           const meta = CRM_STAGE_META[stage];
           const col = visible.filter((c) => c.stage === stage);
