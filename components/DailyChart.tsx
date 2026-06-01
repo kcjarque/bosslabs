@@ -21,6 +21,37 @@ function peso(php: number): string {
   }).format(Math.round(php));
 }
 
+/** Least-squares linear fit over y-values (x = index). Returns the fitted
+ *  start/end values + slope, or null when there's nothing to fit. */
+function trend(ys: number[]): { start: number; end: number; slope: number } | null {
+  const n = ys.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) {
+    sx += i;
+    sy += ys[i];
+    sxy += i * ys[i];
+    sxx += i * i;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  return { start: intercept, end: intercept + slope * (n - 1), slope };
+}
+
+/** Up / down / flat arrow for a slope (per-day change). */
+function TrendArrow({ slope }: { slope: number | undefined }) {
+  if (slope == null || Math.abs(slope) < 0.01) {
+    return <span className="font-semibold text-slate-400">→ flat</span>;
+  }
+  return slope > 0 ? (
+    <span className="font-semibold text-emerald-600">↗ up</span>
+  ) : (
+    <span className="font-semibold text-rose-500">↘ down</span>
+  );
+}
+
 /**
  * DailyChart — inline SVG bar chart (no library). Each day is a stacked
  * column: slate bar for total signups, emerald bar on top for paid. Hovering
@@ -41,6 +72,12 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
 
   const totalRevenue = data.reduce((s, d) => s + d.revenuePhp, 0);
   const totalPaid = data.reduce((s, d) => s + d.paid, 0);
+
+  // Best-fit trend lines over the visible window.
+  const totalTrend = trend(data.map((d) => d.total));
+  const paidTrend = trend(data.map((d) => d.paid));
+  const xOf = (i: number) => padX + slotW * i + slotW / 2;
+  const yOf = (v: number) => padY + innerH - (Math.max(0, Math.min(max, v)) / max) * innerH;
 
   const active = hover != null ? data[hover] : null;
   // Tooltip x as a % of chart width, clamped so it never overflows an edge.
@@ -112,6 +149,32 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
               </g>
             );
           })}
+          {/* Trend lines (best-fit). Drawn over the bars in darker shades. */}
+          {totalTrend && data.length > 1 && (
+            <line
+              x1={xOf(0)}
+              y1={yOf(totalTrend.start)}
+              x2={xOf(data.length - 1)}
+              y2={yOf(totalTrend.end)}
+              stroke="#475569"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeDasharray="4 3"
+              opacity={hover != null ? 0.35 : 0.9}
+            />
+          )}
+          {paidTrend && data.length > 1 && (
+            <line
+              x1={xOf(0)}
+              y1={yOf(paidTrend.start)}
+              x2={xOf(data.length - 1)}
+              y2={yOf(paidTrend.end)}
+              stroke="#047857"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              opacity={hover != null ? 0.35 : 0.95}
+            />
+          )}
           <text x={padX} y={H - 4} fontSize="9" fill="#94A3B8" textAnchor="start">
             {fmtDate(data[0]?.date)}
           </text>
@@ -145,7 +208,22 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
           </div>
         )}
       </div>
-      <div className="mt-2 flex justify-between text-[11px] text-slate-500">
+      {/* Trend legend — also doubles as the up/down indicator. */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <svg width="16" height="6" className="overflow-visible">
+            <line x1="0" y1="3" x2="16" y2="3" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 3" strokeLinecap="round" />
+          </svg>
+          Signups trend <TrendArrow slope={totalTrend?.slope} />
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <svg width="16" height="6">
+            <line x1="0" y1="3" x2="16" y2="3" stroke="#047857" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          Paid trend <TrendArrow slope={paidTrend?.slope} />
+        </span>
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-slate-500">
         <span>
           {data.length} day{data.length === 1 ? '' : 's'} · hover bars for daily detail
         </span>
