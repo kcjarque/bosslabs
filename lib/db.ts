@@ -597,6 +597,9 @@ export type CustomerSequenceSend = {
   sentAt: string;
   emailOk: boolean;
   smsOk: boolean;
+  /** Resend delivery lifecycle for the email leg (null until the webhook fires). */
+  emailStatus: string | null;
+  emailStatusAt: string | null;
   sequenceName: string;
   scheduleType: SequenceScheduleType;
   hoursOffset: number;
@@ -615,7 +618,7 @@ export async function getCustomerSequenceSends(
     .from('sequence_sends')
     .select(
       `
-      id, sent_at, email_ok, sms_ok,
+      id, sent_at, email_ok, sms_ok, email_status, email_status_at,
       sequence_step:sequence_step_id (
         schedule_type, hours_offset,
         email_template_id, sms_template_id,
@@ -659,6 +662,8 @@ export async function getCustomerSequenceSends(
       sentAt: r.sent_at as string,
       emailOk: Boolean(r.email_ok),
       smsOk: Boolean(r.sms_ok),
+      emailStatus: (r.email_status as string | null) ?? null,
+      emailStatusAt: (r.email_status_at as string | null) ?? null,
       sequenceName: (sequence.name as string) ?? '(deleted sequence)',
       scheduleType: (step.schedule_type as SequenceScheduleType) ?? 'before_event',
       hoursOffset: (step.hours_offset as number) ?? 0,
@@ -2051,6 +2056,9 @@ export async function recordSequenceSend(input: {
   signupId: string;
   emailOk: boolean;
   smsOk: boolean;
+  /** Resend message id for the email leg — lets the Resend webhook stamp
+   *  delivered/bounced/opened back onto this row. */
+  emailMessageId?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase()
@@ -2060,11 +2068,58 @@ export async function recordSequenceSend(input: {
       signup_id: input.signupId,
       email_ok: input.emailOk,
       sms_ok: input.smsOk,
+      email_message_id: input.emailMessageId ?? null,
+      // Baseline lifecycle state — the webhook upgrades this as events arrive.
+      email_status: input.emailOk ? 'sent' : null,
+      email_status_at: input.emailOk ? new Date().toISOString() : null,
     });
   // Unique-violation = someone else already wrote it (concurrent cron). Ignore.
   if (error && !error.message.includes('duplicate')) {
     throw new Error(`recordSequenceSend: ${error.message}`);
   }
+}
+
+/** Resolve a sequence_send row from its Resend email message id (webhook match). */
+export async function findSequenceSendByEmailMessageId(
+  messageId: string,
+): Promise<{ id: string; emailStatus: string | null } | null> {
+  if (!messageId || !isSupabaseConfigured()) return null;
+  const { data } = await getSupabase()
+    .from('sequence_sends')
+    .select('id, email_status')
+    .eq('email_message_id', messageId)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: (data as { id: string }).id, emailStatus: (data as { email_status: string | null }).email_status };
+}
+
+// Resend lifecycle rank — never downgrade (out-of-order webhook delivery is
+// allowed, so a late 'delivered' must not clobber an earlier 'opened').
+const EMAIL_STATUS_RANK: Record<string, number> = {
+  sent: 1,
+  delivered: 2,
+  opened: 3,
+  clicked: 4,
+  bounced: 5,
+  complained: 6,
+};
+
+/** Upgrade a sequence_send's email status, never downgrading rank. */
+export async function updateSequenceSendStatus(
+  messageId: string,
+  status: string,
+  statusAt: string,
+): Promise<void> {
+  if (!messageId || !isSupabaseConfigured()) return;
+  const current = await findSequenceSendByEmailMessageId(messageId);
+  if (!current) return;
+  const curRank = current.emailStatus ? EMAIL_STATUS_RANK[current.emailStatus] ?? 0 : 0;
+  const newRank = EMAIL_STATUS_RANK[status] ?? 0;
+  if (newRank <= curRank) return; // don't downgrade / re-write same state
+  await getSupabase()
+    .from('sequence_sends')
+    .update({ email_status: status, email_status_at: statusAt })
+    .eq('id', current.id);
 }
 
 /**

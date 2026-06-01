@@ -24,8 +24,10 @@ import crypto from 'crypto';
 import {
   findSignupByRecoveryMessageId,
   findSignupByAdminSendProviderId,
+  findSequenceSendByEmailMessageId,
   upgradeRecoveryEmailStatus,
   updateAdminSendStatus,
+  updateSequenceSendStatus,
   type AdminSendStatus,
 } from '@/lib/db';
 
@@ -160,8 +162,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, matched: 'adminSend', status: newStatus });
   }
 
-  // Not a tracked send — could be a paid_confirmation, a pre-webhook send,
-  // or a sequence_send (those don't have status tracking yet). Ack so Resend
-  // doesn't retry.
+  // Then try sequence_sends (automated / list-subscribed emails).
+  const seqSend = await findSequenceSendByEmailMessageId(emailId);
+  if (seqSend) {
+    await updateSequenceSendStatus(
+      emailId,
+      newStatus,
+      event.created_at || new Date().toISOString(),
+    );
+    return NextResponse.json({ ok: true, matched: 'sequenceSend', status: newStatus });
+  }
+
+  // Not a tracked send — could be a paid_confirmation or a pre-webhook send.
+  // Ack so Resend doesn't retry.
   return NextResponse.json({ ok: true, matched: false });
 }

@@ -190,6 +190,7 @@ export async function GET(req: Request) {
         const vars = await templateVarsForSignup(signup, webinar);
         let emailOk = false;
         let smsOk = false;
+        let emailMessageId: string | null = null;
 
         if (step.emailTemplateId) {
           const res = await sendEmail({
@@ -198,6 +199,7 @@ export async function GET(req: Request) {
             vars,
           });
           emailOk = res.ok;
+          if (res.ok) emailMessageId = res.id;
           if (emailOk) totals.emailsSent++;
           else totals.failures++;
         }
@@ -219,6 +221,7 @@ export async function GET(req: Request) {
           signupId: signup.id,
           emailOk,
           smsOk,
+          emailMessageId,
         });
 
         stepLog.sent++;

@@ -19,6 +19,7 @@ import {
 import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
 import { CustomerSequences } from '@/components/CustomerSequences';
+import { ResendButton } from '@/components/ResendButton';
 import {
   subscribeCustomerAction,
   unsubscribeCustomerAction,
@@ -42,6 +43,9 @@ type CommsEvent = {
     | 'bounced'
     | 'complained';
   statusAt?: string;
+  /** Template this event sent — drives the Resend button. Omitted for events
+   *  that can't be re-fired (e.g. the internal Telegram alert). */
+  templateId?: string;
 };
 
 function paymentMethodLabel(meta: Record<string, unknown>): string {
@@ -80,6 +84,8 @@ function buildCommsTimeline(
       kind: 'Payment confirmation',
       description: 'Confirmation email + Zoom link',
       ok: true,
+      status: 'sent',
+      templateId: 'paid_confirmation',
     });
   }
 
@@ -92,6 +98,7 @@ function buildCommsTimeline(
       kind: 'Recovery email',
       description: `Status: ${status}`,
       ok: status !== 'failed',
+      templateId: 'payment_recovery',
     });
   }
 
@@ -103,6 +110,8 @@ function buildCommsTimeline(
       kind: 'Recovery SMS',
       description: 'Cart-abandonment text via OneWaySMS',
       ok: true,
+      status: 'sent',
+      templateId: 'payment_recovery',
     });
   }
 
@@ -142,8 +151,11 @@ function buildCommsTimeline(
       kind: 'Admin send',
       description: `Template: ${label}`,
       ok: s.ok !== false,
-      status: s.status,
+      // Fall back to a baseline 'sent' pill when the webhook hasn't (yet)
+      // reported a richer lifecycle status.
+      status: s.status ?? (s.ok !== false ? 'sent' : undefined),
       statusAt: s.statusAt,
+      templateId: s.templateId,
     });
   }
 
@@ -159,9 +171,13 @@ function buildCommsTimeline(
     }
   }
 
-  // Sequence sends (the new generalized engine)
+  // Sequence sends (the new generalized engine). Email legs now carry the
+  // real Resend lifecycle status (delivered/bounced/opened) via the webhook;
+  // until that fires they show a baseline 'sent'. SMS has no delivery webhook,
+  // so it shows 'sent' when the provider accepted it.
   for (const send of sequenceSends) {
     if (send.emailTemplateId) {
+      const emailStatus = (send.emailStatus as CommsEvent['status'] | null) ?? null;
       events.push({
         ts: send.sentAt,
         channel: 'email',
@@ -170,6 +186,9 @@ function buildCommsTimeline(
           ? `Email template: ${send.emailTemplateName}`
           : `Email template: ${send.emailTemplateId}`,
         ok: send.emailOk,
+        status: emailStatus ?? (send.emailOk ? 'sent' : undefined),
+        statusAt: send.emailStatusAt ?? undefined,
+        templateId: send.emailTemplateId,
       });
     }
     if (send.smsTemplateId) {
@@ -181,6 +200,8 @@ function buildCommsTimeline(
           ? `SMS template: ${send.smsTemplateName}`
           : `SMS template: ${send.smsTemplateId}`,
         ok: send.smsOk,
+        status: send.smsOk ? 'sent' : undefined,
+        templateId: send.smsTemplateId,
       });
     }
   }
@@ -436,6 +457,15 @@ export default async function CustomerProfilePage({
                           {ev.kind}
                         </span>
                         {ev.status && <StatusPill status={ev.status} />}
+                        {ev.templateId && (ev.channel === 'email' || ev.channel === 'sms') && (
+                          <span className="ml-auto">
+                            <ResendButton
+                              signupId={customer.id}
+                              channel={ev.channel}
+                              templateId={ev.templateId}
+                            />
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-slate-500">{ev.description}</div>
                       <div className="mt-0.5 text-[11px] text-slate-400">

@@ -147,3 +147,51 @@ export async function bulkSendAction(
   revalidatePath('/admin/customers');
   return { sent, failed, noPhone };
 }
+
+/**
+ * Re-fire a single email/SMS template to one customer — the "Resend" button
+ * on each comms-history event. Records the send into adminSends (with the
+ * Resend message id) so the new attempt shows up in the timeline and picks up
+ * its own delivery status from the webhook.
+ */
+export async function resendCommAction(
+  signupId: string,
+  channel: 'email' | 'sms',
+  templateId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  requireAdmin();
+  if (!templateId) return { ok: false, error: 'No template on this event to resend.' };
+  const signup = await getSignupById(signupId);
+  if (!signup) return { ok: false, error: 'Customer not found.' };
+
+  const vars = await templateVarsForSignup(signup, await getWebinarInfo());
+
+  if (channel === 'email') {
+    const res = await sendEmail({ to: signup.email, templateId, vars });
+    if (res.ok) {
+      await recordAdminSend(signup, {
+        ts: new Date().toISOString(),
+        channel,
+        templateId,
+        ok: true,
+        providerId: res.id,
+      });
+    }
+    revalidatePath(`/admin/customers/${signupId}`);
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
+  }
+
+  if (!signup.phone) return { ok: false, error: 'No phone number on file.' };
+  const res = await sendSms({ to: signup.phone, templateId, vars });
+  if (res.ok) {
+    await recordAdminSend(signup, {
+      ts: new Date().toISOString(),
+      channel,
+      templateId,
+      ok: true,
+      providerId: res.id,
+    });
+  }
+  revalidatePath(`/admin/customers/${signupId}`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
