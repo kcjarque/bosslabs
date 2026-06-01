@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MarkPaidButton } from '@/components/MarkPaidButton';
 
 type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
 type Lead = {
@@ -167,6 +168,9 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
                   <a href={`sms:${l.phone}`} className="flex-1 rounded-md border border-cyan-200 px-2 py-1.5 text-center text-xs font-medium text-cyan-700 hover:bg-cyan-50">💬 Text</a>
                 </div>
               )}
+              <div className="mt-1.5">
+                <MarkPaidButton signupId={l.signupId} endpoint="/api/closer/mark-paid" onDone={load} />
+              </div>
               <CardRemark value={l.remarks} onSave={(t) => saveRemark(l.signupId, t)} />
             </div>
           ))}

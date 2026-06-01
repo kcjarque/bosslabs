@@ -20,6 +20,7 @@ import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
 import { CustomerSequences } from '@/components/CustomerSequences';
 import { CustomerRemarks } from '@/components/CustomerRemarks';
+import { MarkPaidButton } from '@/components/MarkPaidButton';
 import { ResendButton } from '@/components/ResendButton';
 import {
   subscribeCustomerAction,
@@ -398,6 +399,18 @@ export default async function CustomerProfilePage({
               />
             )}
           </dl>
+          {customer.status === 'registered' && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <div className="text-xs uppercase tracking-[0.06em] text-slate-500">Manual payment</div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Abandoned cart — upload the payment screenshot to mark paid. Fires the paid
+                email/SMS + Telegram and records any closer commission.
+              </p>
+              <div className="mt-2">
+                <MarkPaidButton signupId={customer.id} endpoint="/api/admin/mark-paid" />
+              </div>
+            </div>
+          )}
           <CustomerRemarks
             signupId={customer.id}
             initial={typeof meta.remarks === 'string' ? meta.remarks : ''}
