@@ -348,6 +348,82 @@ export async function listCloserCommissions(closerId: string): Promise<CloserCom
   }));
 }
 
+/* ===================================================================== */
+/* ADMIN — assignments overview (every closer's leads, read-only)        */
+/* ===================================================================== */
+
+export type AssignmentLead = {
+  name: string;
+  stage: string;
+  claimedAt: string;
+  closedAt: string | null;
+  commissionCentavos: number | null;
+};
+export type CloserAssignment = {
+  closer: Closer;
+  active: AssignmentLead[];
+  closed: AssignmentLead[];
+  commissionTotalCentavos: number;
+};
+
+/** Every closer with their leads grouped into active/closed + commission
+ *  total — for the admin assignments view. Batched (no per-closer queries). */
+export async function getCloserAssignments(): Promise<{
+  rows: CloserAssignment[];
+  unassignedCount: number;
+}> {
+  if (!isSupabaseConfigured()) return { rows: [], unassignedCount: 0 };
+  const sb = getSupabase();
+  const [closers, leadsRes, commsRes, pool] = await Promise.all([
+    listClosers(),
+    sb.from('closer_leads').select('signup_id, closer_id, stage, claimed_at, closed_at'),
+    sb.from('closer_commissions').select('signup_id, closer_id, amount_centavos'),
+    listUnclaimedAbandoned(),
+  ]);
+  const leadRows = (leadsRes.data ?? []) as Array<{
+    signup_id: string; closer_id: string; stage: string; claimed_at: string; closed_at: string | null;
+  }>;
+
+  const ids = [...new Set(leadRows.map((r) => r.signup_id))];
+  const nameMap = new Map<string, string>();
+  if (ids.length) {
+    const { data: sigs } = await sb.from('signups').select('id, first_name, last_name').in('id', ids);
+    for (const s of (sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>) {
+      nameMap.set(s.id, `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer');
+    }
+  }
+
+  const commByCloser = new Map<string, number>();
+  const commBySignup = new Map<string, number>();
+  for (const c of (commsRes.data ?? []) as Array<{ signup_id: string; closer_id: string; amount_centavos: number }>) {
+    commByCloser.set(c.closer_id, (commByCloser.get(c.closer_id) ?? 0) + c.amount_centavos);
+    commBySignup.set(c.signup_id, c.amount_centavos);
+  }
+
+  const buckets = new Map<string, { active: AssignmentLead[]; closed: AssignmentLead[] }>();
+  for (const c of closers) buckets.set(c.id, { active: [], closed: [] });
+  for (const r of leadRows) {
+    const b = buckets.get(r.closer_id);
+    if (!b) continue;
+    const lead: AssignmentLead = {
+      name: nameMap.get(r.signup_id) ?? 'Customer',
+      stage: r.stage,
+      claimedAt: r.claimed_at,
+      closedAt: r.closed_at,
+      commissionCentavos: commBySignup.get(r.signup_id) ?? null,
+    };
+    (r.stage === 'closed' ? b.closed : b.active).push(lead);
+  }
+
+  const rows = closers.map((closer) => ({
+    closer,
+    active: buckets.get(closer.id)!.active,
+    closed: buckets.get(closer.id)!.closed,
+    commissionTotalCentavos: commByCloser.get(closer.id) ?? 0,
+  }));
+  return { rows, unassignedCount: pool.length };
+}
+
 /**
  * Called from the payment webhook. If this customer's lead was claimed by a
  * closer, mark it closed and record (or top-up, when the OTO lands later) the
