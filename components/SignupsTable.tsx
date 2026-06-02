@@ -59,6 +59,18 @@ function totalPaidCentavos(s: Signup): number | null {
   return s.amountCentavos + otoCentavos;
 }
 
+/** Most recent meaningful activity = latest of signup, payment, or OTO upsell.
+ *  The list sorts by this so a recovered cart that pays days after registering
+ *  surfaces to the top instead of staying buried at its old signup date. */
+function activityAt(s: Signup): string {
+  const meta = s.metadata as
+    | { confirmationSent?: string; otoConfirmed?: string }
+    | undefined;
+  return [s.createdAt, meta?.confirmationSent, meta?.otoConfirmed]
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+    .reduce((latest, v) => (Date.parse(v) > Date.parse(latest) ? v : latest), s.createdAt);
+}
+
 type TemplateRef = { id: string; name: string };
 
 export function SignupsTable({
@@ -186,12 +198,14 @@ export function SignupsTable({
   }
 
   const filtered = useMemo(() => {
-    return initial.filter((s) => {
-      if (!inFilter(s.status, filter)) return false;
-      if (!q) return true;
-      const hay = `${s.firstName} ${s.lastName ?? ''} ${s.email} ${s.phone}`.toLowerCase();
-      return hay.includes(q.toLowerCase());
-    });
+    return initial
+      .filter((s) => {
+        if (!inFilter(s.status, filter)) return false;
+        if (!q) return true;
+        const hay = `${s.firstName} ${s.lastName ?? ''} ${s.email} ${s.phone}`.toLowerCase();
+        return hay.includes(q.toLowerCase());
+      })
+      .sort((a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)));
   }, [initial, filter, q]);
 
   const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
@@ -424,7 +438,7 @@ export function SignupsTable({
                   <span className={methodPillClass(s)}>{paymentMethodLabel(s)}</span>
                 )}
                 <span className="text-[10px] text-slate-400">
-                  {formatRelative(s.createdAt)}
+                  {formatRelative(activityAt(s))}
                 </span>
               </div>
             </div>
@@ -535,7 +549,7 @@ export function SignupsTable({
                   <td>
                     <StatusPill status={s.status} />
                   </td>
-                  <td className="text-slate-500">{formatRelative(s.createdAt)}</td>
+                  <td className="text-slate-500">{formatRelative(activityAt(s))}</td>
                   <td className="text-slate-400">→</td>
                 </tr>
               ))}

@@ -5,13 +5,56 @@
  * the send is a silent no-op (best-effort — never blocks the main flow).
  */
 
-import { getSettings } from './db';
+import { getSettings, saveSettings } from './db';
 
 const BASE = 'https://api.telegram.org/bot';
 
 type TgResponse =
   | { ok: true; result: { message_id: number } }
-  | { ok: false; description: string };
+  | {
+      ok: false;
+      description: string;
+      // Telegram returns this when a basic group is upgraded to a supergroup:
+      // the old chat_id is dead and the new one lives here. We auto-heal on it.
+      parameters?: { migrate_to_chat_id?: number };
+    };
+
+/**
+ * POST a Telegram message, auto-healing the saved chat_id when a group is
+ * upgraded to a supergroup (the chat_id changes; the old one starts failing).
+ * On that specific error Telegram hands back the new id — we persist it and
+ * retry once so a migration never silently drops notifications again.
+ */
+async function sendWithMigrationRetry(
+  token: string,
+  chatId: string,
+  text: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const post = (cid: string) =>
+    fetch(`${BASE}${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: cid,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    }).then((r) => r.json() as Promise<TgResponse>);
+
+  let json = await post(chatId);
+  if (!json.ok && json.parameters?.migrate_to_chat_id) {
+    const newId = String(json.parameters.migrate_to_chat_id);
+    console.warn(`[telegram] group upgraded to supergroup ${newId} — updating chat_id + retrying`);
+    await saveSettings({ telegramChatId: newId }).catch(() => {});
+    json = await post(newId);
+  }
+  if (!json.ok) {
+    console.warn('[telegram] sendMessage failed:', json.description);
+    return { ok: false, reason: json.description };
+  }
+  return { ok: true };
+}
 
 /**
  * Send a Telegram message to the configured group chat.
@@ -31,23 +74,7 @@ export async function sendTelegram(
       return { ok: false, reason: 'telegram not configured' };
     }
 
-    const res = await fetch(`${BASE}${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    });
-
-    const json = (await res.json()) as TgResponse;
-    if (!json.ok) {
-      console.warn('[telegram] sendMessage failed:', json.description);
-      return { ok: false, reason: json.description };
-    }
-    return { ok: true };
+    return await sendWithMigrationRetry(token, chatId, text);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Network error';
     console.warn('[telegram] sendMessage error:', msg);
@@ -70,14 +97,24 @@ export async function sendTelegramPhoto(
     const chatId = settings.telegramChatId;
     if (!token || !chatId) return { ok: false, reason: 'telegram not configured' };
 
-    const form = new FormData();
-    form.append('chat_id', chatId);
-    form.append('caption', caption);
-    form.append('parse_mode', 'HTML');
-    form.append('photo', new Blob([bytes]), filename);
+    const post = (cid: string) => {
+      const form = new FormData();
+      form.append('chat_id', cid);
+      form.append('caption', caption);
+      form.append('parse_mode', 'HTML');
+      form.append('photo', new Blob([bytes]), filename);
+      return fetch(`${BASE}${token}/sendPhoto`, { method: 'POST', body: form }).then(
+        (r) => r.json() as Promise<TgResponse>,
+      );
+    };
 
-    const res = await fetch(`${BASE}${token}/sendPhoto`, { method: 'POST', body: form });
-    const json = (await res.json()) as TgResponse;
+    let json = await post(chatId);
+    if (!json.ok && json.parameters?.migrate_to_chat_id) {
+      const newId = String(json.parameters.migrate_to_chat_id);
+      console.warn(`[telegram] group upgraded to supergroup ${newId} — updating chat_id + retrying (photo)`);
+      await saveSettings({ telegramChatId: newId }).catch(() => {});
+      json = await post(newId);
+    }
     if (!json.ok) {
       console.warn('[telegram] sendPhoto failed:', json.description);
       return { ok: false, reason: json.description };

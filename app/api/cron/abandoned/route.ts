@@ -42,6 +42,7 @@ export async function GET(req: Request) {
   });
 
   let sent = 0;
+  let failed = 0;
   for (const s of abandoned) {
     const fullName = `${s.firstName} ${s.lastName ?? ''}`.trim();
     const amt = s.amountCentavos
@@ -49,20 +50,11 @@ export async function GET(req: Request) {
       : '₱0';
     const ageMin = Math.round((now - new Date(s.createdAt).getTime()) / 60000);
 
-    // Mark notified BEFORE sending — a retried cron run that arrives
-    // mid-flight sees the marker and bails cleanly. Worst case: we miss
-    // a notification (acceptable). Better than spam.
-    await updateSignup(s.id, {
-      metadata: {
-        ...(s.metadata ?? {}),
-        abandonedNotified: new Date().toISOString(),
-      },
-    });
-
-    // Awaited so Vercel doesn't kill the fetch mid-flight when the
-    // function returns. Plus the iteration cadence keeps us under
-    // Telegram's per-chat rate limit (~1 message/sec).
-    await sendTelegram(
+    // Send FIRST, mark notified only on success. If the send fails (e.g.
+    // Telegram outage / the group migrated mid-run), we leave the marker
+    // unset so the next cron run retries — no more silent permanent loss.
+    // Awaited so Vercel doesn't kill the fetch when the function returns.
+    const res = await sendTelegram(
       `🚨 <b>Abandoned checkout</b>\n\n` +
         `<b>${esc(fullName)}</b>\n` +
         `${esc(s.email)}\n` +
@@ -70,7 +62,20 @@ export async function GET(req: Request) {
         `Amount: <b>${amt}</b>${s.bumped ? ' (with bump)' : ''}\n` +
         `Stuck for ${ageMin} min`,
     );
-    sent++;
+
+    if (res.ok) {
+      await updateSignup(s.id, {
+        metadata: {
+          ...(s.metadata ?? {}),
+          abandonedNotified: new Date().toISOString(),
+        },
+      });
+      sent++;
+    } else {
+      failed++;
+      console.warn('[cron/abandoned] send failed, will retry next run:', s.id, res.reason);
+    }
+
     // Pace to ~1 msg/sec per chat to stay under Telegram's rate limit
     // when a batch of multiple abandoned checkouts is processed.
     if (abandoned.length > 1) {
@@ -83,5 +88,6 @@ export async function GET(req: Request) {
     checked: all.length,
     abandoned: abandoned.length,
     sent,
+    failed,
   });
 }
