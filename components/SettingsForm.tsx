@@ -160,7 +160,7 @@ export function SettingsForm({
               className="input"
               value={values.resendFromEmail}
               onChange={(e) => update('resendFromEmail', e.target.value)}
-              placeholder="hello@bosslabs.ai"
+              placeholder="bosslabs@conexmedia.ph"
             />
           </Field>
           <Field label="From name">

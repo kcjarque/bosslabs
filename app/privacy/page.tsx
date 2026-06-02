@@ -67,8 +67,8 @@ export default function PrivacyPage() {
         <p>
           As a Philippine resident, you have the right to access, correct, or
           delete your personal data. To exercise these rights, email{' '}
-          <a className="text-cyan-400 hover:underline" href="mailto:hello@bosslabs.ai">
-            hello@bosslabs.ai
+          <a className="text-cyan-400 hover:underline" href="mailto:bosslabs@conexmedia.ph">
+            bosslabs@conexmedia.ph
           </a>{' '}
           and we'll respond within 15 working days.
         </p>
@@ -93,8 +93,8 @@ export default function PrivacyPage() {
       <Section title="Contact">
         <p>
           Questions about this policy? Email{' '}
-          <a className="text-cyan-400 hover:underline" href="mailto:hello@bosslabs.ai">
-            hello@bosslabs.ai
+          <a className="text-cyan-400 hover:underline" href="mailto:bosslabs@conexmedia.ph">
+            bosslabs@conexmedia.ph
           </a>
           . We answer all privacy-related questions within 5 working days.
         </p>

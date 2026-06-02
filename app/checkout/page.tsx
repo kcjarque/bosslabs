@@ -11,7 +11,7 @@ export default function CheckoutPage({
   const failed = searchParams.status === 'failed';
   return (
     <>
-      <Nav ctaLabel="Need help?" ctaHref="mailto:hello@bosslabs.ai" />
+      <Nav ctaLabel="Need help?" ctaHref="mailto:bosslabs@conexmedia.ph" />
       <main>
         {failed && (
           <div className="border-y border-red-500/30 bg-red-500/10">

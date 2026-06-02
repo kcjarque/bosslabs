@@ -104,8 +104,8 @@ function MinimalFooter() {
           <span aria-hidden className="text-ink-300/60">·</span>
           <a href="/contact" className="hover:text-ink-100">Contact</a>
           <span aria-hidden className="text-ink-300/60">·</span>
-          <a href="mailto:hello@bosslabs.ai" className="hover:text-ink-100">
-            hello@bosslabs.ai
+          <a href="mailto:bosslabs@conexmedia.ph" className="hover:text-ink-100">
+            bosslabs@conexmedia.ph
           </a>
         </nav>
 

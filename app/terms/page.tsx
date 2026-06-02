@@ -32,8 +32,8 @@ export default function TermsPage() {
         <p>
           Show up to the webinar (live or replay), apply the frameworks to your
           business, and if it genuinely doesn't apply within 7 days, email us at{' '}
-          <a className="text-cyan-400 hover:underline" href="mailto:hello@bosslabs.ai">
-            hello@bosslabs.ai
+          <a className="text-cyan-400 hover:underline" href="mailto:bosslabs@conexmedia.ph">
+            bosslabs@conexmedia.ph
           </a>
           . We'll refund you in full — no questions, no forms, no friction.
         </p>

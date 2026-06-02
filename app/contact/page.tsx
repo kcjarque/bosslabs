@@ -8,7 +8,7 @@ export default function ContactPage() {
     <LegalLayout eyebrow="Get in touch" title="Send us a message.">
       <Section title="Fastest way">
         <p>
-          Email <a className="text-cyan-400 hover:underline" href="mailto:hello@bosslabs.ai">hello@bosslabs.ai</a>. We answer within
+          Email <a className="text-cyan-400 hover:underline" href="mailto:bosslabs@conexmedia.ph">bosslabs@conexmedia.ph</a>. We answer within
           one business day — usually faster.
         </p>
         <p>

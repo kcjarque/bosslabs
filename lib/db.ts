@@ -165,9 +165,9 @@ const DEFAULT_SETTINGS: Settings = {
   webinarStartsAtIso: '',
   emailProvider: 'resend',
   resendApiKey: '',
-  resendFromEmail: 'hello@bosslabs.ai',
+  resendFromEmail: 'bosslabs@conexmedia.ph',
   resendFromName: 'BOSSLABS AI',
-  resendReplyTo: 'hello@bosslabs.ai',
+  resendReplyTo: 'bosslabs@conexmedia.ph',
   // OneWaySMS PH default endpoint. Verified reachable from Vercel egress
   // (port 10001 is open + returns proper -100 / message-id responses).
   // The `gateway.onewaysms.com.ph` variant some old docs cite is a
