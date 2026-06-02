@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Settings, EventModel } from '@/lib/db';
+import { SesTestPanel } from '@/components/SesTestPanel';
 
 export function SettingsForm({
   initial,
@@ -141,6 +142,7 @@ export function SettingsForm({
             <option value="ses">Amazon SES</option>
           </select>
         </Field>
+        <SesTestPanel />
         <Field label="Resend API Key" hint="re_… · only used when provider is Resend · blank to keep current">
           <input
             type="password"
