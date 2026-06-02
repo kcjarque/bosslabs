@@ -28,7 +28,11 @@ export default async function CloserSettingsPage() {
 
       <ClosersTabs active="settings" />
 
-      <CloserSettingsForm initialHours={settings.closerClaimHoldHours} />
+      <CloserSettingsForm
+        initialHours={settings.closerClaimHoldHours}
+        initialWorkStart={settings.closerWorkStartHour}
+        initialWorkEnd={settings.closerWorkEndHour}
+      />
 
       <CloserManager closers={closers} />
     </div>

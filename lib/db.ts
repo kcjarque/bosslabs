@@ -148,6 +148,9 @@ export type Settings = {
   adminEmail: string;
   /* Closers — hours a claimed lead is held before auto-release to the pool */
   closerClaimHoldHours: number;
+  /* Closer working hours (Asia/Manila, 24h) — the claim timer only counts down within this window */
+  closerWorkStartHour: number;
+  closerWorkEndHour: number;
   /* Multi-event */
   /** Which event new signups attach to. Null = no active event (signups
    *  not tagged with an event). Settable from /admin/settings. */
@@ -184,6 +187,8 @@ const DEFAULT_SETTINGS: Settings = {
   telegramChatId: '',
   adminEmail: '',
   closerClaimHoldHours: 6,
+  closerWorkStartHour: 9,
+  closerWorkEndHour: 20,
   activeEventId: null,
 };
 
@@ -268,6 +273,8 @@ type SettingsRow = {
   telegram_chat_id: string;
   admin_email: string;
   closer_claim_hold_hours: number | string;
+  closer_work_start_hour: number | string;
+  closer_work_end_hour: number | string;
   active_event_id: string | null;
 };
 
@@ -296,6 +303,8 @@ function rowToSettings(r: SettingsRow): Settings {
     telegramChatId: r.telegram_chat_id ?? '',
     adminEmail: r.admin_email ?? '',
     closerClaimHoldHours: r.closer_claim_hold_hours != null ? Number(r.closer_claim_hold_hours) : 6,
+    closerWorkStartHour: r.closer_work_start_hour != null ? Number(r.closer_work_start_hour) : 9,
+    closerWorkEndHour: r.closer_work_end_hour != null ? Number(r.closer_work_end_hour) : 20,
     activeEventId: r.active_event_id ?? null,
   };
 }
@@ -325,6 +334,8 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.telegramChatId !== undefined) out.telegram_chat_id = s.telegramChatId;
   if (s.adminEmail !== undefined) out.admin_email = s.adminEmail;
   if (s.closerClaimHoldHours !== undefined) out.closer_claim_hold_hours = s.closerClaimHoldHours;
+  if (s.closerWorkStartHour !== undefined) out.closer_work_start_hour = s.closerWorkStartHour;
+  if (s.closerWorkEndHour !== undefined) out.closer_work_end_hour = s.closerWorkEndHour;
   if (s.activeEventId !== undefined) out.active_event_id = s.activeEventId;
   return out;
 }

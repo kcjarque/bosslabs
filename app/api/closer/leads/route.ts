@@ -16,14 +16,16 @@ export const runtime = 'nodejs';
 export async function GET() {
   const closer = await getCloserSession();
   if (!closer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const holdHours = (await getSettings()).closerClaimHoldHours || 6;
-  // Free up any claims held past the window BEFORE reading the board.
-  await releaseExpiredClaims(holdHours);
+  const settings = await getSettings();
+  const holdHours = settings.closerClaimHoldHours || 6;
+  const work = { startHour: settings.closerWorkStartHour ?? 9, endHour: settings.closerWorkEndHour ?? 20 };
+  // Free up any claims past the WORKING-HOUR window BEFORE reading the board.
+  await releaseExpiredClaims(holdHours, work);
   const [pool, leads] = await Promise.all([
     listUnclaimedAbandoned(),
-    listCloserLeads(closer.id, holdHours),
+    listCloserLeads(closer.id, holdHours, work),
   ]);
-  return NextResponse.json({ pool, leads, holdHours });
+  return NextResponse.json({ pool, leads, holdHours, workStart: work.startHour, workEnd: work.endHour });
 }
 
 export async function POST(req: Request) {

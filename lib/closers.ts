@@ -187,28 +187,67 @@ export type CloserLead = {
   /** Free-text remark — shared store with the order-bump board + customer
    *  profile (signup metadata.remarks). */
   remarks: string;
-  /** When this claim auto-releases back to the pool (null once closed). */
-  expiresAt: string | null;
+  /** Working minutes left before this claim auto-releases (null once closed).
+   *  Counts only the closer's working hours — pauses overnight. */
+  remainingWorkingMin: number | null;
 };
 
+/** Working-hours window in Asia/Manila local time (24h). */
+export type WorkHours = { startHour: number; endHour: number };
+
+const MANILA_OFFSET_MS = 8 * 3600_000; // UTC+8, no DST
+const DAY_MS = 24 * 3600_000;
+
 /**
- * Release every claim that's been held past the hold window (and isn't
- * closed) back to the pool. Lazy-expiry: called whenever the board loads, so
- * a lead a closer sat on too long becomes available to everyone again.
+ * Minutes between two instants that fall inside the daily working window
+ * [startHour, endHour) in Manila. Walks day-by-day and sums each day's
+ * overlap. If the window is invalid (start >= end) it degrades to wall-clock.
  */
-export async function releaseExpiredClaims(holdHours: number): Promise<number> {
-  if (!isSupabaseConfigured() || !(holdHours > 0)) return 0;
-  const cutoff = new Date(Date.now() - holdHours * 3600_000).toISOString();
-  const { data } = await getSupabase()
-    .from('closer_leads')
-    .delete()
-    .neq('stage', 'closed')
-    .lt('claimed_at', cutoff)
-    .select('id');
-  return data?.length ?? 0;
+export function workingMinutesBetween(startMs: number, endMs: number, work: WorkHours): number {
+  if (endMs <= startMs) return 0;
+  const openMin = work.startHour * 60;
+  const closeMin = work.endHour * 60;
+  if (!(closeMin > openMin)) return Math.floor((endMs - startMs) / 60000); // degrade to wall-clock
+  const s = startMs + MANILA_OFFSET_MS;
+  const e = endMs + MANILA_OFFSET_MS;
+  let total = 0;
+  for (let day = Math.floor(s / DAY_MS) * DAY_MS; day < e; day += DAY_MS) {
+    const segStart = Math.max(s, day + openMin * 60000);
+    const segEnd = Math.min(e, day + closeMin * 60000);
+    if (segEnd > segStart) total += (segEnd - segStart) / 60000;
+  }
+  return Math.floor(total);
 }
 
-export async function listCloserLeads(closerId: string, holdHours = 6): Promise<CloserLead[]> {
+/** Working minutes left before a claim (claimed at claimedMs) expires. */
+function remainingWorkingMin(claimedMs: number, holdHours: number, work: WorkHours): number {
+  return holdHours * 60 - workingMinutesBetween(claimedMs, Date.now(), work);
+}
+
+/**
+ * Release every claim whose WORKING-HOUR hold window has elapsed (and isn't
+ * closed) back to the pool. The cutoff isn't a simple timestamp (off-hours
+ * pause the clock), so we compute per lead — closer_leads is tiny. Lazy-expiry:
+ * called whenever the board loads.
+ */
+export async function releaseExpiredClaims(holdHours: number, work: WorkHours): Promise<number> {
+  if (!isSupabaseConfigured() || !(holdHours > 0)) return 0;
+  const sb = getSupabase();
+  const { data } = await sb.from('closer_leads').select('id, claimed_at').neq('stage', 'closed');
+  const rows = (data ?? []) as Array<{ id: string; claimed_at: string }>;
+  const expired = rows
+    .filter((r) => remainingWorkingMin(new Date(r.claimed_at).getTime(), holdHours, work) <= 0)
+    .map((r) => r.id);
+  if (expired.length === 0) return 0;
+  const { data: del } = await sb.from('closer_leads').delete().in('id', expired).select('id');
+  return del?.length ?? 0;
+}
+
+export async function listCloserLeads(
+  closerId: string,
+  holdHours = 6,
+  work: WorkHours = { startHour: 9, endHour: 20 },
+): Promise<CloserLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
   const { data: leads } = await sb
@@ -240,10 +279,10 @@ export async function listCloserLeads(closerId: string, holdHours = 6): Promise<
       closedAt: r.closed_at,
       commissionCentavos: commMap.get(r.signup_id) ?? null,
       remarks: meta.remarks ?? '',
-      expiresAt:
+      remainingWorkingMin:
         r.stage === 'closed'
           ? null
-          : new Date(new Date(r.claimed_at).getTime() + holdHours * 3600_000).toISOString(),
+          : Math.max(0, remainingWorkingMin(new Date(r.claimed_at).getTime(), holdHours, work)),
     };
   });
 }
