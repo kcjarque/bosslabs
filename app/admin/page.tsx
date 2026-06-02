@@ -7,7 +7,7 @@ import {
   getVisitBuckets,
   type Signup,
 } from '@/lib/db';
-import { formatPHP, OFFER } from '@/lib/config';
+import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { DailyChart } from '@/components/DailyChart';
 import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
 
@@ -315,10 +315,15 @@ export default async function AdminDashboard({
   const fmtRate = (pct: number) => (pct > 100 || !Number.isFinite(pct) ? '—' : `${pct.toFixed(1)}%`);
 
   const recent = signups.slice(0, 8);
+  // Email channel reflects the active provider. SES auth lives in env vars
+  // (checked directly so the dashboard doesn't pull in the AWS SDK).
+  const emailIsSes = settings.emailProvider === 'ses';
+  const sesConfigured = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+  const emailChannelName = emailIsSes ? 'Email · Amazon SES' : 'Email · Resend';
   const channelStatus = {
-    email: !!settings.resendApiKey,
+    email: emailIsSes ? sesConfigured : !!settings.resendApiKey,
     sms: !!settings.onewaysmsUsername && !!settings.onewaysmsPassword,
-    messenger: !!settings.messengerGroupUrl,
+    facebook: !!FACEBOOK_GROUP_URL,
   };
 
   return (
@@ -683,7 +688,7 @@ export default async function AdminDashboard({
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <ChannelBadge
-            name="Email · Resend"
+            name={emailChannelName}
             ok={channelStatus.email}
             okLabel="Live"
             offLabel="Demo mode"
@@ -695,9 +700,9 @@ export default async function AdminDashboard({
             offLabel="Demo mode"
           />
           <ChannelBadge
-            name="Messenger group"
-            ok={channelStatus.messenger}
-            okLabel="Configured"
+            name="Facebook group"
+            ok={channelStatus.facebook}
+            okLabel="Live"
             offLabel="Not set"
           />
         </div>
