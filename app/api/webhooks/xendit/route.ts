@@ -23,7 +23,7 @@ import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
-import { closeLeadAndRecordCommission } from '@/lib/closers';
+import { closeLeadAndRecordCommission, getCloserRecoveredSignupIds } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -188,8 +188,19 @@ async function handleMainPaid(event: XenditEvent) {
   // Running tally of paid orders (includes this one — status was set to
   // 'paid' above). Best-effort; never blocks the alert.
   const orders = await countPaidOrders();
+  // Is THIS sale a recovery? (abandoned-then-paid — paid a later Manila day
+  // than signup — OR a closer-claimed lead, whose commission was just recorded
+  // above.) If so, celebrate it differently to spotlight the team's win.
+  const manilaDay = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
+  const closerRecoveredIds = await getCloserRecoveredSignupIds();
+  const isRecovered =
+    closerRecoveredIds.has(signup.id) ||
+    manilaDay(new Date()) > manilaDay(new Date(signup.createdAt));
+  const header = isRecovered
+    ? `🎉 <b>New Recovered Lead — Paid! Good job Team!</b>`
+    : `💰 <b>New payment!</b>`;
   await sendTelegram(
-    `💰 <b>New payment!</b>\n\n` +
+    `${header}\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
