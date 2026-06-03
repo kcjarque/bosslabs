@@ -23,7 +23,7 @@ import { verifyWebhook } from '@/lib/xendit';
 import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
-import { closeLeadAndRecordCommission, getCloserRecoveredSignupIds } from '@/lib/closers';
+import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -188,14 +188,13 @@ async function handleMainPaid(event: XenditEvent) {
   // Running tally of paid orders (includes this one — status was set to
   // 'paid' above). Best-effort; never blocks the alert.
   const orders = await countPaidOrders();
-  // Is THIS sale a recovery? (abandoned-then-paid — paid a later Manila day
-  // than signup — OR a closer-claimed lead, whose commission was just recorded
-  // above.) If so, celebrate it differently to spotlight the team's win.
+  // Is THIS sale a recovery? (a closer claimed the lead, OR it was
+  // abandoned-then-paid — paid a later Manila day than signup.) If so,
+  // celebrate it + credit the closer who worked it.
   const manilaDay = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
-  const closerRecoveredIds = await getCloserRecoveredSignupIds();
+  const closer = await getCloserForSignup(signup.id);
   const isRecovered =
-    closerRecoveredIds.has(signup.id) ||
-    manilaDay(new Date()) > manilaDay(new Date(signup.createdAt));
+    !!closer || manilaDay(new Date()) > manilaDay(new Date(signup.createdAt));
   const header = isRecovered
     ? `🎉 <b>New Recovered Lead — Paid! Good job Team!</b>`
     : `💰 <b>New payment!</b>`;
@@ -205,6 +204,7 @@ async function handleMainPaid(event: XenditEvent) {
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
+    (closer ? `Confirmed by: <b>${esc(closer.name)}</b>\n` : '') +
     `Invoice: <code>${externalId}</code>\n` +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
       (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : ''),

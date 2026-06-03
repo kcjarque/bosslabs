@@ -157,6 +157,27 @@ export async function getCloserRecoveredSignupIds(): Promise<Set<string>> {
   return new Set(((data ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
 }
 
+/** The closer who claimed this signup (from closer_leads), or null if the
+ *  sale wasn't worked by a closer. Used to credit the closer on alerts. */
+export async function getCloserForSignup(
+  signupId: string,
+): Promise<{ id: string; name: string; username: string } | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  const { data: lead } = await sb
+    .from('closer_leads')
+    .select('closer_id')
+    .eq('signup_id', signupId)
+    .maybeSingle();
+  if (!lead) return null;
+  const { data: closer } = await sb
+    .from('closer_accounts')
+    .select('id, name, username')
+    .eq('id', (lead as { closer_id: string }).closer_id)
+    .maybeSingle();
+  return closer ? (closer as { id: string; name: string; username: string }) : null;
+}
+
 /** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
  *  No phone is returned — the pool is intentionally private until claimed. */
 export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
