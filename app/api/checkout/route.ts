@@ -255,7 +255,8 @@ export async function POST(req: Request) {
         `📱 ${body.mobile ? esc(body.mobile) : '—'}\n` +
         `Promo: <code>${esc(promoApplied.code)}</code>\n` +
         `Amount: <b>₱0</b>${bumped ? ' (with bump)' : ''}\n` +
-        `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,
+        `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
+          (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : ''),
       );
 
       return NextResponse.json({

@@ -115,7 +115,8 @@ export async function markAbandonedCartPaid(
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
     `Confirmed by: <b>${esc(opts.paidBy ?? 'admin')}</b>${opts.method ? ` · ${esc(opts.method)}` : ''}\n` +
-    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`;
+    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
+      (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
   if (opts.proofBytes) {
     await sendTelegramPhoto(opts.proofBytes, opts.proofFilename || 'payment-proof.jpg', caption);
   } else {

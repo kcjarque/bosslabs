@@ -195,7 +195,8 @@ async function handleMainPaid(event: XenditEvent) {
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
     `Invoice: <code>${externalId}</code>\n` +
-    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today`,
+    `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
+      (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : ''),
   );
 
   return NextResponse.json({ ok: true, emailOk: emailRes.ok });

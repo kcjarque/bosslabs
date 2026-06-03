@@ -21,6 +21,7 @@ import path from 'path';
 import crypto from 'crypto';
 import * as React from 'react';
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { isRecoveredPaid, paymentDayOf } from './recovered';
 
 /**
  * Request-scoped caching wrapper.
@@ -979,8 +980,8 @@ export type PageViewCounts = {
  * zeros if Supabase isn't configured or a query errors, so it can never
  * block (or break) a payment notification.
  */
-export async function countPaidOrders(): Promise<{ total: number; today: number }> {
-  if (!isSupabaseConfigured()) return { total: 0, today: 0 };
+export async function countPaidOrders(): Promise<{ total: number; today: number; recoveredToday: number }> {
+  if (!isSupabaseConfigured()) return { total: 0, today: 0, recoveredToday: 0 };
   try {
     const sb = getSupabase();
     const { count: total } = await sb
@@ -994,9 +995,23 @@ export async function countPaidOrders(): Promise<{ total: number; today: number 
       .select('id', { count: 'exact', head: true })
       .eq('status', 'paid')
       .gte('created_at', `${todayStr}T00:00:00+08:00`);
-    return { total: total ?? 0, today: today ?? 0 };
+    // Recovered-today = payments that ARRIVED today (confirmationSent) from an
+    // earlier signup — abandoned-then-paid, or closer-claimed-then-paid. These
+    // sit OUTSIDE the created-today "today" count (their signup day is past),
+    // so they compose: today + recoveredToday = all payments received today.
+    const [{ data: comms }, { data: paidRows }] = await Promise.all([
+      sb.from('closer_commissions').select('signup_id'),
+      sb.from('signups').select('id, status, created_at, metadata').in('status', ['paid', 'attended']),
+    ]);
+    const closerIds = new Set(((comms ?? []) as { signup_id: string }[]).map((c) => c.signup_id));
+    let recoveredToday = 0;
+    for (const r of (paidRows ?? []) as Array<{ id: string; status: SignupStatus; created_at: string; metadata: Record<string, unknown> | null }>) {
+      const s = { id: r.id, status: r.status, createdAt: r.created_at, metadata: r.metadata ?? undefined };
+      if (paymentDayOf(s) === todayStr && isRecoveredPaid(s, closerIds)) recoveredToday++;
+    }
+    return { total: total ?? 0, today: today ?? 0, recoveredToday };
   } catch {
-    return { total: 0, today: 0 };
+    return { total: 0, today: 0, recoveredToday: 0 };
   }
 }
 
