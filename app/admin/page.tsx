@@ -276,37 +276,31 @@ export default async function AdminDashboard({
   const sFunnelEntrants = scoped.filter((s) => s.source === 'paid').length;
   const sConversion = sFunnelEntrants > 0 ? (sPaid.length / sFunnelEntrants) * 100 : 0;
 
-  // Recovered = abandoned-then-paid or closer-claimed sales, scoped by the
-  // PAYMENT day (these buyers signed up earlier, so signup-date scoping would
-  // miss them — same attribution the chart uses).
-  const sRecoveredList = signups.filter((s) => {
-    if (!isRecoveredPaid(s, closerRecoveredIds)) return false;
+  // All cash RECEIVED in the period, scoped by PAYMENT day, then PARTITIONED
+  // into direct vs recovered so the two never overlap:
+  //   - recovered = closer-claimed OR abandoned-then-paid (paid a later day
+  //     than signup). A closer-claimed sale was, by definition, abandoned
+  //     first, so it counts ONLY as recovered — never as a paid ticket.
+  //   - direct = everything else (paid in the same session, never abandoned).
+  // Paid tickets (direct) + Recovered = every payment, each counted once, so
+  // Revenue = direct + recovered with no double count.
+  const revOf = (s: Signup) => {
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    return (s.amountCentavos ?? 0) + otoExtra;
+  };
+  const sPaidByPaymentList = signups.filter((s) => {
+    if (s.status !== 'paid' && s.status !== 'attended') return false;
     if (!dashRange) return true; // all time
     const cs = (s.metadata as { confirmationSent?: string } | undefined)?.confirmationSent;
     const payMs = new Date(cs ?? s.createdAt).getTime();
     return payMs >= dashRange.startMs && payMs <= rangeEnd;
   });
-  const sRecoveredRevenueCentavos = sRecoveredList.reduce((sum, s) => {
-    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
-    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-    return sum + (s.amountCentavos ?? 0) + otoExtra;
-  }, 0);
-
-  // Revenue = all cash RECEIVED in the period (scoped by PAYMENT day), so
-  // recovered sales (signed up earlier, paid in-period) are folded into the
-  // total — each payment counted exactly once (no double count with the
-  // cohort-scoped numbers above).
-  const sRevenueByPaymentCentavos = signups.reduce((sum, s) => {
-    if (s.status !== 'paid' && s.status !== 'attended') return sum;
-    if (dashRange) {
-      const cs = (s.metadata as { confirmationSent?: string } | undefined)?.confirmationSent;
-      const payMs = new Date(cs ?? s.createdAt).getTime();
-      if (payMs < dashRange.startMs || payMs > rangeEnd) return sum;
-    }
-    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
-    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-    return sum + (s.amountCentavos ?? 0) + otoExtra;
-  }, 0);
+  const sRecoveredList = sPaidByPaymentList.filter((s) => isRecoveredPaid(s, closerRecoveredIds));
+  const sDirectList = sPaidByPaymentList.filter((s) => !isRecoveredPaid(s, closerRecoveredIds));
+  const sRecoveredRevenueCentavos = sRecoveredList.reduce((sum, s) => sum + revOf(s), 0);
+  const sDirectRevenueCentavos = sDirectList.reduce((sum, s) => sum + revOf(s), 0);
+  const sRevenueByPaymentCentavos = sDirectRevenueCentavos + sRecoveredRevenueCentavos;
 
   // Last-N-hours splits — broken out by paid vs registered for actual signal.
   const last24Paid = within(24, (s) => s.status === 'paid');
@@ -434,11 +428,11 @@ export default async function AdminDashboard({
         />
         <StatCard
           label="Paid tickets"
-          value={sPaid.length.toString()}
+          value={sDirectList.length.toString()}
           sub={
             dashRange
-              ? `in ${dashRange.label}`
-              : `+${last24Paid} in 24h · +${last7dPaid} in 7d`
+              ? `direct · in ${dashRange.label}`
+              : `direct · +${last24Paid} in 24h`
           }
           tone="green"
         />
