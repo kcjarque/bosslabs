@@ -292,6 +292,22 @@ export default async function AdminDashboard({
     return sum + (s.amountCentavos ?? 0) + otoExtra;
   }, 0);
 
+  // Revenue = all cash RECEIVED in the period (scoped by PAYMENT day), so
+  // recovered sales (signed up earlier, paid in-period) are folded into the
+  // total — each payment counted exactly once (no double count with the
+  // cohort-scoped numbers above).
+  const sRevenueByPaymentCentavos = signups.reduce((sum, s) => {
+    if (s.status !== 'paid' && s.status !== 'attended') return sum;
+    if (dashRange) {
+      const cs = (s.metadata as { confirmationSent?: string } | undefined)?.confirmationSent;
+      const payMs = new Date(cs ?? s.createdAt).getTime();
+      if (payMs < dashRange.startMs || payMs > rangeEnd) return sum;
+    }
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    return sum + (s.amountCentavos ?? 0) + otoExtra;
+  }, 0);
+
   // Last-N-hours splits — broken out by paid vs registered for actual signal.
   const last24Paid = within(24, (s) => s.status === 'paid');
   const last24Reg = within(24, (s) => s.status === 'registered');
@@ -408,8 +424,12 @@ export default async function AdminDashboard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
           label="Revenue"
-          value={formatPHP(sRevenueCentavos)}
-          sub={`${sPaid.length} paid · AOV ${formatPHP(Math.round(sAovPhp * 100))}`}
+          value={formatPHP(sRevenueByPaymentCentavos)}
+          sub={
+            sRecoveredRevenueCentavos > 0
+              ? `incl. ${formatPHP(sRecoveredRevenueCentavos)} recovered`
+              : `${sPaid.length} paid · AOV ${formatPHP(Math.round(sAovPhp * 100))}`
+          }
           tone="green"
         />
         <StatCard
