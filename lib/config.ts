@@ -375,6 +375,17 @@ export const MESSENGER_GROUP_URL =
 export const FACEBOOK_GROUP_URL =
   process.env.NEXT_PUBLIC_FACEBOOK_GROUP_URL || 'https://www.facebook.com/share/g/18iYKmoNPc/';
 
+/* Monitor recipients — every sequence/drip email also gets sent to these so
+ * the team can see exactly what registrants receive, for ANY event, without
+ * being fake signups (which would pollute paid/abandoned/revenue metrics).
+ * One copy per step fire, email only. Override via env (comma-separated). */
+export const MONITOR_EMAILS = (
+  process.env.DRIP_MONITOR_EMAILS || 'kylejarque@gmail.com,michaelbmanago@gmail.com'
+)
+  .split(',')
+  .map((e) => e.trim())
+  .filter(Boolean);
+
 export function formatPHP(centavos: number) {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',

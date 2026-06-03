@@ -44,6 +44,7 @@ import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { verifyCronAuth } from '@/lib/cron';
+import { MONITOR_EMAILS } from '@/lib/config';
 
 export const runtime = 'nodejs';
 // Cron route — always dynamic. Auth is read via verifyCronAuth() (a helper),
@@ -230,6 +231,24 @@ export async function GET(req: Request) {
 
         stepLog.sent++;
         if (step.emailTemplateId && !emailOk) stepLog.failed++;
+      }
+
+      // Monitor copy — one email per step fire so the team sees exactly what
+      // this event's drip looks like. Email only; uses the sequence's event so
+      // the Zoom link etc. resolve. Best-effort — never blocks real sends, and
+      // monitors are NOT signups so paid/abandoned/revenue stay clean.
+      if (MONITOR_EMAILS.length > 0 && step.emailTemplateId) {
+        for (const monitorEmail of MONITOR_EMAILS) {
+          try {
+            const vars = await templateVarsForSignup(
+              { firstName: 'Team', lastName: '(monitor)', email: monitorEmail, phone: '', eventId: sequence.eventId ?? null },
+              webinar,
+            );
+            await sendEmail({ to: monitorEmail, templateId: step.emailTemplateId, vars });
+          } catch {
+            // ignore — monitoring must never affect the real drip
+          }
+        }
       }
 
       log.push(stepLog);
