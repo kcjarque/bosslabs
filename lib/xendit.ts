@@ -22,6 +22,11 @@ export type XenditPaymentMethod =
   | 'CREDIT_CARD'
   | 'GCASH'
   | 'PAYMAYA'
+  | 'QRPH'
+  | 'DD_BPI'
+  // Legacy bank codes — NOT enabled on the business (they 400 with
+  // UNAVAILABLE_PAYMENT_METHOD_ERROR). Kept in the union only so old data
+  // type-checks; do not put these in any group.
   | 'BPI'
   | 'BDO'
   | 'UNIONBANK';
@@ -42,9 +47,12 @@ export const DEFAULT_PAYMENT_METHODS: XenditPaymentMethod[] = [
 export const PAYMENT_METHOD_GROUPS = {
   GCASH: ['GCASH'] as XenditPaymentMethod[],
   CREDIT_CARD: ['CREDIT_CARD'] as XenditPaymentMethod[],
-  // Xendit's PH bank/direct-debit channels — buyer picks BPI/BDO/UnionBank
-  // on the Xendit page after clicking "Pay via Banks" here.
-  BANKS: ['BPI', 'BDO', 'UNIONBANK'] as XenditPaymentMethod[],
+  // "Pay via Banks" → the bank rails actually ENABLED on the business:
+  // QR Ph (scan-to-pay from ANY bank/e-wallet app) + BPI direct debit.
+  // The old BPI/BDO/UNIONBANK virtual-account codes are disabled in Xendit
+  // and 400'd every Banks checkout — re-enable them in the Xendit dashboard
+  // if you want named-bank transfers back.
+  BANKS: ['QRPH', 'DD_BPI'] as XenditPaymentMethod[],
 } as const;
 
 export type PaymentMethodGroup = keyof typeof PAYMENT_METHOD_GROUPS;
