@@ -355,7 +355,7 @@ export function CheckoutFlow() {
             />
             <PayButton
               method="BANKS"
-              label="Pay via Banks"
+              label="Pay via Bank with QRPH"
               icon={<BankIcon />}
               price={formatPHP(total)}
               loading={loading === 'BANKS'}
