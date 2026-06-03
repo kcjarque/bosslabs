@@ -75,6 +75,7 @@ type TemplateRef = { id: string; name: string };
 
 export function SignupsTable({
   initial,
+  recoveredIds = [],
   eventNameById = {},
   sequences = [],
   emailTemplates = [],
@@ -84,6 +85,7 @@ export function SignupsTable({
   onBulkSend,
 }: {
   initial: Signup[];
+  recoveredIds?: string[];
   eventNameById?: Record<string, string>;
   sequences?: SequenceModel[];
   emailTemplates?: TemplateRef[];
@@ -208,6 +210,7 @@ export function SignupsTable({
       .sort((a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)));
   }, [initial, filter, q]);
 
+  const recoveredSet = useMemo(() => new Set(recoveredIds), [recoveredIds]);
   const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
   const allFilteredSelected =
     filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
@@ -431,6 +434,7 @@ export function SignupsTable({
               </div>
               <div className="flex flex-col items-end gap-1">
                 <StatusPill status={s.status} />
+                {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
                 {s.eventId && eventNameById[s.eventId] && (
                   <EventPill name={eventNameById[s.eventId]} />
                 )}
@@ -547,7 +551,10 @@ export function SignupsTable({
                     )}
                   </td>
                   <td>
-                    <StatusPill status={s.status} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StatusPill status={s.status} />
+                      {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
+                    </div>
                   </td>
                   <td className="text-slate-500">{formatRelative(activityAt(s))}</td>
                   <td className="text-slate-400">→</td>

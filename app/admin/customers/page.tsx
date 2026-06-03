@@ -7,6 +7,8 @@ import {
   getSmsTemplates,
 } from '@/lib/db';
 import { SignupsTable } from '@/components/SignupsTable';
+import { getCloserRecoveredSignupIds } from '@/lib/closers';
+import { recoveredIdSet } from '@/lib/recovered';
 import {
   bulkSubscribeAction,
   bulkDeleteAction,
@@ -17,14 +19,18 @@ export const dynamic = 'force-dynamic';
 
 export default async function CustomersPage() {
   requireAdmin();
-  const [signups, events, sequences, emailTemplates, smsTemplates] = await Promise.all([
-    getSignups(),
-    getEvents(),
-    getSequences(),
-    getEmailTemplates(),
-    getSmsTemplates(),
-  ]);
+  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds] =
+    await Promise.all([
+      getSignups(),
+      getEvents(),
+      getSequences(),
+      getEmailTemplates(),
+      getSmsTemplates(),
+      getCloserRecoveredSignupIds(),
+    ]);
   const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
+  // Recovered = abandoned-then-paid OR closer-claimed-then-paid (orange badge).
+  const recoveredIds = Array.from(recoveredIdSet(signups, closerRecoveredIds));
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -48,6 +54,7 @@ export default async function CustomersPage() {
 
       <SignupsTable
         initial={signups}
+        recoveredIds={recoveredIds}
         eventNameById={eventNameById}
         sequences={sequences}
         emailTemplates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))}

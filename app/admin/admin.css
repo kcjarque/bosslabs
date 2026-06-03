@@ -143,6 +143,11 @@ body:has(.admin-shell) {
   background: rgba(220, 38, 38, 0.06);
   color: #B91C1C;
 }
+.admin-shell .pill-orange {
+  border-color: rgba(234, 88, 12, 0.45);
+  background: rgba(234, 88, 12, 0.08);
+  color: #C2410C;
+}
 .admin-shell .pill-violet {
   border-color: rgba(139, 92, 246, 0.4);
   background: rgba(139, 92, 246, 0.08);

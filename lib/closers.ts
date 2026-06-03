@@ -148,6 +148,15 @@ function totalCentavos(amountCentavos: number | null, metadata: Record<string, u
   return (amountCentavos ?? 99900) + oto;
 }
 
+/** Signup ids that a closer claimed and that then paid (a closer commission
+ *  exists). Used to flag those sales as "recovered" on the dashboard +
+ *  customers table even when the payment landed the same day. */
+export async function getCloserRecoveredSignupIds(): Promise<Set<string>> {
+  if (!isSupabaseConfigured()) return new Set();
+  const { data } = await getSupabase().from('closer_commissions').select('signup_id');
+  return new Set(((data ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
+}
+
 /** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
  *  No phone is returned — the pool is intentionally private until claimed. */
 export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };

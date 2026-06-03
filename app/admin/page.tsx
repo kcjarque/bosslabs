@@ -8,6 +8,7 @@ import {
   type Signup,
 } from '@/lib/db';
 import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
+import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { DailyChart } from '@/components/DailyChart';
 import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
 
@@ -31,27 +32,53 @@ function manilaToday(): string {
 
 const ABANDONMENT_PRICE_CENTAVOS = OFFER.main.priceCentavos;
 
-/** Bucket signups into day columns between startDate and endDate (inclusive, YYYY-MM-DD, Manila). */
-function bucketDaily(signups: Signup[], startDate: string, endDate: string) {
-  const buckets = new Map<string, { date: string; total: number; paid: number; revenuePhp: number }>();
+/**
+ * Bucket signups into day columns (inclusive, YYYY-MM-DD, Manila).
+ *
+ * Cash-by-day model: SIGNUPS are counted on the day they registered, but
+ * PAYMENTS (count + revenue) are counted on the day the cash actually
+ * arrived (confirmationSent). A payment is split into:
+ *   - paid      = direct, paid the same day they signed up
+ *   - recovered = abandoned-then-paid (later day) OR closer-claimed-then-paid
+ * The cohort conversion-rate KPI is computed elsewhere by signup date, so a
+ * recovered sale still keeps its signup-day conversion credit.
+ */
+function bucketDaily(
+  signups: Signup[],
+  startDate: string,
+  endDate: string,
+  closerRecoveredIds: Set<string>,
+) {
+  const buckets = new Map<
+    string,
+    { date: string; total: number; paid: number; recovered: number; revenuePhp: number }
+  >();
   // Build date range by walking from start to end in day increments.
   const cur = new Date(startDate + 'T00:00:00+08:00');
   const last = new Date(endDate + 'T00:00:00+08:00');
   while (cur <= last) {
     const key = manilaDate(cur);
-    buckets.set(key, { date: key, total: 0, paid: 0, revenuePhp: 0 });
+    buckets.set(key, { date: key, total: 0, paid: 0, recovered: 0, revenuePhp: 0 });
     cur.setDate(cur.getDate() + 1);
   }
   for (const s of signups) {
-    const key = manilaDate(new Date(s.createdAt));
-    const b = buckets.get(key);
-    if (!b) continue;
-    b.total += 1;
+    // Signups land on their registration day.
+    const signupKey = manilaDate(new Date(s.createdAt));
+    const signupBucket = buckets.get(signupKey);
+    if (signupBucket) signupBucket.total += 1;
+
+    // Payments land on the day the cash arrived.
     if (s.status === 'paid' || s.status === 'attended') {
-      b.paid += 1;
-      const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
-      const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount : 0;
-      b.revenuePhp += (s.amountCentavos ?? 0) / 100 + otoExtra;
+      const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string; confirmationSent?: string } | undefined) ?? {};
+      const payKey = manilaDate(new Date(meta.confirmationSent ?? s.createdAt));
+      const payBucket = buckets.get(payKey);
+      if (payBucket) {
+        const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount : 0;
+        payBucket.revenuePhp += (s.amountCentavos ?? 0) / 100 + otoExtra;
+        const recovered = closerRecoveredIds.has(s.id) || payKey > signupKey;
+        if (recovered) payBucket.recovered += 1;
+        else payBucket.paid += 1;
+      }
     }
   }
   return Array.from(buckets.values());
@@ -167,6 +194,7 @@ export default async function AdminDashboard({
     viewsCheckout,
     visitsBuckets,
     visitsBucketsPrev,
+    closerRecoveredIds,
   ] = await Promise.all([
     getSignups(),
     getSettings(),
@@ -182,6 +210,8 @@ export default async function AdminDashboard({
       untilIso: funnelSinceIso,
       bucketMs,
     }),
+    // Signups a closer claimed + that paid — flagged "recovered" even if same-day.
+    getCloserRecoveredSignupIds(),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -272,8 +302,10 @@ export default async function AdminDashboard({
   // Activity chart scoped to the same global period.
   const chartStart = manilaDate(new Date(funnelSinceMs));
   const chartEnd = manilaDate(new Date(rangeEnd));
-  const daily = bucketDaily(signups, chartStart, chartEnd);
-  const dailyMax = Math.max(1, ...daily.map((d) => d.total));
+  const daily = bucketDaily(signups, chartStart, chartEnd, closerRecoveredIds);
+  // Recovered stacks on top of the signups bar, so size the axis to the
+  // tallest signups + recovered column (not just signups).
+  const dailyMax = Math.max(1, ...daily.map((d) => d.total + d.recovered));
 
   // Channel mix on PAID signups (not stuck) — which method works best.
   const paidChannelMix = channelMix(paid);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-type Day = { date: string; total: number; paid: number; revenuePhp: number };
+type Day = { date: string; total: number; paid: number; recovered: number; revenuePhp: number };
 
 function fmtDate(date: string): string {
   if (!date) return '';
@@ -72,6 +72,7 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
 
   const totalRevenue = data.reduce((s, d) => s + d.revenuePhp, 0);
   const totalPaid = data.reduce((s, d) => s + d.paid, 0);
+  const totalRecovered = data.reduce((s, d) => s + d.recovered, 0);
 
   // Best-fit trend lines over the visible window.
   const totalTrend = trend(data.map((d) => d.total));
@@ -146,6 +147,21 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
                     opacity={dim ? 0.45 : 1}
                   />
                 )}
+                {/* Recovered payments — cash that arrived this day from an
+                    earlier (abandoned/closer-claimed) signup. Stacked in
+                    orange ON TOP of the signups bar, since it's extra money
+                    not from today's signups. */}
+                {d.recovered > 0 && (
+                  <rect
+                    x={x}
+                    y={totalY - (d.recovered / max) * innerH}
+                    width={barW}
+                    height={(d.recovered / max) * innerH}
+                    rx="1"
+                    fill="#F97316"
+                    opacity={dim ? 0.45 : 1}
+                  />
+                )}
               </g>
             );
           })}
@@ -202,6 +218,12 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
               <span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" />
               {active.paid} paid
             </div>
+            {active.recovered > 0 && (
+              <div className="mt-0.5 flex items-center gap-1.5 text-orange-600">
+                <span className="inline-block h-2 w-2 rounded-sm bg-orange-500" />
+                {active.recovered} recovered
+              </div>
+            )}
             <div className="mt-1.5 font-semibold text-emerald-700">
               {peso(active.revenuePhp)}
             </div>
@@ -222,6 +244,10 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
           </svg>
           Paid trend <TrendArrow slope={paidTrend?.slope} />
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: '#F97316' }} />
+          Recovered <span className="font-semibold text-orange-600">paid after abandoned</span>
+        </span>
       </div>
       <div className="mt-1 flex justify-between text-[11px] text-slate-500">
         <span>
@@ -229,6 +255,11 @@ export function DailyChart({ data, max }: { data: Day[]; max: number }) {
         </span>
         <span>
           <strong className="text-slate-700">{totalPaid}</strong> paid ·{' '}
+          {totalRecovered > 0 && (
+            <>
+              <strong className="text-orange-600">{totalRecovered}</strong> recovered ·{' '}
+            </>
+          )}
           <strong className="text-slate-700">{peso(totalRevenue)}</strong> revenue
         </span>
       </div>
