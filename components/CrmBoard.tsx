@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CRM_STAGES, CRM_STAGE_META, type CrmStage, type CrmCard } from '@/lib/crm-stages';
+import { toE164Ph } from '@/lib/phone';
 
 async function api(payload: Record<string, unknown>) {
   const r = await fetch('/api/admin/crm', {
@@ -17,7 +18,8 @@ async function api(payload: Record<string, unknown>) {
 function smsHref(phone: string, template: string, name: string): string {
   const first = (name || '').trim().split(/\s+/)[0] || 'there';
   const body = template.replace(/\{\{\s*name\s*\}\}/gi, first);
-  return `sms:${phone}?&body=${encodeURIComponent(body)}`;
+  // Normalize to +639XXXXXXXXX — carriers/SMS apps reject 09… / spaced formats.
+  return `sms:${toE164Ph(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
 export function CrmBoard() {
@@ -217,7 +219,7 @@ export function CrmBoard() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">{c.name}</div>
-                        {c.phone && <div className="text-[11px] text-slate-400">{c.phone}</div>}
+                        {c.phone && <div className="text-[11px] text-slate-400">{toE164Ph(c.phone)}</div>}
                         {c.amountCentavos != null && (
                           <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                             ₱{(c.amountCentavos / 100).toLocaleString()}

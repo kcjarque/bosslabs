@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MarkPaidButton } from '@/components/MarkPaidButton';
+import { toE164Ph } from '@/lib/phone';
 
 type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
 type Lead = {
@@ -153,7 +154,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-slate-900">{l.name}</div>
-                  <div className="text-[11px] font-medium text-cyan-700">{l.phone || 'no number'}</div>
+                  <div className="text-[11px] font-medium text-cyan-700">{l.phone ? toE164Ph(l.phone) : 'no number'}</div>
                 </div>
                 <button
                   onClick={() => release(l.leadId)}
@@ -177,8 +178,8 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               </div>
               {l.phone && (
                 <div className="mt-2 flex gap-1.5">
-                  <a href={`tel:${l.phone}`} className="flex-1 rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white hover:bg-cyan-500">📞 Call</a>
-                  <a href={`sms:${l.phone}`} className="flex-1 rounded-md border border-cyan-200 px-2 py-1.5 text-center text-xs font-medium text-cyan-700 hover:bg-cyan-50">💬 Text</a>
+                  <a href={`tel:${toE164Ph(l.phone)}`} className="flex-1 rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white hover:bg-cyan-500">📞 Call</a>
+                  <a href={`sms:${toE164Ph(l.phone)}`} className="flex-1 rounded-md border border-cyan-200 px-2 py-1.5 text-center text-xs font-medium text-cyan-700 hover:bg-cyan-50">💬 Text</a>
                 </div>
               )}
               <div className="mt-1.5">
