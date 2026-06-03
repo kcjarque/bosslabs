@@ -9,6 +9,7 @@ import {
 } from '@/lib/db';
 import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
+import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
 
@@ -275,6 +276,22 @@ export default async function AdminDashboard({
   const sFunnelEntrants = scoped.filter((s) => s.source === 'paid').length;
   const sConversion = sFunnelEntrants > 0 ? (sPaid.length / sFunnelEntrants) * 100 : 0;
 
+  // Recovered = abandoned-then-paid or closer-claimed sales, scoped by the
+  // PAYMENT day (these buyers signed up earlier, so signup-date scoping would
+  // miss them — same attribution the chart uses).
+  const sRecoveredList = signups.filter((s) => {
+    if (!isRecoveredPaid(s, closerRecoveredIds)) return false;
+    if (!dashRange) return true; // all time
+    const cs = (s.metadata as { confirmationSent?: string } | undefined)?.confirmationSent;
+    const payMs = new Date(cs ?? s.createdAt).getTime();
+    return payMs >= dashRange.startMs && payMs <= rangeEnd;
+  });
+  const sRecoveredRevenueCentavos = sRecoveredList.reduce((sum, s) => {
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    return sum + (s.amountCentavos ?? 0) + otoExtra;
+  }, 0);
+
   // Last-N-hours splits — broken out by paid vs registered for actual signal.
   const last24Paid = within(24, (s) => s.status === 'paid');
   const last24Reg = within(24, (s) => s.status === 'registered');
@@ -420,11 +437,17 @@ export default async function AdminDashboard({
       </div>
 
       {/* Funnel + activity row */}
-      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
           label="Total signups (all sources)"
           value={scoped.length.toString()}
           sub={`${sFunnelEntrants} via paid funnel`}
+        />
+        <StatCard
+          label="Recovered"
+          value={sRecoveredList.length.toString()}
+          tone="orange"
+          sub={`${formatPHP(sRecoveredRevenueCentavos)} · paid after abandoning`}
         />
         <StatCard
           label="Last 24 hours"
@@ -787,7 +810,7 @@ function StatCard({
   label: string;
   value: string;
   sub?: string;
-  tone?: 'green' | 'amber';
+  tone?: 'green' | 'amber' | 'orange';
   href?: string;
 }) {
   const toneClass =
@@ -795,7 +818,9 @@ function StatCard({
       ? 'border-emerald-200 bg-emerald-50/40'
       : tone === 'amber'
         ? 'border-amber-200 bg-amber-50/40'
-        : '';
+        : tone === 'orange'
+          ? 'border-orange-200 bg-orange-50/50'
+          : '';
   const body = (
     <div className={`card ${toneClass}`.trim()}>
       <div className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
