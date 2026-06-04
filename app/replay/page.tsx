@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
 const REPLAY_YOUTUBE_ID = '6XBSwt0swHY';
-const APP_URL = 'https://REPLACE-WITH-APP-LINK';
+const APP_URL = 'https://preclarus-app.vercel.app';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
 // opens tomorrow (the morning after the webinar) and runs 7 days. Change this
@@ -98,25 +98,36 @@ export default function ReplayPage({
               produced — go have a play.
             </p>
           </div>
-          <div className="mt-8 rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-6 text-center shadow-glow-sm sm:p-10">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M8 5l8 7-8 7"
-                  stroke="#1FBEEC"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <p className="mt-5 font-serif text-2xl text-white sm:text-3xl">
-              See it for yourself.
-            </p>
-            <div className="mt-6">
-              <a href={APP_URL} className="btn-cyan !px-8 !py-3.5 text-base">
-                Open the app we built →
-              </a>
+          <div className="mt-8 overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent shadow-glow-sm">
+            {/* Live screenshot of the app we built — click to open. */}
+            <a
+              href={APP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group block"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/preclarus-app.png"
+                alt="Live preview of the app we built during the session"
+                className="w-full border-b border-white/[0.06] transition group-hover:opacity-95"
+                loading="lazy"
+              />
+            </a>
+            <div className="p-6 text-center sm:p-8">
+              <p className="font-serif text-2xl text-white sm:text-3xl">
+                See it for yourself.
+              </p>
+              <div className="mt-6">
+                <a
+                  href={APP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-cyan !px-8 !py-3.5 text-base"
+                >
+                  Open the app we built →
+                </a>
+              </div>
             </div>
           </div>
         </section>
