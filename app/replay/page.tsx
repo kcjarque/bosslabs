@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
-const REPLAY_YOUTUBE_ID = 'mlOrJhKZc_Y';
+const REPLAY_YOUTUBE_ID = '6XBSwt0swHY';
 const APP_URL = 'https://REPLACE-WITH-APP-LINK';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
