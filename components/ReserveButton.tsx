@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
-type Method = 'BPI' | 'BDO' | 'Maya';
+type Method = 'UnionBank' | 'BPI' | 'Credit Card';
 type Plan = 'full' | 'reservation' | 'installment';
 
-const METHODS: Method[] = ['BPI', 'BDO', 'Maya'];
+const METHODS: Method[] = ['UnionBank', 'BPI', 'Credit Card'];
 const PLANS: { id: Plan; label: string; blurb: string }[] = [
   { id: 'full', label: 'Full payment', blurb: 'Pay once, save the most' },
   { id: 'reservation', label: 'Reservation ₱10k', blurb: 'Lock your slot with a deposit' },
