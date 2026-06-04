@@ -53,13 +53,45 @@ export default async function VibeCodeRetreatPage() {
 /* --------------------------------------------------------------------- */
 /* Background — deep navy with cinematic cyan glow + faint grid          */
 /* --------------------------------------------------------------------- */
+// Deterministic floating particles (no Math.random → stable SSR).
+const PARTICLES = [
+  { l: '8%', d: 26, delay: 0, s: 3 }, { l: '18%', d: 34, delay: 6, s: 2 },
+  { l: '27%', d: 30, delay: 12, s: 4 }, { l: '38%', d: 38, delay: 3, s: 2 },
+  { l: '47%', d: 28, delay: 9, s: 3 }, { l: '56%', d: 36, delay: 15, s: 2 },
+  { l: '64%', d: 32, delay: 5, s: 4 }, { l: '72%', d: 40, delay: 11, s: 2 },
+  { l: '81%', d: 29, delay: 2, s: 3 }, { l: '90%', d: 35, delay: 8, s: 2 },
+  { l: '14%', d: 42, delay: 18, s: 2 }, { l: '60%', d: 44, delay: 14, s: 3 },
+];
+
 function CinematicBackground() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <style dangerouslySetInnerHTML={{ __html: VC_CSS }} />
       <div className="absolute inset-0 bg-[#06070A]" />
       <div className="absolute inset-0 bg-gradient-to-b from-[#0A1020] via-[#06070A] to-[#06070A]" />
-      <div className="absolute -left-40 top-[-10%] h-[620px] w-[620px] rounded-full bg-cyan-500/[0.10] blur-[140px]" />
-      <div className="absolute -right-40 top-[30%] h-[560px] w-[560px] rounded-full bg-indigo-500/[0.08] blur-[150px]" />
+
+      {/* slow-drifting aurora glows — the "chill vibes" */}
+      <div className="vc-orb absolute -left-40 top-[-8%] h-[620px] w-[620px] rounded-full bg-cyan-500/[0.12]" />
+      <div className="vc-orb vc-orb-2 absolute -right-40 top-[26%] h-[560px] w-[560px] rounded-full bg-indigo-500/[0.10]" />
+      <div className="vc-orb vc-orb-3 absolute left-[30%] top-[62%] h-[520px] w-[520px] rounded-full bg-sky-400/[0.07]" />
+
+      {/* floating particles rising slowly */}
+      {PARTICLES.map((p, i) => (
+        <span
+          key={i}
+          className="vc-particle absolute rounded-full bg-cyan-300/40"
+          style={{
+            left: p.l,
+            bottom: '-10px',
+            width: `${p.s}px`,
+            height: `${p.s}px`,
+            animationDuration: `${p.d}s`,
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+
+      {/* faint grid, fading toward the top */}
       <div
         className="absolute inset-0 opacity-[0.05]"
         style={{
@@ -72,6 +104,107 @@ function CinematicBackground() {
     </div>
   );
 }
+
+// Soft drifting glow behind a section — gives each section "something alive".
+function SectionGlow({ className = '' }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`vc-glow pointer-events-none absolute -z-10 h-[340px] w-[340px] rounded-full bg-cyan-500/[0.08] blur-[100px] ${className}`}
+    />
+  );
+}
+
+// Pulsing, flowing network of nodes — the signature element for "Founders Network".
+function NetworkConstellation({ className = '' }: { className?: string }) {
+  const nodes = [
+    { x: 20, y: 30 }, { x: 72, y: 16 }, { x: 124, y: 44 }, { x: 56, y: 70 },
+    { x: 104, y: 96 }, { x: 152, y: 72 }, { x: 28, y: 112 },
+  ];
+  const links: [number, number][] = [
+    [0, 1], [1, 2], [0, 3], [3, 4], [2, 5], [4, 5], [3, 6], [6, 0], [1, 3],
+  ];
+  return (
+    <svg viewBox="0 0 172 130" className={className} fill="none" aria-hidden>
+      {links.map(([a, b], i) => (
+        <line
+          key={i}
+          x1={nodes[a].x}
+          y1={nodes[a].y}
+          x2={nodes[b].x}
+          y2={nodes[b].y}
+          stroke="#22D3EE"
+          strokeWidth="1"
+          opacity="0.45"
+          className="vc-flow"
+          style={{ animationDelay: `${i * 0.35}s` }}
+        />
+      ))}
+      {nodes.map((n, i) => (
+        <circle
+          key={i}
+          cx={n.x}
+          cy={n.y}
+          r="3.2"
+          fill="#22D3EE"
+          className="vc-twinkle"
+          style={{ animationDelay: `${i * 0.3}s` }}
+        />
+      ))}
+    </svg>
+  );
+}
+
+// Self-drawing rising chart line — the signature element for "Billionaire level".
+function RisingChart({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 200 110" className={className} fill="none" aria-hidden>
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <rect key={i} x={12 + i * 26} y={92 - i * 9} width="10" height={i * 9 + 10} rx="2" fill="#22D3EE" opacity="0.16" />
+      ))}
+      <path
+        d="M10 96 L40 80 L70 84 L100 58 L130 60 L160 30 L190 12"
+        stroke="#22D3EE"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ strokeDasharray: 420, strokeDashoffset: 420, animation: 'vcDraw 3s ease-out forwards' }}
+      />
+      <path d="M181 8 L190 12 L185 21" stroke="#22D3EE" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="100" cy="58" r="3" fill="#67E8F9" className="vc-twinkle" />
+      <circle cx="160" cy="30" r="3" fill="#67E8F9" className="vc-twinkle" style={{ animationDelay: '1s' }} />
+    </svg>
+  );
+}
+
+const VC_CSS = `
+@keyframes vcDrift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(46px,-34px) scale(1.1); } }
+@keyframes vcDrift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-54px,42px) scale(1.12); } }
+@keyframes vcDrift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,40px) scale(1.08); } }
+.vc-orb { filter: blur(140px); animation: vcDrift 24s ease-in-out infinite; }
+.vc-orb-2 { animation: vcDrift2 30s ease-in-out infinite; }
+.vc-orb-3 { animation: vcDrift3 27s ease-in-out infinite; }
+@keyframes vcFloat { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .7; } 88% { opacity: .7; } 100% { transform: translateY(-78vh); opacity: 0; } }
+.vc-particle { animation: vcFloat linear infinite; }
+@keyframes vcGlowDrift { 0%,100% { transform: translate(0,0); opacity:.55; } 50% { transform: translate(28px,-22px); opacity:.95; } }
+.vc-glow { animation: vcGlowDrift 18s ease-in-out infinite; }
+@keyframes vcShimmer { 0% { transform: translateX(-130%) skewX(-18deg); } 100% { transform: translateX(260%) skewX(-18deg); } }
+.vc-shimmer { position: relative; overflow: hidden; }
+.vc-shimmer::after { content:''; position:absolute; inset:0; width:40%; background: linear-gradient(90deg, transparent, rgba(34,211,238,.14), transparent); animation: vcShimmer 5.5s ease-in-out infinite; }
+@keyframes vcPulseGlow { 0%,100% { opacity:.35; transform: scale(1); } 50% { opacity:.8; transform: scale(1.06); } }
+.vc-pulse { animation: vcPulseGlow 4s ease-in-out infinite; }
+@keyframes vcDraw { to { stroke-dashoffset: 0; } }
+@keyframes vcTwinkle { 0%,100% { opacity:.2; } 50% { opacity:1; } }
+.vc-twinkle { animation: vcTwinkle 3s ease-in-out infinite; }
+@keyframes vcDashFlow { to { stroke-dashoffset: -200; } }
+.vc-flow { stroke-dasharray: 6 10; animation: vcDashFlow 6s linear infinite; }
+@keyframes vcFloatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.vc-bob { animation: vcFloatY 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .vc-orb, .vc-orb-2, .vc-orb-3, .vc-particle, .vc-glow, .vc-pulse, .vc-twinkle, .vc-flow, .vc-bob { animation: none !important; }
+  .vc-shimmer::after { display: none; }
+}
+`;
 
 /* --------------------------------------------------------------------- */
 /* Shared building blocks                                                */
@@ -126,8 +259,8 @@ function GlowCard({
 
 function SpecBar({ items }: { items: { icon: React.ReactNode; top: string; bottom: string }[] }) {
   return (
-    <div className="mt-10 rounded-2xl border border-cyan-500/20 bg-white/[0.02] px-5 py-4 sm:mt-12 sm:px-7 sm:py-5">
-      <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 sm:justify-between">
+    <div className="vc-shimmer mt-10 rounded-2xl border border-cyan-500/20 bg-white/[0.02] px-5 py-4 sm:mt-12 sm:px-7 sm:py-5">
+      <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 sm:justify-between">
         {items.map((it, i) => (
           <div key={i} className="flex items-center gap-3">
             <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
@@ -214,6 +347,7 @@ function Hero({ priceCentavos }: { priceCentavos: number | null }) {
   ];
   return (
     <section className="relative">
+      <SectionGlow className="left-[4%] top-[18%]" />
       <div className="container-tight py-14 sm:py-20">
         <Eyebrow num="02">The Invitation</Eyebrow>
         <h1 className="mt-7 font-sans text-[40px] font-extrabold uppercase leading-[0.92] tracking-[-0.01em] text-white sm:text-[68px] md:text-[80px]">
@@ -279,7 +413,8 @@ function WhatYouGet() {
     { icon: IC.person, t: '1-on-1 Consultation', d: 'A roadmap built around YOUR business.', i: '05' },
   ];
   return (
-    <section className="container-tight py-14 sm:py-20">
+    <section className="relative container-tight py-14 sm:py-20">
+      <SectionGlow className="left-[8%] top-[12%]" />
       <Eyebrow num="03">What You Get</Eyebrow>
       <Display className="mt-5 text-[30px] sm:text-[46px]">
         The five things that actually move your
@@ -314,7 +449,8 @@ function Bonuses() {
     { tag: 'Bonus 3', t: 'Unlimited Food & Alcohol', d: 'Fully catered for the full 24 hours — fuel the sprint and celebrate the win without ever leaving.' },
   ];
   return (
-    <section className="container-tight py-14 sm:py-20">
+    <section className="relative container-tight py-14 sm:py-20">
+      <SectionGlow className="right-[10%] top-[14%]" />
       <Eyebrow num="04">But wait… here&rsquo;s more!</Eyebrow>
       <Display className="mt-5 text-[30px] sm:text-[46px]">
         Every seat also includes these — <span className="text-cyan-400">at zero extra cost.</span>
@@ -349,7 +485,9 @@ function FoundersNetwork() {
     { icon: IC.stars, t: 'Lifelong Connections', d: 'Build relationships that last far beyond the retreat.' },
   ];
   return (
-    <section className="container-tight py-14 sm:py-20">
+    <section className="relative container-tight py-14 sm:py-20">
+      <SectionGlow className="left-[8%] top-[10%]" />
+      <NetworkConstellation className="vc-bob absolute right-2 top-12 hidden h-44 w-56 opacity-70 lg:block" />
       <Eyebrow num="04.1">Founders Network</Eyebrow>
       <Display className="mt-5 text-[34px] sm:text-[54px]">
         You don&rsquo;t have to <span className="text-cyan-400">build alone.</span>
@@ -381,7 +519,9 @@ function BillionaireSession() {
     { icon: IC.diamond, t: "Opportunities You Won't Find Online", d: 'Private deals, partnerships, and access that open new doors.' },
   ];
   return (
-    <section className="container-tight py-14 sm:py-20">
+    <section className="relative container-tight py-14 sm:py-20">
+      <SectionGlow className="right-[8%] top-[10%]" />
+      <RisingChart className="vc-bob absolute right-2 top-10 hidden h-32 w-56 opacity-80 lg:block" />
       <Eyebrow num="04.2">Billionaire Strategy Session</Eyebrow>
       <Display className="mt-5 text-[34px] sm:text-[54px]">
         Big thinkers. Bigger moves.
@@ -419,7 +559,8 @@ function Payment({ priceCentavos }: { priceCentavos: number | null }) {
     { name: 'BPI', holder: 'BossLabs · MI•••L B MA•••O', img: '/qr-bpi.jpeg' },
   ];
   return (
-    <section id="secure-seat" className="container-tight py-16 sm:py-24">
+    <section id="secure-seat" className="relative container-tight py-16 sm:py-24">
+      <SectionGlow className="left-1/2 top-[6%] -translate-x-1/2" />
       <div className="mx-auto max-w-4xl">
         <div className="text-center">
           <Eyebrow num="05">Secure Your Seat</Eyebrow>
