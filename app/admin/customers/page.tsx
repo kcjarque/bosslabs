@@ -5,6 +5,8 @@ import {
   getSequences,
   getEmailTemplates,
   getSmsTemplates,
+  getLists,
+  computeListMembers,
 } from '@/lib/db';
 import { SignupsTable } from '@/components/SignupsTable';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
@@ -19,7 +21,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function CustomersPage() {
   requireAdmin();
-  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds] =
+  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds, lists] =
     await Promise.all([
       getSignups(),
       getEvents(),
@@ -27,10 +29,17 @@ export default async function CustomersPage() {
       getEmailTemplates(),
       getSmsTemplates(),
       getCloserRecoveredSignupIds(),
+      getLists(),
     ]);
   const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
   // Recovered = abandoned-then-paid OR closer-claimed-then-paid (orange badge).
   const recoveredIds = Array.from(recoveredIdSet(signups, closerRecoveredIds));
+  // Precompute each list's member ids so the table can filter by list instantly
+  // (computeListMembers reuses the cached getSignups — cheap).
+  const listMembers = await Promise.all(lists.map((l) => computeListMembers(l)));
+  const listMemberIds: Record<string, string[]> = Object.fromEntries(
+    lists.map((l, i) => [l.id, listMembers[i].map((s) => s.id)]),
+  );
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -56,6 +65,8 @@ export default async function CustomersPage() {
         initial={signups}
         recoveredIds={recoveredIds}
         eventNameById={eventNameById}
+        lists={lists.map((l) => ({ id: l.id, name: l.name }))}
+        listMemberIds={listMemberIds}
         sequences={sequences}
         emailTemplates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))}
         smsTemplates={smsTemplates.map((t) => ({ id: t.id, name: t.name }))}

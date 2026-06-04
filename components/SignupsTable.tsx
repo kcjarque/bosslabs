@@ -77,6 +77,8 @@ export function SignupsTable({
   initial,
   recoveredIds = [],
   eventNameById = {},
+  lists = [],
+  listMemberIds = {},
   sequences = [],
   emailTemplates = [],
   smsTemplates = [],
@@ -87,6 +89,8 @@ export function SignupsTable({
   initial: Signup[];
   recoveredIds?: string[];
   eventNameById?: Record<string, string>;
+  lists?: { id: string; name: string }[];
+  listMemberIds?: Record<string, string[]>;
   sequences?: SequenceModel[];
   emailTemplates?: TemplateRef[];
   smsTemplates?: TemplateRef[];
@@ -103,6 +107,8 @@ export function SignupsTable({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [eventFilter, setEventFilter] = useState('');
+  const [listFilter, setListFilter] = useState('');
   const [q, setQ] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSeqId, setBulkSeqId] = useState('');
@@ -199,18 +205,31 @@ export function SignupsTable({
     setSelectedIds(new Set());
   }
 
+  // Members of the selected list (null = no list filter active).
+  const listMemberSet = useMemo(
+    () => (listFilter ? new Set(listMemberIds[listFilter] ?? []) : null),
+    [listFilter, listMemberIds],
+  );
+
+  // All filters AND together: status + event + list + search.
   const filtered = useMemo(() => {
     return initial
       .filter((s) => {
         if (!inFilter(s.status, filter)) return false;
+        if (eventFilter && (s.eventId ?? '') !== eventFilter) return false;
+        if (listMemberSet && !listMemberSet.has(s.id)) return false;
         if (!q) return true;
         const hay = `${s.firstName} ${s.lastName ?? ''} ${s.email} ${s.phone}`.toLowerCase();
         return hay.includes(q.toLowerCase());
       })
       .sort((a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)));
-  }, [initial, filter, q]);
+  }, [initial, filter, eventFilter, listMemberSet, q]);
 
   const recoveredSet = useMemo(() => new Set(recoveredIds), [recoveredIds]);
+  const eventOptions = useMemo(
+    () => Object.entries(eventNameById).map(([id, name]) => ({ id, name })),
+    [eventNameById],
+  );
   const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
   const allFilteredSelected =
     filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
@@ -220,30 +239,76 @@ export function SignupsTable({
 
   return (
     <>
-      {/* Filters */}
-      <div className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="flex flex-wrap gap-1">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              className={`rounded-md px-3 py-1.5 text-sm transition ${
-                filter === f.key
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+      {/* Filters — status + event + list + search all AND together. Narrow to
+          a segment, then select-all + bulk send. */}
+      <div className="card flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex flex-wrap gap-1">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={`rounded-md px-3 py-1.5 text-sm transition ${
+                  filter === f.key
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name, email, phone…"
+            className="input sm:max-w-xs sm:flex-1"
+          />
         </div>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name, email, phone…"
-          className="input sm:max-w-xs sm:flex-1"
-        />
+
+        {(eventOptions.length > 0 || lists.length > 0) && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+            {eventOptions.length > 0 && (
+              <select
+                className="select sm:w-auto"
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                aria-label="Filter by event"
+              >
+                <option value="">All events</option>
+                {eventOptions.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name}</option>
+                ))}
+              </select>
+            )}
+            {lists.length > 0 && (
+              <select
+                className="select sm:w-auto"
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                aria-label="Filter by list"
+              >
+                <option value="">All lists</option>
+                {lists.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            )}
+            {(eventFilter || listFilter || filter !== 'all' || q) && (
+              <button
+                type="button"
+                onClick={() => { setEventFilter(''); setListFilter(''); setFilter('all'); setQ(''); }}
+                className="text-xs text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+              >
+                Reset filters
+              </button>
+            )}
+            <span className="ml-auto text-xs font-medium text-slate-500">
+              {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Bulk action bar — sticky at top once selections exist. */}
