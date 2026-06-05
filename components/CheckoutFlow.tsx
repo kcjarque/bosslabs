@@ -394,10 +394,10 @@ export function CheckoutFlow() {
           <div className="mt-5 flex items-start justify-between gap-4">
             <div>
               <div className="font-serif text-xl text-white">
-                BOSSLABS AI — Live Webinar
+                BOSSLABS AI — Live Workshop
               </div>
               <div className="mt-1 text-xs text-ink-200">
-                90 min · Live on Zoom · 7-day replay · Community access
+                2 hours · Live on Zoom · 7-day replay · Community access
               </div>
             </div>
             <div className="font-serif text-2xl text-white">
