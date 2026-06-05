@@ -24,7 +24,7 @@ import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db'
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
-import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
+import { getWebinarInfo, templateVarsForSignup, paidConfirmationTemplateId } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -129,14 +129,17 @@ async function handleMainPaid(event: XenditEvent) {
   const webinar = await getWebinarInfo();
   // Resolves the per-event Zoom link from the signup's event, else global.
   const vars = await templateVarsForSignup(signup, webinar);
+  // After the webinar is over (late / recovered payments), send the replay
+  // confirmation instead of a dead "join the Zoom call" link.
+  const confirmTpl = await paidConfirmationTemplateId(signup, webinar);
 
   const emailRes = await sendEmail({
     to: signup.email,
-    templateId: 'paid_confirmation',
+    templateId: confirmTpl,
     vars,
   });
   if (signup.phone) {
-    await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars });
+    await sendSms({ to: signup.phone, templateId: confirmTpl, vars });
   }
 
   // CAPI Purchase event for the main invoice (₱999 or ₱2,996 if bumped).

@@ -20,7 +20,7 @@ import {
 import { extractClientIp, extractFbCookies, sendCapiEvent } from '@/lib/meta';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, paidConfirmationTemplateId } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
 import { sendTelegram, esc } from '@/lib/telegram';
 import { syncCrmCardForSignup } from '@/lib/crm';
@@ -188,6 +188,8 @@ export async function POST(req: Request) {
       // gets Zoom link + replay + community access. Don't block the
       // redirect on send failures — the buyer can still hit /accepted.
       const webinar = await getWebinarInfo();
+      const siteBase =
+        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://www.bosslabs.live';
       const vars = {
         firstName,
         webinarName: webinar.name,
@@ -198,14 +200,18 @@ export async function POST(req: Request) {
         zoomRegisterUrl: webinar.zoomRegisterUrl,
         messengerGroupUrl: webinar.messengerGroupUrl,
         replayUrl: webinar.replayUrl,
+        replayPageUrl: `${siteBase}/replay`,
       };
+      // Once the webinar is over, send the replay confirmation (no dead Zoom
+      // link). The free-seat path uses the active event's start time.
+      const confirmTpl = await paidConfirmationTemplateId({ eventId: undefined }, webinar);
       void sendEmail({
         to: body.email,
-        templateId: 'paid_confirmation',
+        templateId: confirmTpl,
         vars,
       });
       if (body.mobile) {
-        void sendSms({ to: body.mobile, templateId: 'paid_confirmation', vars });
+        void sendSms({ to: body.mobile, templateId: confirmTpl, vars });
       }
 
       // No Purchase CAPI on a free order (Meta optimizes ad spend on
