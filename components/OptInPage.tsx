@@ -163,6 +163,48 @@ function PaidCta({ className = '' }: { className?: string }) {
 /* 1 — HERO                                                              */
 /* --------------------------------------------------------------------- */
 function Hero({ webinar }: { webinar: WebinarInfo }) {
+  const facts = [
+    {
+      k: 'WHEN',
+      v: webinar.date,
+      s: `${webinar.time} ${webinar.timezone}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4.5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v3M16 3v3" />
+        </svg>
+      ),
+    },
+    {
+      k: 'WHERE',
+      v: 'Live on Zoom',
+      s: 'Not a recorded session',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3z" />
+        </svg>
+      ),
+    },
+    {
+      k: 'LENGTH',
+      v: '2-Hour Workshop',
+      s: 'Live & hands-on',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" />
+        </svg>
+      ),
+    },
+    {
+      k: 'FORMAT',
+      v: 'Live Demo',
+      s: 'Launch real apps',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 15c-1.5 1.5-2 4.5-2 4.5s3-.5 4.5-2M9.5 11.5a4 4 0 0 1 4-4c3-3 6.5-3 6.5-3s0 3.5-3 6.5a4 4 0 0 1-4 4l-2 2-5-5 2.5-1.5z" /><circle cx="14.5" cy="9.5" r="1.1" />
+        </svg>
+      ),
+    },
+  ];
   return (
     <section className="relative isolate overflow-hidden">
       <HeroBackground />
@@ -193,6 +235,27 @@ function Hero({ webinar }: { webinar: WebinarInfo }) {
             <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
               Bonuses included · Limited seats per session · 7-day guarantee
             </p>
+          </div>
+
+          {/* Quick facts — date/time, format (mirrors the retreat info cards) */}
+          <div className="mt-10 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+            {facts.map((card) => (
+              <div
+                key={card.k}
+                className="rounded-2xl border border-cyan-500/25 bg-white/[0.03] p-5"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                    {card.icon}
+                  </span>
+                  <span className="font-sans text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
+                    {card.k}
+                  </span>
+                </div>
+                <div className="mt-4 font-sans text-[17px] font-semibold text-white">{card.v}</div>
+                <div className="mt-1 text-[13px] text-ink-300">{card.s}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
