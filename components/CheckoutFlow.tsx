@@ -516,13 +516,27 @@ function BumpCard({
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
             YES — Add the {OFFER.oto.name}
           </h3>
-          <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-100 sm:text-[14px]">
-            A 1-hour exclusive 1:1 call with the founders — before the webinar. We
-            map your full AI integration roadmap, build out the vision for your app,
-            and hand you the exact prompts to start coding, so you can launch your
-            project in under 24 hours. Action takers only — grab it now at this price.
-          </p>
-          <div className="mt-3 flex items-baseline gap-3">
+          <ul className="mt-3 space-y-1.5">
+            {OFFER.oto.inclusions.map((line) => (
+              <li
+                key={line}
+                className="flex items-start gap-2 font-sans text-[13px] leading-snug text-ink-100 sm:text-[14px]"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="mt-[2px] flex-none text-cyan-400"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 flex items-baseline gap-3">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">
               {OFFER.oto.label}
             </span>
