@@ -719,10 +719,10 @@ export default async function AdminDashboard({
             {otoAttachRate.toFixed(0)}%
           </div>
           <div className="mt-1 text-[12px] text-slate-500">
-            {bumpedCount} of {paid.length} took the 1:1 Audit upsell
+            {bumpedCount} of {paid.length} took the 1on1 MVP Session upsell
           </div>
           <div className="mt-3 text-[11px] text-slate-500">
-            Target: 30%+. Each attached audit adds ₱1,997 — at 50% attach
+            Target: 30%+. Each attached session adds ₱1,997 — at 50% attach
             rate, AOV climbs from ₱999 to ₱2,000+.
           </div>
         </div>

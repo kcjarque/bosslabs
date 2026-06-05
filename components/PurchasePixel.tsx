@@ -36,7 +36,7 @@ export function PurchasePixel({
         value,
         currency: 'PHP',
         content_name: bumped
-          ? 'BOSSLABS AI Webinar + 1:1 Audit'
+          ? 'BOSSLABS AI Webinar + 1on1 MVP Session'
           : 'BOSSLABS AI Webinar',
         content_ids: [bumped ? 'BL_WEBINAR_LIVE+BL_OTO_AUDIT' : 'BL_WEBINAR_LIVE'],
         num_items: bumped ? 2 : 1,

@@ -5,8 +5,8 @@ import { OrderBumpActions } from '@/components/OrderBumpActions';
 import { OFFER, formatPHP } from '@/lib/config';
 
 export const metadata = {
-  title: 'Add the 1:1 AI Integration Audit · BOSSLABS AI',
-  description: 'Webinar attendees: add your One-on-One AI Integration Audit.',
+  title: 'Add the 1on1 MVP Session · BOSSLABS AI',
+  description: 'Action Taker Bonus: add your 1on1 MVP Session with the founders.',
 };
 
 export default function OrderBumpPage({
@@ -35,8 +35,8 @@ export default function OrderBumpPage({
             Proceed with your <span className="accent-italic">order bump</span>.
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Attended the webinar and ready to add your{' '}
-            <span className="text-white">One-on-One AI Integration Audit</span>? Enter the email you
+            Ready to add your{' '}
+            <span className="text-white">{OFFER.oto.name}</span>? Enter the email you
             registered with and choose how you&rsquo;d like to pay.
           </p>
         </div>
@@ -49,7 +49,7 @@ export default function OrderBumpPage({
           )}
 
           <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-5 shadow-glow sm:p-10">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">The Audit</div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">{OFFER.oto.eyebrow}</div>
             <h2 className="h-sub mt-3">{OFFER.oto.name}</h2>
             <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
               {OFFER.oto.promise}

@@ -254,20 +254,22 @@ export const OFFER = {
   },
   oto: {
     sku: 'BL_OTO_AUDIT',
-    name: 'One-on-One AI Integration Audit',
+    name: '1on1 MVP Session',
     priceCentavos: 199700,
     currency: 'PHP',
     label: '₱1,997',
-    crossed: '₱4,997',
+    crossed: '₱3,997',
+    // Pre-webinar urgency framing — this is the "action taker" rate.
+    eyebrow: 'Action Taker Bonus',
     promise:
-      'A private 45-minute call with Mikey or Kyle. We audit your business, find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps to build. You walk away with a custom integration plan — not a course.',
+      'A 1-hour exclusive 1:1 call with the founders — claimed before the webinar. We map your full AI integration roadmap, build out the vision for your app, and hand you the exact prompts to start coding, so you can get your project started in under 24 hours.',
     inclusions: [
-      'Live 45-min 1:1 call (Zoom) with Mikey or Kyle',
-      'Custom AI Integration Map — top 3 apps for YOUR business',
-      'Workflow leak audit — exact ₱amount you can reclaim',
-      'Implementation roadmap (priority order, week-by-week)',
-      'Recording + written summary delivered within 2 business days',
-      'Priority queue for follow-up questions for 30 days',
+      '1 Hour Exclusive 1:1 Call with the Founders',
+      'Your full AI Integration Roadmap',
+      'Build your vision for your app',
+      'Get you started on what to code',
+      'The Ultimate Prompt Build',
+      'Start your project in less than 24 hours',
     ],
   },
 };

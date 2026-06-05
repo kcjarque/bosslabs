@@ -22,9 +22,9 @@ export default function TermsPage() {
           of purchase.
         </p>
         <p>
-          The optional One-on-One AI Integration Audit (One-Time Offer) is a
-          separately delivered 45-minute private call with a BOSSLABS founder,
-          available only at the time of purchase on the post-checkout offer page.
+          The optional 1on1 MVP Session (Action Taker Bonus / One-Time Offer) is a
+          separately delivered 1-hour private call with a BOSSLABS founder,
+          available only at the time of purchase on the checkout / post-checkout offer page.
         </p>
       </Section>
 

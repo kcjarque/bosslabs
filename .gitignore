@@ -8,3 +8,4 @@ next-env.d.ts
 # Mini-backend storage (signups + tokens). Local-only by design.
 /data/signups.json
 /data/settings.json
+.vercel

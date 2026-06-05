@@ -419,15 +419,15 @@ export function CheckoutFlow() {
           {bump && (
             <div className="mt-6 border-t border-cyan-500/30 pt-6">
               <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-                1:1 Audit added
+                {OFFER.oto.eyebrow} added
               </div>
               <div className="mt-3 flex items-start justify-between gap-4">
                 <div>
                   <div className="font-serif text-lg text-white">
-                    One-on-One AI Integration Audit
+                    {OFFER.oto.name}
                   </div>
                   <div className="mt-1 text-xs text-ink-200">
-                    45-min private call · Custom integration map
+                    1-hour 1:1 call with the founders · Full AI roadmap
                   </div>
                 </div>
                 <div className="font-serif text-xl text-cyan-400">
@@ -511,16 +511,16 @@ function BumpCard({
         />
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
-            One-time add-on · Save 60%
+            {OFFER.oto.eyebrow} · Save 50%
           </div>
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
-            YES — Add a One-on-One AI Integration Audit
+            YES — Add the {OFFER.oto.name}
           </h3>
           <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-100 sm:text-[14px]">
-            A private 45-minute call with Mikey or Kyle. We audit your business,
-            find the ₱100K+ of monthly leaks AI can close, and map your first 3 apps
-            to build. You walk away with a custom integration plan — not a course.
-            Add it now at half the regular price, this page only.
+            A 1-hour exclusive 1:1 call with the founders — before the webinar. We
+            map your full AI integration roadmap, build out the vision for your app,
+            and hand you the exact prompts to start coding, so you can launch your
+            project in under 24 hours. Action takers only — grab it now at this price.
           </p>
           <div className="mt-3 flex items-baseline gap-3">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">
