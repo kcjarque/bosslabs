@@ -359,14 +359,23 @@ function Hero({ priceCentavos }: { priceCentavos: number | null }) {
       <SectionGlow className="left-[4%] top-[18%]" />
       <div className="container-tight py-14 sm:py-20">
         <Eyebrow num="02">The Invitation</Eyebrow>
-        <h1 className="mt-7 font-sans text-[40px] font-extrabold uppercase leading-[0.92] tracking-[-0.01em] text-white sm:text-[68px] md:text-[80px]">
-          Walk in with an idea.
+        {/* Big hero title — VibeCode Retreat */}
+        <h1 className="mt-5 font-sans font-extrabold uppercase leading-[0.84] tracking-[-0.02em] text-white text-[14vw] sm:text-[96px] md:text-[124px]">
+          Vibecode
           <br />
-          Walk out with an <span className="text-cyan-400">app</span> that{' '}
-          <span className="text-cyan-400">raises your valuation.</span>
+          <span className="text-cyan-400">Retreat</span>
         </h1>
-        <p className="mt-6 max-w-2xl font-sans text-lg text-ink-200 sm:text-xl">
-          An invite-only, <span className="text-cyan-400">build-or-refund</span> founder retreat.
+        <p className="mt-4 font-sans text-xl font-bold uppercase tracking-tight text-white sm:text-3xl">
+          Code. Build. Collaborate. <span className="text-cyan-400">Elevate.</span>
+        </p>
+
+        {/* Subhead — the promise, demoted under the title */}
+        <p className="mt-7 max-w-2xl font-sans text-base leading-relaxed text-ink-300 sm:text-lg">
+          Walk in with an idea. Walk out with an{' '}
+          <span className="font-semibold text-white">app that raises your valuation.</span>
+        </p>
+        <p className="mt-2 max-w-2xl text-[14px] text-ink-400 sm:text-[15px]">
+          An invite-only, <span className="text-cyan-300">build-or-refund</span> founder retreat.
           {priceCentavos != null && (
             <>
               {' '}
