@@ -2,13 +2,17 @@ import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { CheckoutFlow } from '@/components/CheckoutFlow';
 import { PILLARS } from '@/lib/config';
+import { resolveOtoOffer } from '@/lib/webinar';
 
-export default function CheckoutPage({
+export const dynamic = 'force-dynamic';
+
+export default async function CheckoutPage({
   searchParams,
 }: {
   searchParams: { status?: string };
 }) {
   const failed = searchParams.status === 'failed';
+  const oto = await resolveOtoOffer();
   return (
     <>
       <Nav ctaLabel="Need help?" ctaHref="mailto:bosslabs@conexmedia.ph" />
@@ -22,7 +26,7 @@ export default function CheckoutPage({
           </div>
         )}
         <section className="container-tight py-10 sm:py-16">
-          <CheckoutFlow />
+          <CheckoutFlow oto={oto} />
         </section>
 
         {/* What you'll learn — anchors hesitant buyers near the action */}

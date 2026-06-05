@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
+import type { OtoOffer } from '@/lib/webinar';
 import { getFbCookies, newEventId, trackPixelEvent } from '@/lib/meta-client';
 import { PaymentLogos } from './PaymentLogos';
 
@@ -16,7 +17,7 @@ type AppliedPromo = {
   isFree: boolean;
 };
 
-export function CheckoutFlow() {
+export function CheckoutFlow({ oto }: { oto: OtoOffer }) {
   // `loading` is the method currently in flight — lets us spinner just that
   // button while the other two stay disabled (prevents double-submits).
   const [loading, setLoading] = useState<PayMethod | 'FREE' | null>(null);
@@ -32,7 +33,7 @@ export function CheckoutFlow() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
 
-  const baseTotal = OFFER.main.priceCentavos + (bump ? OFFER.oto.priceCentavos : 0);
+  const baseTotal = OFFER.main.priceCentavos + (bump ? oto.centavos : 0);
   const total = appliedPromo ? appliedPromo.finalCentavos : baseTotal;
   const isFree = Boolean(appliedPromo?.isFree);
 
@@ -45,7 +46,7 @@ export function CheckoutFlow() {
     setBump(next);
     if (next) {
       trackPixelEvent('AddToCart', {
-        value: OFFER.oto.priceCentavos / 100,
+        value: oto.centavos / 100,
         currency: 'PHP',
         content_name: OFFER.oto.name,
         content_ids: [OFFER.oto.sku],
@@ -292,7 +293,7 @@ export function CheckoutFlow() {
         </div>
 
         {/* Order bump card */}
-        <BumpCard checked={bump} onChange={handleBumpChange} />
+        <BumpCard checked={bump} onChange={handleBumpChange} oto={oto} />
 
         {/* Promo code row — small, lives between bump card and Pay buttons.
             Pressing Apply hits /api/checkout/promo for a preview; on a 100%
@@ -431,7 +432,7 @@ export function CheckoutFlow() {
                   </div>
                 </div>
                 <div className="font-serif text-xl text-cyan-400">
-                  {formatPHP(OFFER.oto.priceCentavos)}
+                  {formatPHP(oto.centavos)}
                 </div>
               </div>
             </div>
@@ -489,9 +490,11 @@ export function CheckoutFlow() {
 function BumpCard({
   checked,
   onChange,
+  oto,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  oto: OtoOffer;
 }) {
   return (
     <label
@@ -511,7 +514,7 @@ function BumpCard({
         />
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
-            {OFFER.oto.eyebrow} · Save 50%
+            {oto.isFull ? `${OFFER.oto.eyebrow}` : `${OFFER.oto.eyebrow} · Save 50%`}
           </div>
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
             YES — Add the {OFFER.oto.name}
@@ -524,11 +527,13 @@ function BumpCard({
           </p>
           <div className="mt-3 flex items-baseline gap-3">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">
-              {OFFER.oto.label}
+              {oto.label}
             </span>
-            <span className="font-serif text-base text-ink-300 line-through sm:text-lg">
-              {OFFER.oto.crossed}
-            </span>
+            {oto.crossed && (
+              <span className="font-serif text-base text-ink-300 line-through sm:text-lg">
+                {oto.crossed}
+              </span>
+            )}
             <span className="text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
               this page only
             </span>

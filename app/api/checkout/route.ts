@@ -20,7 +20,7 @@ import {
 import { extractClientIp, extractFbCookies, sendCapiEvent } from '@/lib/meta';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, resolveOtoOffer } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
 import { sendTelegram, esc } from '@/lib/telegram';
 import { syncCrmCardForSignup } from '@/lib/crm';
@@ -61,8 +61,11 @@ export async function POST(req: Request) {
     const base = siteUrl(req);
     const bumped = Boolean(body.bump);
 
+    // OTO price flips before/after the webinar (₱1,997 → ₱3,997) — resolved
+    // server-side so the buyer is billed the same amount the page showed.
+    const oto = await resolveOtoOffer();
     const baseAmountCentavos =
-      OFFER.main.priceCentavos + (bumped ? OFFER.oto.priceCentavos : 0);
+      OFFER.main.priceCentavos + (bumped ? oto.centavos : 0);
 
     // Promo path: validate first (preview), then atomically redeem. If the
     // atomic redeem fails (race lost or just turned exhausted between the

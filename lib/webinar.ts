@@ -8,6 +8,7 @@
  */
 
 import { getSettings, getEvent, type Signup } from './db';
+import { OFFER } from './config';
 
 export type WebinarInfo = {
   name: string;
@@ -80,6 +81,36 @@ export async function templateVarsForSignup(
       (process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
         'https://www.bosslabs.live') + '/checkout',
   };
+}
+
+/**
+ * Resolve the live 1on1 MVP Session pricing.
+ *
+ * The offer is an "Action Taker Bonus": ₱1,997 (shown discounted from ₱3,997)
+ * BEFORE/DURING the webinar, and the full ₱3,997 once it has wrapped. The flip
+ * happens `start + 3h` so live action-takers still get the bonus rate.
+ *
+ * Server-authoritative on purpose: the checkout/OTO/order-bump charge routes
+ * AND the display surfaces both resolve price here, so the amount shown always
+ * equals the amount billed. Returns a plain serializable object so it can be
+ * passed straight into client components as props.
+ */
+const OTO_FULL_AFTER_MS = 3 * 60 * 60 * 1000;
+
+export type OtoOffer = {
+  centavos: number;
+  label: string;
+  crossed: string | null;
+  isFull: boolean;
+};
+
+export async function resolveOtoOffer(): Promise<OtoOffer> {
+  const webinar = await getWebinarInfo();
+  const start = Date.parse(webinar.startsAtIso || '');
+  const isFull = !Number.isNaN(start) && Date.now() >= start + OTO_FULL_AFTER_MS;
+  return isFull
+    ? { centavos: OFFER.oto.fullPriceCentavos, label: OFFER.oto.fullLabel, crossed: null, isFull: true }
+    : { centavos: OFFER.oto.priceCentavos, label: OFFER.oto.label, crossed: OFFER.oto.crossed, isFull: false };
 }
 
 export async function getWebinarInfo(): Promise<WebinarInfo> {

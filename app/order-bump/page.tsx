@@ -3,18 +3,22 @@ import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OrderBumpActions } from '@/components/OrderBumpActions';
 import { OFFER, formatPHP } from '@/lib/config';
+import { resolveOtoOffer } from '@/lib/webinar';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Add the 1on1 MVP Session · BOSSLABS AI',
   description: 'Action Taker Bonus: add your 1on1 MVP Session with the founders.',
 };
 
-export default function OrderBumpPage({
+export default async function OrderBumpPage({
   searchParams,
 }: {
   searchParams: { status?: string };
 }) {
   const failed = searchParams.status === 'failed';
+  const oto = await resolveOtoOffer();
 
   return (
     <>
@@ -70,14 +74,16 @@ export default function OrderBumpPage({
             </ul>
 
             <div className="mt-8 flex items-baseline gap-3 border-t border-white/[0.07] pt-7">
-              <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">{OFFER.oto.label}</div>
-              <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">{OFFER.oto.crossed}</div>
+              <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">{oto.label}</div>
+              {oto.crossed && (
+                <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">{oto.crossed}</div>
+              )}
               <div className="text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-                One-time · {formatPHP(OFFER.oto.priceCentavos)}
+                One-time · {formatPHP(oto.centavos)}
               </div>
             </div>
 
-            <OrderBumpActions />
+            <OrderBumpActions priceLabel={oto.label} />
           </div>
 
           <p className="mt-6 text-center text-[11px] uppercase tracking-[0.22em] text-ink-300">
