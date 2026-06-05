@@ -5,7 +5,6 @@ import { Mark } from '@/components/Mark';
 import { OTOActions } from '@/components/OTOActions';
 import { PurchasePixel } from '@/components/PurchasePixel';
 import { OFFER, formatPHP } from '@/lib/config';
-import { resolveOtoOffer, type OtoOffer } from '@/lib/webinar';
 import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 
 // Xendit's successRedirectUrl points here, not /thank-you — so /oto is the
@@ -27,7 +26,6 @@ export default async function OtoPage({
   // /thank-you and the CAPI Purchase event from the Xendit webhook —
   // Meta counts them as one Purchase.
   const purchase = await resolvePurchaseAmount(orderId, undefined);
-  const oto = await resolveOtoOffer();
 
   return (
     <>
@@ -38,7 +36,7 @@ export default async function OtoPage({
           bumped={purchase.bumped}
         />
       )}
-      {bumped ? <BumpedConfirmation orderId={orderId} /> : <LastChance orderId={orderId} oto={oto} />}
+      {bumped ? <BumpedConfirmation orderId={orderId} /> : <LastChance orderId={orderId} />}
     </>
   );
 }
@@ -93,7 +91,7 @@ function BumpedConfirmation({ orderId }: { orderId: string }) {
 /* --------------------------------------------------------------------- */
 /* LAST CHANCE — user didn't bump at checkout                            */
 /* --------------------------------------------------------------------- */
-function LastChance({ orderId, oto }: { orderId: string; oto: OtoOffer }) {
+function LastChance({ orderId }: { orderId: string }) {
   return (
     <>
       <OtoHeader label="Step 2 of 2" />
@@ -121,14 +119,9 @@ function LastChance({ orderId, oto }: { orderId: string; oto: OtoOffer }) {
             <span className="text-white">{OFFER.oto.name}</span>{' '}
             ship their first app <span className="text-white">3× faster</span> on average.
             This is the only page where you can add it for{' '}
-            <span className="text-white">{oto.label}</span>
-            {oto.crossed && (
-              <>
-                {' '}
-                <span className="text-ink-300 line-through">{oto.crossed}</span>
-              </>
-            )}
-            . After this page, the price goes back up.
+            <span className="text-white">{OFFER.oto.label}</span>{' '}
+            <span className="text-ink-300 line-through">{OFFER.oto.crossed}</span>.
+            After this page, the price goes back up.
           </p>
         </div>
 
@@ -160,16 +153,14 @@ function LastChance({ orderId, oto }: { orderId: string; oto: OtoOffer }) {
                 </div>
                 <div className="mt-2 flex items-baseline gap-3">
                   <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">
-                    {oto.label}
+                    {OFFER.oto.label}
                   </div>
-                  {oto.crossed && (
-                    <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">
-                      {oto.crossed}
-                    </div>
-                  )}
+                  <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">
+                    {OFFER.oto.crossed}
+                  </div>
                 </div>
                 <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-                  One-time · No subscription · {formatPHP(oto.centavos)}
+                  One-time · No subscription · {formatPHP(OFFER.oto.priceCentavos)}
                 </div>
               </div>
               <OTOActions orderId={orderId} />

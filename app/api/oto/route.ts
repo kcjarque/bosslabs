@@ -11,7 +11,6 @@ import { NextResponse } from 'next/server';
 import { OFFER } from '@/lib/config';
 import { createInvoice } from '@/lib/xendit';
 import { findSignupByExternalId } from '@/lib/db';
-import { resolveOtoOffer } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -35,12 +34,9 @@ export async function POST(req: Request) {
     const externalId = `BL-OTO-${mainOrder}-${Date.now()}`;
     const base = siteUrl(req);
 
-    // ₱1,997 before/during the webinar, ₱3,997 after — server-authoritative.
-    const oto = await resolveOtoOffer();
-
     const invoice = await createInvoice({
       externalId,
-      amount: oto.centavos / 100,
+      amount: OFFER.oto.priceCentavos / 100,
       description: OFFER.oto.name,
       payerEmail: parent.email,
       successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,

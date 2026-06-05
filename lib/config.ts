@@ -255,14 +255,9 @@ export const OFFER = {
   oto: {
     sku: 'BL_OTO_AUDIT',
     name: '1on1 MVP Session',
-    // Action-taker rate — charged + shown BEFORE/DURING the webinar.
     priceCentavos: 199700,
-    // Full rate — charged + shown AFTER the webinar wraps. Pricing flips in
-    // lib/webinar.ts resolveOtoOffer() (server-authoritative).
-    fullPriceCentavos: 399700,
     currency: 'PHP',
     label: '₱1,997',
-    fullLabel: '₱3,997',
     crossed: '₱3,997',
     // Pre-webinar urgency framing — this is the "action taker" rate.
     eyebrow: 'Action Taker Bonus',

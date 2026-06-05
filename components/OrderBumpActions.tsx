@@ -15,7 +15,7 @@ function Dot({ className }: { className: string }) {
   return <span className={`inline-block h-2.5 w-2.5 rounded-full ${className}`} />;
 }
 
-export function OrderBumpActions({ priceLabel }: { priceLabel: string }) {
+export function OrderBumpActions() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState<Group | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export function OrderBumpActions({ priceLabel }: { priceLabel: string }) {
             type="button"
             onClick={() => pay(m.group)}
             disabled={loading !== null}
-            aria-label={`${m.label} — ${priceLabel}`}
+            aria-label={`${m.label} — ${OFFER.oto.label}`}
             className="group relative flex w-full items-center gap-3 rounded-full border border-cyan-500/40 bg-gradient-to-r from-cyan-500/[0.12] via-cyan-500/[0.06] to-transparent px-5 py-4 text-left transition hover:border-cyan-400 hover:from-cyan-500/[0.18] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-[#06070A]/60 sm:h-10 sm:w-10">
@@ -79,7 +79,7 @@ export function OrderBumpActions({ priceLabel }: { priceLabel: string }) {
                 {loading === m.group ? 'Starting secure checkout…' : m.label}
               </span>
               <span className="font-serif text-[15px] tracking-tight text-cyan-300 sm:text-[17px]">
-                {priceLabel}
+                {OFFER.oto.label}
               </span>
             </span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="flex-none text-cyan-400 transition group-hover:translate-x-0.5" aria-hidden="true">
@@ -96,7 +96,7 @@ export function OrderBumpActions({ priceLabel }: { priceLabel: string }) {
       )}
 
       <p className="mt-5 text-center text-[11px] uppercase tracking-[0.22em] text-ink-300">
-        {priceLabel} · one-time · 100% secure checkout
+        {OFFER.oto.label} · one-time · 100% secure checkout
       </p>
     </div>
   );
