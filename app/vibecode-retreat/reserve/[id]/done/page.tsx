@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { RetreatHeaderLight, Steps } from '@/components/RetreatChrome';
+import { RetreatPrepForm } from '@/components/RetreatPrepForm';
 import { getRetreatReservation } from '@/lib/db';
+import { savePrepDetailsAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +55,13 @@ export default async function ReserveDonePage({
               ) : null}{' '}
               within 24 hours. Keep an eye on your inbox (and spam folder).
             </p>
+
+            {/* The "rest" — collected here, after payment, to keep sign-up fast. */}
+            {r && (
+              <div className="mx-auto mt-9 max-w-md">
+                <RetreatPrepForm id={r.id} onSave={savePrepDetailsAction} />
+              </div>
+            )}
 
             <div className="mx-auto mt-9 max-w-md rounded-2xl border border-slate-200 bg-white/70 p-6 text-left shadow-[0_12px_36px_-26px_rgba(20,50,90,0.4)]">
               <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-700">

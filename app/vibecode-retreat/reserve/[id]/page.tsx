@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Footer } from '@/components/Footer';
-import { BankCards } from '@/components/BankCards';
+import { RetreatPayPanel } from '@/components/RetreatPayPanel';
 import { ProofUpload } from '@/components/ProofUpload';
 import { RetreatHeaderLight, Steps } from '@/components/RetreatChrome';
 import { getRetreatReservation, getFunnels } from '@/lib/db';
 import type { EventFunnelConfig } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
-import { RETREAT_BANKS, planSummary } from '@/lib/retreat';
+import { planSummary } from '@/lib/retreat';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,20 +58,25 @@ export default async function ReservePaymentPage({
               {formatPHP(due)}
             </div>
             <div className="mt-1 text-sm text-slate-500">{summary.label}</div>
+            <div className="mt-3 text-[12px] leading-relaxed text-slate-500">
+              Prefer to commit less now? Send{' '}
+              <span className="font-semibold text-slate-700">{formatPHP(1_000_000)}</span> to reserve
+              your slot and settle the balance later.
+            </div>
           </div>
 
           {/* Step 1 — pay */}
           <div className="mt-12">
             <h2 className="font-serif text-xl text-slate-900 sm:text-2xl">
-              <span className="text-cyan-600">1.</span> Send it to any account
+              <span className="text-cyan-600">1.</span> Pay to lock your seat
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Use your name{' '}
-              <span className="font-medium text-slate-700">“{r.name}”</span> as
-              the transfer note so we can match your payment fast.
+              Pay by card for instant confirmation, or scan a bank QR (InstaPay) — use your name{' '}
+              <span className="font-medium text-slate-700">“{r.name}”</span> as the transfer note so
+              we can match it fast.
             </p>
             <div className="mt-5">
-              <BankCards banks={[...RETREAT_BANKS]} highlight={r.paymentMethod} />
+              <RetreatPayPanel method={r.paymentMethod} transferNote={r.name} />
             </div>
           </div>
 

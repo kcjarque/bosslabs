@@ -2705,3 +2705,24 @@ export async function markRetreatReservationProof(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw new Error(`markRetreatReservationProof: ${error.message}`);
 }
+
+/** Fill in the "rest" of a reservation (collected after payment on the
+ *  done page) — keeps the upfront reserve form minimal. */
+export async function updateRetreatReservation(
+  id: string,
+  patch: Partial<Pick<RetreatReservationInput,
+    'overnight' | 'diet' | 'business' | 'buildIdea' | 'extraPersonName' | 'tshirtSize' | 'heardFrom'>>,
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const row: Record<string, unknown> = {};
+  if (patch.overnight !== undefined) row.overnight = patch.overnight;
+  if (patch.diet !== undefined) row.diet = patch.diet;
+  if (patch.business !== undefined) row.business = patch.business;
+  if (patch.buildIdea !== undefined) row.build_idea = patch.buildIdea;
+  if (patch.extraPersonName !== undefined) row.extra_person_name = patch.extraPersonName;
+  if (patch.tshirtSize !== undefined) row.tshirt_size = patch.tshirtSize;
+  if (patch.heardFrom !== undefined) row.heard_from = patch.heardFrom;
+  if (Object.keys(row).length === 0) return;
+  const { error } = await getSupabase().from('retreat_reservations').update(row).eq('id', id);
+  if (error) throw new Error(`updateRetreatReservation: ${error.message}`);
+}

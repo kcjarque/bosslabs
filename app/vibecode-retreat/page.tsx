@@ -13,7 +13,6 @@ import { ReserveButton } from '@/components/ReserveButton';
 export const dynamic = 'force-dynamic';
 
 const SLUG = 'vibecode-retreat';
-const CARD_CHECKOUT_URL = 'https://checkout.xendit.co/od/bosslabs-vibecoderetreat';
 
 export const metadata: Metadata = {
   title: 'VibeCode Retreat — Walk in with an idea. Walk out with an app.',
@@ -564,97 +563,34 @@ function BillionaireSession() {
 /* Payment — bank QR (InstaPay) + credit card + reserve                  */
 /* --------------------------------------------------------------------- */
 function Payment({ priceCentavos }: { priceCentavos: number | null }) {
-  const banks = [
-    { name: 'UnionBank', holder: 'Manago, Michael Batiquin', img: '/qr-unionbank.jpeg' },
-    { name: 'BPI', holder: 'BossLabs · MI•••L B MA•••O', img: '/qr-bpi.jpeg' },
-  ];
   return (
     <section id="secure-seat" className="relative container-tight py-16 sm:py-24">
       <SectionGlow className="left-1/2 top-[6%] -translate-x-1/2" />
-      <div className="mx-auto max-w-4xl">
-        <div className="text-center">
-          <Eyebrow num="05">Secure Your Seat</Eyebrow>
-          <Display className="mt-5 text-[32px] sm:text-[48px]">
-            Lock in your <span className="text-cyan-400">slot.</span>
-          </Display>
-          {priceCentavos != null && (
-            <div className="mt-5 inline-flex items-baseline gap-3">
-              <span className="font-sans text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
-                {formatPHP(priceCentavos)}
-              </span>
-              <span className="text-sm uppercase tracking-[0.2em] text-cyan-400">per seat</span>
-            </div>
-          )}
-          <p className="mx-auto mt-4 max-w-lg text-sm text-ink-300">
-            Only 10 seats. Pay by card or scan a bank QR (InstaPay) below, then apply so we can
-            confirm your slot.
-          </p>
+      <div className="mx-auto max-w-2xl text-center">
+        <Eyebrow num="05">Secure Your Seat</Eyebrow>
+        <Display className="mt-5 text-[32px] sm:text-[48px]">
+          Lock in your <span className="text-cyan-400">slot.</span>
+        </Display>
+        {priceCentavos != null && (
+          <div className="mt-5 inline-flex items-baseline gap-3">
+            <span className="font-sans text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
+              {formatPHP(priceCentavos)}
+            </span>
+            <span className="text-sm uppercase tracking-[0.2em] text-cyan-400">per seat</span>
+          </div>
+        )}
+        <p className="mx-auto mt-4 max-w-lg text-[15px] leading-relaxed text-ink-200">
+          Reserve in 30 seconds — just your name, email &amp; number.{' '}
+          <span className="text-white">No payment yet</span> — we&apos;ll show you exactly how to pay
+          (card or bank QR) on the very next screen.
+        </p>
+        <div className="mt-8 flex justify-center">
+          <ReserveButton label="Reserve your seat →" />
         </div>
-
-        {/* Credit card */}
-        <div className="mt-10 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.08] to-white/[0.01] p-6 sm:p-8">
-            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">
-              Pay by card
-            </div>
-            <h3 className="mt-2 font-sans text-2xl font-bold text-white">Credit / Debit Card</h3>
-            <p className="mt-2 text-sm text-ink-300">
-              Visa, Mastercard & more via secure Xendit checkout. Instant confirmation.
-            </p>
-            <a
-              href={CARD_CHECKOUT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-cyan mt-6 inline-flex !px-7 !py-3.5 text-base"
-            >
-              Pay via Credit Card →
-            </a>
-          </div>
-
-          {/* Apply / reserve */}
-          <div className="rounded-2xl border border-cyan-500/20 bg-white/[0.03] p-6 sm:p-8">
-            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">
-              Apply for a slot
-            </div>
-            <h3 className="mt-2 font-sans text-2xl font-bold text-white">Reserve &amp; we confirm</h3>
-            <p className="mt-2 text-sm text-ink-300">
-              Tell us about your business and lock your slot. Invite-only — we review every
-              application.
-            </p>
-            <ReserveButton className="mt-6" label="Reserve your slot →" />
-          </div>
-        </div>
-
-        {/* Bank QR */}
-        <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-white/[0.03] p-6 sm:p-8">
-          <div className="text-center">
-            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">
-              Pay by bank transfer · InstaPay
-            </div>
-            <p className="mt-2 text-sm text-ink-300">
-              Scan with your banking app, then send your receipt to confirm.
-            </p>
-          </div>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            {banks.map((b) => (
-              <div
-                key={b.name}
-                className="flex flex-col items-center rounded-2xl border border-white/10 bg-white p-5"
-              >
-                <div className="text-sm font-bold uppercase tracking-[0.18em] text-slate-900">
-                  {b.name}
-                </div>
-                <div className="mt-1 text-[12px] text-slate-500">{b.holder}</div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={b.img}
-                  alt={`${b.name} InstaPay QR — ${b.holder}`}
-                  className="mt-4 w-full max-w-[260px] rounded-lg"
-                  loading="lazy"
-                />
-              </div>
-            ))}
-          </div>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.16em] text-ink-400">
+          <span>10 seats only</span>
+          <span>Build-or-refund</span>
+          <span>Pay by card or bank QR</span>
         </div>
       </div>
     </section>
