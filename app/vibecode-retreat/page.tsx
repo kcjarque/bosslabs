@@ -55,12 +55,15 @@ export default async function VibeCodeRetreatPage() {
 /* --------------------------------------------------------------------- */
 // Deterministic floating particles (no Math.random → stable SSR).
 const PARTICLES = [
-  { l: '8%', d: 26, delay: 0, s: 3 }, { l: '18%', d: 34, delay: 6, s: 2 },
-  { l: '27%', d: 30, delay: 12, s: 4 }, { l: '38%', d: 38, delay: 3, s: 2 },
-  { l: '47%', d: 28, delay: 9, s: 3 }, { l: '56%', d: 36, delay: 15, s: 2 },
-  { l: '64%', d: 32, delay: 5, s: 4 }, { l: '72%', d: 40, delay: 11, s: 2 },
-  { l: '81%', d: 29, delay: 2, s: 3 }, { l: '90%', d: 35, delay: 8, s: 2 },
-  { l: '14%', d: 42, delay: 18, s: 2 }, { l: '60%', d: 44, delay: 14, s: 3 },
+  { l: '6%', d: 17, delay: 0, s: 4 }, { l: '13%', d: 22, delay: 5, s: 2 },
+  { l: '20%', d: 19, delay: 9, s: 5 }, { l: '28%', d: 24, delay: 2, s: 3 },
+  { l: '35%', d: 16, delay: 7, s: 4 }, { l: '42%', d: 21, delay: 12, s: 2 },
+  { l: '49%', d: 18, delay: 4, s: 5 }, { l: '56%', d: 23, delay: 10, s: 3 },
+  { l: '63%', d: 17, delay: 1, s: 4 }, { l: '70%', d: 25, delay: 6, s: 2 },
+  { l: '77%', d: 19, delay: 13, s: 5 }, { l: '84%', d: 22, delay: 3, s: 3 },
+  { l: '91%', d: 18, delay: 8, s: 4 }, { l: '10%', d: 26, delay: 15, s: 3 },
+  { l: '47%', d: 27, delay: 11, s: 2 }, { l: '66%', d: 28, delay: 16, s: 4 },
+  { l: '33%', d: 20, delay: 14, s: 3 }, { l: '88%', d: 24, delay: 18, s: 2 },
 ];
 
 function CinematicBackground() {
@@ -70,16 +73,30 @@ function CinematicBackground() {
       <div className="absolute inset-0 bg-[#06070A]" />
       <div className="absolute inset-0 bg-gradient-to-b from-[#0A1020] via-[#06070A] to-[#06070A]" />
 
-      {/* slow-drifting aurora glows — the "chill vibes" */}
-      <div className="vc-orb absolute -left-40 top-[-8%] h-[620px] w-[620px] rounded-full bg-cyan-500/[0.12]" />
-      <div className="vc-orb vc-orb-2 absolute -right-40 top-[26%] h-[560px] w-[560px] rounded-full bg-indigo-500/[0.10]" />
-      <div className="vc-orb vc-orb-3 absolute left-[30%] top-[62%] h-[520px] w-[520px] rounded-full bg-sky-400/[0.07]" />
+      {/* panning grid — clear continuous motion at the back */}
+      <div
+        className="vc-grid absolute inset-0 opacity-[0.08]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(120,200,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(120,200,255,0.55) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 35%, transparent 80%)',
+        }}
+      />
 
-      {/* floating particles rising slowly */}
+      {/* bigger, brighter, wider-drifting aurora glows */}
+      <div className="vc-orb absolute -left-40 top-[-10%] h-[680px] w-[680px] rounded-full bg-cyan-500/[0.20]" />
+      <div className="vc-orb vc-orb-2 absolute -right-44 top-[22%] h-[620px] w-[620px] rounded-full bg-indigo-500/[0.18]" />
+      <div className="vc-orb vc-orb-3 absolute left-[28%] top-[58%] h-[560px] w-[560px] rounded-full bg-sky-400/[0.14]" />
+
+      {/* sweeping diagonal light beam across the hero */}
+      <div className="vc-beam absolute -inset-y-1/2 left-0 w-[40%] -rotate-12 bg-gradient-to-r from-transparent via-cyan-400/[0.10] to-transparent blur-2xl" />
+
+      {/* floating particles rising */}
       {PARTICLES.map((p, i) => (
         <span
           key={i}
-          className="vc-particle absolute rounded-full bg-cyan-300/40"
+          className="vc-particle absolute rounded-full bg-cyan-300/60 shadow-[0_0_8px_2px_rgba(34,211,238,0.35)]"
           style={{
             left: p.l,
             bottom: '-10px',
@@ -90,17 +107,6 @@ function CinematicBackground() {
           }}
         />
       ))}
-
-      {/* faint grid, fading toward the top */}
-      <div
-        className="absolute inset-0 opacity-[0.05]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%)',
-        }}
-      />
     </div>
   );
 }
@@ -178,14 +184,18 @@ function RisingChart({ className = '' }: { className?: string }) {
 }
 
 const VC_CSS = `
-@keyframes vcDrift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(46px,-34px) scale(1.1); } }
-@keyframes vcDrift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-54px,42px) scale(1.12); } }
-@keyframes vcDrift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,40px) scale(1.08); } }
-.vc-orb { filter: blur(140px); animation: vcDrift 24s ease-in-out infinite; }
-.vc-orb-2 { animation: vcDrift2 30s ease-in-out infinite; }
-.vc-orb-3 { animation: vcDrift3 27s ease-in-out infinite; }
-@keyframes vcFloat { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .7; } 88% { opacity: .7; } 100% { transform: translateY(-78vh); opacity: 0; } }
+@keyframes vcDrift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(90px,-60px) scale(1.2); } }
+@keyframes vcDrift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-100px,76px) scale(1.22); } }
+@keyframes vcDrift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(64px,72px) scale(1.18); } }
+.vc-orb { filter: blur(130px); animation: vcDrift 15s ease-in-out infinite; }
+.vc-orb-2 { animation: vcDrift2 19s ease-in-out infinite; }
+.vc-orb-3 { animation: vcDrift3 17s ease-in-out infinite; }
+@keyframes vcFloat { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: .9; } 88% { opacity: .9; } 100% { transform: translateY(-88vh); opacity: 0; } }
 .vc-particle { animation: vcFloat linear infinite; }
+@keyframes vcGridPan { from { background-position: 0 0; } to { background-position: 64px 64px; } }
+.vc-grid { animation: vcGridPan 6s linear infinite; }
+@keyframes vcBeam { 0% { transform: translateX(-60vw) rotate(-12deg); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateX(170vw) rotate(-12deg); opacity: 0; } }
+.vc-beam { animation: vcBeam 11s ease-in-out infinite; }
 @keyframes vcGlowDrift { 0%,100% { transform: translate(0,0); opacity:.55; } 50% { transform: translate(28px,-22px); opacity:.95; } }
 .vc-glow { animation: vcGlowDrift 18s ease-in-out infinite; }
 @keyframes vcShimmer { 0% { transform: translateX(-130%) skewX(-18deg); } 100% { transform: translateX(260%) skewX(-18deg); } }
@@ -201,7 +211,7 @@ const VC_CSS = `
 @keyframes vcFloatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .vc-bob { animation: vcFloatY 6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .vc-orb, .vc-orb-2, .vc-orb-3, .vc-particle, .vc-glow, .vc-pulse, .vc-twinkle, .vc-flow, .vc-bob { animation: none !important; }
+  .vc-orb, .vc-orb-2, .vc-orb-3, .vc-particle, .vc-glow, .vc-pulse, .vc-twinkle, .vc-flow, .vc-bob, .vc-grid, .vc-beam { animation: none !important; }
   .vc-shimmer::after { display: none; }
 }
 `;
