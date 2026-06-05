@@ -24,15 +24,16 @@ function smsHref(phone: string, template: string, name: string): string {
   return `sms:${toE164Ph(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
+type Candidate = { id: string; name: string; email: string; phone: string };
+
 export function RetreatCrmBoard() {
   const [cards, setCards] = useState<RetreatCrmCard[]>([]);
+  const [customers, setCustomers] = useState<Candidate[]>([]);
   const [template, setTemplate] = useState('');
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<RetreatCrmStage | null>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [pickQuery, setPickQuery] = useState('');
   const [savedTpl, setSavedTpl] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -42,6 +43,7 @@ export function RetreatCrmBoard() {
     const d = await r.json();
     setCards(d.cards ?? []);
     setTemplate(d.template ?? '');
+    setCustomers(d.customers ?? []);
   }
   useEffect(() => {
     (async () => {
@@ -50,17 +52,13 @@ export function RetreatCrmBoard() {
     })();
   }, []);
 
-  async function addCard(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
+  async function promote(c: Candidate) {
     const res = await api({
       action: 'add',
-      card: { name: name.trim(), email: email.trim(), phone: phone.trim() },
+      card: { name: c.name.trim(), email: c.email.trim(), phone: c.phone.trim() },
     });
-    if (res.card) setCards((c) => [...c, res.card]);
-    setName('');
-    setEmail('');
-    setPhone('');
+    if (res.card) setCards((cs) => [...cs, res.card]);
+    setPickQuery('');
   }
 
   function moveCard(id: string, stage: RetreatCrmStage) {
@@ -107,6 +105,30 @@ export function RetreatCrmBoard() {
       )
     : cards;
 
+  // Already-on-board lookup so a customer can't be added twice (match on email
+  // or normalized phone — the same person across two reservations/contacts).
+  const onBoardEmails = new Set(
+    cards.map((c) => c.email.trim().toLowerCase()).filter(Boolean),
+  );
+  const onBoardPhones = new Set(
+    cards.map((c) => (c.phone ? toE164Ph(c.phone) : '')).filter(Boolean),
+  );
+  const isOnBoard = (c: Candidate) =>
+    (!!c.email && onBoardEmails.has(c.email.trim().toLowerCase())) ||
+    (!!c.phone && onBoardPhones.has(toE164Ph(c.phone)));
+
+  const pq = pickQuery.trim().toLowerCase();
+  const matches = pq
+    ? customers
+        .filter(
+          (c) =>
+            c.name.toLowerCase().includes(pq) ||
+            c.email.toLowerCase().includes(pq) ||
+            c.phone.toLowerCase().includes(pq),
+        )
+        .slice(0, 12)
+    : [];
+
   return (
     <div className="space-y-4">
       <div className="card space-y-3">
@@ -127,15 +149,66 @@ export function RetreatCrmBoard() {
             </button>
           </div>
         </div>
-        <form onSubmit={addCard} className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
-          <div className="flex-1">
-            <label className="label">Promote someone interested</label>
-            <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="border-t border-slate-100 pt-3">
+          <label className="label">Promote someone interested</label>
+          <p className="mb-1.5 text-[11px] text-slate-500">
+            Search your existing customers and add them straight to <strong>Interested</strong>.
+          </p>
+          <div className="relative">
+            <input
+              className="input"
+              placeholder="Search customers by name, email, or number…"
+              value={pickQuery}
+              onChange={(e) => setPickQuery(e.target.value)}
+            />
+            {pickQuery && (
+              <button
+                onClick={() => setPickQuery('')}
+                aria-label="Clear"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                ×
+              </button>
+            )}
+            {pq && (
+              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {matches.length === 0 ? (
+                  <div className="px-3 py-2.5 text-xs text-slate-400">
+                    No matching customers. They&rsquo;ll appear here once they exist in Customers.
+                  </div>
+                ) : (
+                  matches.map((m) => {
+                    const already = isOnBoard(m);
+                    return (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-slate-50"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm text-slate-800">{m.name}</div>
+                          <div className="truncate text-[11px] text-slate-400">
+                            {m.email}
+                            {m.phone ? ` · ${toE164Ph(m.phone)}` : ''}
+                          </div>
+                        </div>
+                        {already ? (
+                          <span className="whitespace-nowrap text-[11px] text-slate-400">On board ✓</span>
+                        ) : (
+                          <button
+                            onClick={() => promote(m)}
+                            className="btn btn-secondary whitespace-nowrap text-xs"
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
-          <input className="input sm:w-52" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="input sm:w-40" placeholder="09xx… (for SMS)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <button type="submit" className="btn btn-secondary">Add to Interested</button>
-        </form>
+        </div>
       </div>
 
       {/* Search + Refresh */}

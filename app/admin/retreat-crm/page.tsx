@@ -15,9 +15,9 @@ export default function RetreatCrmPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Everyone who reserves a retreat seat lands here as <strong>Interested</strong>; once they
-          pay (proof submitted) they auto-move to <strong>Paid</strong>. Promote anyone who expressed
-          interest with <strong>Add to Interested</strong>, then drag them across the stages and{' '}
-          <strong>Text</strong> them from your phone.
+          pay (proof submitted) they auto-move to <strong>Paid</strong>. To add someone who expressed
+          interest, <strong>search your customers</strong> and add them to Interested, then drag them
+          across the stages and <strong>Text</strong> them from your phone.
         </p>
       </header>
 

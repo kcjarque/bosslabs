@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 import {
   listRetreatCrmCards,
+  listRetreatCrmCandidates,
   addRetreatCrmCard,
   updateRetreatCrmCard,
   deleteRetreatCrmCard,
@@ -14,8 +15,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const [cards, template] = await Promise.all([listRetreatCrmCards(), getRetreatCrmTemplate()]);
-  return NextResponse.json({ cards, template });
+  const [cards, template, customers] = await Promise.all([
+    listRetreatCrmCards(),
+    getRetreatCrmTemplate(),
+    listRetreatCrmCandidates(),
+  ]);
+  return NextResponse.json({ cards, template, customers });
 }
 
 export async function POST(req: Request) {

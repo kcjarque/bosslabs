@@ -7,6 +7,7 @@
  * and drag through the later stages. Sync runs on read so the board self-heals.
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { getSignups } from './db';
 import { RETREAT_CRM_STAGES, type RetreatCrmStage, type RetreatCrmCard } from './retreat-crm-stages';
 
 export {
@@ -102,6 +103,24 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
   return cards
     .map((c) => rowToCard(c, c.reservation_id ? resById.get(c.reservation_id) : undefined))
     .sort((a, b) => a.stage.localeCompare(b.stage) || a.position - b.position);
+}
+
+/** A pickable customer for the "Promote someone interested" search box. */
+export type RetreatCrmCandidate = { id: string; name: string; email: string; phone: string };
+
+/**
+ * The customer list that powers the promote-search in the board. Drawn from the
+ * same signups the Customers page shows, so the team searches one source of truth
+ * instead of retyping names. Name falls back to email when a row has no name.
+ */
+export async function listRetreatCrmCandidates(): Promise<RetreatCrmCandidate[]> {
+  const signups = await getSignups();
+  return signups.map((s) => ({
+    id: s.id,
+    name: `${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || s.email,
+    email: s.email ?? '',
+    phone: s.phone ?? '',
+  }));
 }
 
 export async function addRetreatCrmCard(input: {
