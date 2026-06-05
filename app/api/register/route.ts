@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { addSignup } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
-import { getWebinarInfo, freeWelcomeTemplateId } from '@/lib/webinar';
+import { getWebinarInfo } from '@/lib/webinar';
 
 export const runtime = 'nodejs';
 
@@ -30,8 +30,6 @@ export async function POST(req: Request) {
 
     // Fire-and-forget welcome email + SMS (template lookup, with var injection).
     const webinar = await getWebinarInfo();
-    const siteBase =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://www.bosslabs.live';
     const vars = {
       firstName: signup.firstName,
       email: signup.email,
@@ -43,16 +41,12 @@ export async function POST(req: Request) {
       zoomRegisterUrl: webinar.zoomRegisterUrl,
       zoomJoinUrl: webinar.zoomJoinUrl,
       replayUrl: webinar.replayUrl,
-      replayPageUrl: `${siteBase}/replay`,
       messengerGroupUrl: webinar.messengerGroupUrl,
     };
 
-    // If they register after the webinar is over, send the replay welcome
-    // instead of "see you on <date> · join the Zoom call".
-    const welcomeTpl = await freeWelcomeTemplateId(signup, webinar);
     Promise.all([
-      sendEmail({ to: signup.email, templateId: welcomeTpl, vars }),
-      sendSms({ to: signup.phone, templateId: welcomeTpl, vars }),
+      sendEmail({ to: signup.email, templateId: 'free_welcome', vars }),
+      sendSms({ to: signup.phone, templateId: 'free_welcome', vars }),
     ]).catch((err) => console.error('[register] notification error:', err));
 
     return NextResponse.json({ ok: true, id: signup.id });

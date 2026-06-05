@@ -13,7 +13,7 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
 import { sendTelegram, sendTelegramPhoto, esc } from './telegram';
-import { getWebinarInfo, templateVarsForSignup, paidConfirmationTemplateId } from './webinar';
+import { getWebinarInfo, templateVarsForSignup } from './webinar';
 import { syncCrmCardForSignup } from './crm';
 import { closeLeadAndRecordCommission } from './closers';
 import { recordCommission } from './affiliates';
@@ -96,15 +96,12 @@ export async function markAbandonedCartPaid(
   });
   await closeLeadAndRecordCommission(signup.id);
 
-  // 4) Paid confirmation email + SMS (best-effort). Once the webinar is over,
-  //    this switches to the replay confirmation so late / recovered buyers
-  //    don't get a dead "join the Zoom call" link for a session that's done.
+  // 4) Paid confirmation email + SMS (best-effort).
   const webinar = await getWebinarInfo();
   const vars = await templateVarsForSignup(signup, webinar);
-  const confirmTpl = await paidConfirmationTemplateId(signup, webinar);
-  await sendEmail({ to: signup.email, templateId: confirmTpl, vars }).catch(() => {});
+  await sendEmail({ to: signup.email, templateId: 'paid_confirmation', vars }).catch(() => {});
   if (signup.phone) {
-    await sendSms({ to: signup.phone, templateId: confirmTpl, vars }).catch(() => {});
+    await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars }).catch(() => {});
   }
 
   // 5) Telegram alert — send the actual proof screenshot as a photo (caption
