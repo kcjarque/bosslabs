@@ -86,7 +86,10 @@ function buildCommsTimeline(
       kind: 'Payment confirmation',
       description: 'Confirmation email + Zoom link',
       ok: true,
-      status: 'sent',
+      // Real delivery status arrives via the SES webhook (defaults to 'sent'
+      // until a delivered/bounced event lands).
+      status: (meta.confirmationStatus as CommsEvent['status']) ?? 'sent',
+      statusAt: meta.confirmationStatusAt as string | undefined,
       templateId: 'paid_confirmation',
     });
   }

@@ -2188,6 +2188,49 @@ export async function updateSequenceSendStatus(
     .eq('id', current.id);
 }
 
+/** Find a signup by the message-id of its paid_confirmation email (stored in
+ *  metadata.confirmationMessageId), so a delivery webhook can stamp the real
+ *  delivered/bounced status onto a transactional confirmation. */
+export async function findSignupByConfirmationMessageId(
+  messageId: string,
+): Promise<Signup | null> {
+  if (!messageId) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .filter('metadata->>confirmationMessageId', 'eq', messageId)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findSignupByConfirmationMessageId: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return (
+    list.find(
+      (s) =>
+        (s.metadata as { confirmationMessageId?: string } | undefined)
+          ?.confirmationMessageId === messageId,
+    ) ?? null
+  );
+}
+
+/** Upgrade the paid_confirmation delivery status on a signup, never downgrading. */
+export async function updateConfirmationStatus(
+  signupId: string,
+  status: string,
+  statusAt: string,
+): Promise<void> {
+  const s = await getSignupById(signupId);
+  if (!s) return;
+  const cur = (s.metadata as { confirmationStatus?: string } | undefined)?.confirmationStatus;
+  const curRank = cur ? EMAIL_STATUS_RANK[cur] ?? 0 : 0;
+  const newRank = EMAIL_STATUS_RANK[status] ?? 0;
+  if (newRank <= curRank) return; // don't downgrade
+  await updateSignup(signupId, {
+    metadata: { ...(s.metadata ?? {}), confirmationStatus: status, confirmationStatusAt: statusAt },
+  });
+}
+
 /**
  * Step counts grouped by sequence_id — single query instead of N
  * per-sequence calls. Used by /admin/sequences to render the table.

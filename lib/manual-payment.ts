@@ -62,19 +62,17 @@ export async function markAbandonedCartPaid(
   const now = new Date().toISOString();
 
   // 1) Mark paid + stamp the manual-payment record (idempotency marker).
-  await updateSignup(signup.id, {
-    status: 'paid',
-    metadata: {
-      ...(signup.metadata ?? {}),
-      confirmationSent: now,
-      paidAmount: amountPhp,
-      manualPayment: true,
-      manualPaymentAt: now,
-      manualPaymentBy: opts.paidBy ?? 'admin',
-      manualPaymentMethod: opts.method ?? null,
-      manualPaymentProof: opts.proofUrl ?? null,
-    },
-  });
+  const paidMeta = {
+    ...(signup.metadata ?? {}),
+    confirmationSent: now,
+    paidAmount: amountPhp,
+    manualPayment: true,
+    manualPaymentAt: now,
+    manualPaymentBy: opts.paidBy ?? 'admin',
+    manualPaymentMethod: opts.method ?? null,
+    manualPaymentProof: opts.proofUrl ?? null,
+  };
+  await updateSignup(signup.id, { status: 'paid', metadata: paidMeta });
 
   // 2) Affiliate commission (if this buyer was referred).
   const refMeta = signup.metadata as { affiliateCode?: string; affiliateSub?: string } | undefined;
@@ -99,9 +97,18 @@ export async function markAbandonedCartPaid(
   // 4) Paid confirmation email + SMS (best-effort).
   const webinar = await getWebinarInfo();
   const vars = await templateVarsForSignup(signup, webinar);
-  await sendEmail({ to: signup.email, templateId: 'paid_confirmation', vars }).catch(() => {});
+  const emailRes = await sendEmail({ to: signup.email, templateId: 'paid_confirmation', vars }).catch(
+    () => null,
+  );
   if (signup.phone) {
     await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars }).catch(() => {});
+  }
+  // Record the confirmation message-id so the SES delivery webhook can stamp
+  // the real delivered/bounced status onto it later.
+  if (emailRes?.ok && emailRes.id) {
+    await updateSignup(signup.id, {
+      metadata: { ...paidMeta, confirmationMessageId: emailRes.id, confirmationStatus: 'sent' },
+    }).catch(() => {});
   }
 
   // 5) Telegram alert — send the actual proof screenshot as a photo (caption

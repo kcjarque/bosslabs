@@ -103,15 +103,13 @@ async function handleMainPaid(event: XenditEvent) {
 
   // Write the marker FIRST, then do side-effects. A retried webhook that
   // arrives mid-flight sees the marker and bails cleanly.
-  await updateSignup(signup.id, {
-    status: 'paid',
-    metadata: {
-      ...(signup.metadata ?? {}),
-      confirmationSent: new Date().toISOString(),
-      xenditInvoiceId: event.id,
-      paidAmount: event.amount,
-    },
-  });
+  const paidMeta = {
+    ...(signup.metadata ?? {}),
+    confirmationSent: new Date().toISOString(),
+    xenditInvoiceId: event.id,
+    paidAmount: event.amount,
+  };
+  await updateSignup(signup.id, { status: 'paid', metadata: paidMeta });
 
   // Affiliate commission — if this buyer was referred, record the payout
   // (idempotent; computed on the total paid incl. any OTO bump).
@@ -137,6 +135,13 @@ async function handleMainPaid(event: XenditEvent) {
   });
   if (signup.phone) {
     await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars });
+  }
+  // Record the confirmation's message-id so the SES delivery webhook can stamp
+  // the real delivered/bounced status onto it later.
+  if (emailRes.ok && emailRes.id) {
+    await updateSignup(signup.id, {
+      metadata: { ...paidMeta, confirmationMessageId: emailRes.id, confirmationStatus: 'sent' },
+    }).catch(() => {});
   }
 
   // CAPI Purchase event for the main invoice (₱999 or ₱2,996 if bumped).
