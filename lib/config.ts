@@ -117,24 +117,24 @@ export const LAYERS = [
 export const PILLARS = [
   {
     n: '01',
-    brand: 'The 24-Hour Replacement',
-    promise: 'How to Replace One Expensive Workflow Per Day in Your Business',
+    brand: 'Everyone Is Wrong About AI',
+    promise: 'The truth: it’s not about prompts — and definitely not marketing-marketing',
     body:
-      'The exact loop we use every week — identify the workflow eating your team\'s time, build the AI replacement in one night, deploy it the next day. By the end of the webinar, you will have shipped your first one live.',
+      'Most gurus sell you prompts and “marketing-marketing.” That’s hao shao. The real value of AI is building systems that run your business — better product, better operations, better value your competitors can’t copy. We show you what AI is actually for.',
   },
   {
     n: '02',
-    brand: 'The Replacement Math',
-    promise: 'How to Cut Your Tech Bill by 80% and Reclaim 40 Hours a Week',
+    brand: 'Bawal Ang Hao Shao',
+    promise: 'Live demo — watch a real system get built right in front of you',
     body:
-      'The math behind why most Filipino businesses are over-paying for SaaS subscriptions and freelance devs. We show you which line items to kill and which to keep — then walk through the exact stack that replaces all of it for less than the cost of one team lunch.',
+      'No theory, no recycled slides, walang drama. We build a real, working system LIVE so you see exactly how it’s done — start to finish. Bawal ang hao shao: kung hindi namin maipakita, hindi namin ibebenta.',
   },
   {
     n: '03',
-    brand: 'The Founder Multiplier',
-    promise: 'How to Stop Being Your Business\'s Bottleneck and Start Shipping at Startup Speed',
+    brand: 'You Don’t Need a Developer',
+    promise: 'You need the right VISION — and you can ship it in under 24 hours',
     body:
-      'The mindset shift behind why operators with zero developer background are out-shipping their own engineering teams. Even if you have never written code, this section turns you into a builder by the end of the night.',
+      'You don’t need to hire engineers or learn how to code. You need the right vision — AI becomes your developer. Hawak mo na ang World’s Best Developer, kaya kahit zero coding background, you can ship a real system in less than 24 hours. Built by the boss, hindi binili sa agency.',
   },
 ];
 

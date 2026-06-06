@@ -29,13 +29,13 @@ export default function CheckoutPage({
         <section className="border-t border-white/[0.05] py-16 sm:py-24">
           <div className="container-tight">
             <div className="max-w-2xl">
-              <div className="eyebrow">In 90 minutes you will learn</div>
+              <div className="eyebrow">In 2 hours you will learn</div>
               <h2 className="h-section mt-5">
                 What you walk away with.
               </h2>
               <p className="lead mt-5 max-w-xl">
-                Same playbook we use every week in our own businesses. Four moves,
-                live demo, you leave with a working app.
+                Same playbook we use every week in our own businesses. The 3 secrets,
+                a live demo, and you leave with a working app.
               </p>
             </div>
 

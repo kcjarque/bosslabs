@@ -343,9 +343,9 @@ function Pillars() {
     <section className="border-t border-white/[0.05] py-20 sm:py-28">
       <div className="container-tight">
         <div className="mx-auto max-w-2xl text-center">
-          <div className="eyebrow justify-center">In 90 minutes, you will learn</div>
+          <div className="eyebrow justify-center">In 2 hours, you will learn</div>
           <h2 className="h-section mt-5">
-            The three moves that turn your business into a{' '}
+            The 3 secrets that turn your business into a{' '}
             <span className="accent-italic">tech-enabled machine.</span>
           </h2>
         </div>
