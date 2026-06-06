@@ -81,38 +81,33 @@ export const WHAT_IS = {
 };
 
 /* --------------------------------------------------------------------- */
-/* THE WORKFLOW — 6 steps from idea to shipped app                       */
+/* THE VISION-TO-REALITY FRAMEWORK — 5 steps to ship                     */
 /* --------------------------------------------------------------------- */
 export const LAYERS = [
   {
     n: '01',
-    name: 'Setup',
-    desc: 'Claude Code installed, repo cloned, environment running — 15 minutes flat. No "should I learn Python first?" detours.',
+    name: 'Prompt',
+    desc: 'Get your idea in place — describe what you want to build in plain language.',
   },
   {
     n: '02',
-    name: 'Spec',
-    desc: 'We teach you how to describe your business problem so the AI builds the right tool. The right prompts return working code.',
+    name: 'MVP',
+    desc: 'Drop it in Claude Code. It builds your first working version, fast.',
   },
   {
     n: '03',
-    name: 'Build',
-    desc: 'Claude Code writes the app. You review. No waiting on a developer, no Slack threads, no "I will get back to you tomorrow."',
+    name: 'Testing',
+    desc: 'Check if it works, then keep improving until it does.',
   },
   {
     n: '04',
-    name: 'Ship',
-    desc: 'Deploy to Vercel or Supabase in one command. Live URL within the hour. You are the boss — not waiting on a dev team.',
+    name: 'Launch',
+    desc: 'Connect all the pieces together and ship it live.',
   },
   {
     n: '05',
-    name: 'Iterate',
-    desc: 'Bug or new feature? Same loop. Same speed. The skill compounds every time you run it.',
-  },
-  {
-    n: '06',
-    name: 'Compound',
-    desc: 'One app becomes three. Three becomes a system. Your business stops needing developers entirely — because now, you are the developer.',
+    name: 'Feedback Loop',
+    desc: 'Check again that everything works — then refine and repeat.',
   },
 ];
 

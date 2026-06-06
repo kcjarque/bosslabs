@@ -145,6 +145,16 @@ export function WorkflowCompoundIcon({ size = 44, className }: IconProps) {
   );
 }
 
+export function WorkflowPromptIcon({ size = 44, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 44 44" fill="none" className={className} aria-hidden>
+      <path d="M22 6a11 11 0 0 0-7 19.4c1.6 1.4 2.5 2.9 2.8 4.6h8.4c0.3-1.7 1.2-3.2 2.8-4.6A11 11 0 0 0 22 6Z" stroke={CYAN} strokeWidth="1.6" fill="none" strokeLinejoin="round" />
+      <path d="M18 34h8M19 38h6" stroke={CYAN_SOFT} strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M22 15v7M19 18.5h6" stroke={CYAN_SOFT} strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  );
+}
+
 /* --------------------------------------------------------------------- */
 /* CATEGORY ICONS — for Wins section, varies by business type            */
 /* --------------------------------------------------------------------- */

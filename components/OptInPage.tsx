@@ -12,11 +12,9 @@ import {
   PillarMultiplierIcon,
   PillarReplacementIcon,
   WorkflowBuildIcon,
-  WorkflowCompoundIcon,
   WorkflowIterateIcon,
-  WorkflowSetupIcon,
+  WorkflowPromptIcon,
   WorkflowShipIcon,
-  WorkflowSpecIcon,
 } from './Illustrations';
 import { Logo } from './Logo';
 import { Mark } from './Mark';
@@ -557,25 +555,24 @@ function WorkflowDiagram() {
     <section className="border-t border-white/[0.05] py-20 sm:py-28">
       <div className="container-tight">
         <div className="max-w-2xl">
-          <div className="eyebrow">The workflow</div>
+          <div className="eyebrow">The Vision-to-Reality framework</div>
           <h2 className="h-section mt-5">
-            From <span className="accent-italic">idea</span> to shipped app — in 6 steps.
+            From <span className="accent-italic">vision</span> to reality — in 5 steps.
           </h2>
           <p className="lead mt-5 sm:mt-6">
-            Same loop we use every week. By the end of the webinar, you will have your
-            own AI Coding workflow — and your first deployed app.
+            Same loop we use every week. By the end of the workshop, you will have your
+            own AI build workflow — and your first shipped app.
           </p>
         </div>
 
         <div className="mt-10 overflow-hidden rounded-2xl border border-white/[0.08] sm:mt-14 sm:rounded-3xl">
           {LAYERS.map((l, i) => {
             const Icon = [
-              WorkflowSetupIcon,
-              WorkflowSpecIcon,
-              WorkflowBuildIcon,
-              WorkflowShipIcon,
-              WorkflowIterateIcon,
-              WorkflowCompoundIcon,
+              WorkflowPromptIcon, // Prompt
+              WorkflowBuildIcon, // MVP
+              WorkflowIterateIcon, // Testing
+              WorkflowShipIcon, // Launch
+              WorkflowIterateIcon, // Feedback Loop
             ][i];
             return (
               <div
@@ -607,8 +604,8 @@ function WorkflowDiagram() {
           })}
         </div>
 
-        <p className="mt-6 text-center font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-          One night · One install · You ship before you sleep
+        <p className="mt-6 text-center font-sans text-[13px] italic text-ink-300 sm:text-[14px]">
+          Build → test → improve → ship → test again. That&rsquo;s the whole loop.
         </p>
       </div>
     </section>
