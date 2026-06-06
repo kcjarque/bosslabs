@@ -472,13 +472,13 @@ export function CheckoutFlow() {
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-[12px] leading-relaxed text-ink-200">
-          <div className="uppercase tracking-[0.2em] text-cyan-400 text-[10px]">
-            7-day guarantee
+        <div className="mt-5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.04] p-4 text-[12px] leading-relaxed text-ink-200">
+          <div className="uppercase tracking-[0.2em] text-emerald-300 text-[10px]">
+            100% Full Refund Guarantee
           </div>
           <p className="mt-2">
-            Show up, do the work. If the frameworks do not apply to your business,
-            email us within 7 days — we refund you, no questions.
+            Bawal ang hao shao. Show up and do the work — kung hao-shao kami dito,
+            email us within 7 days and we refund you <strong className="text-white">100%</strong>, walang tanong.
           </p>
         </div>
       </aside>

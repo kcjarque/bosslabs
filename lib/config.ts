@@ -139,6 +139,25 @@ export const PILLARS = [
 ];
 
 /* --------------------------------------------------------------------- */
+/* STUDENT BUILDS — real, live apps built with students in past webinars */
+/* Shared by the homepage proof cards, checkout proof, and exit popups.  */
+/* --------------------------------------------------------------------- */
+export const STUDENT_BUILDS = [
+  {
+    name: 'EstateConnect',
+    tag: 'Real-estate agent assignment & live chat',
+    img: '/realestate-app.png',
+    url: 'https://realestate-kappa-liard.vercel.app/',
+  },
+  {
+    name: 'Sentinel',
+    tag: 'Real-time security operations platform',
+    img: '/preclarus-app.png',
+    url: 'https://preclarus-app.vercel.app/',
+  },
+];
+
+/* --------------------------------------------------------------------- */
 /* MEET YOUR HOST                                                        */
 /* --------------------------------------------------------------------- */
 export const HOST = {

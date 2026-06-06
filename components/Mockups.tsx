@@ -8,6 +8,7 @@
  */
 
 import { Mark } from './Mark';
+import { STUDENT_BUILDS } from '@/lib/config';
 
 /* --------------------------------------------------------------------- */
 /* 1 — TerminalMockup                                                    */
@@ -209,82 +210,40 @@ export function AppsStack() {
     <div className="relative h-full w-full">
       <div className="absolute -inset-10 rounded-[40px] bg-cyan-500/5 blur-3xl" aria-hidden />
 
-      <div className="relative grid place-items-center py-6 sm:py-10">
-        <AppCard
-          tilt="rotate-[-8deg] -translate-x-[10%] translate-y-[8%] z-0"
-          label="HR Portal"
-          stat="₱18K/mo saved"
-          metric="92%"
-          metricLabel="auto-processed"
-          dim
-        />
-        <AppCard
-          tilt="rotate-[5deg] translate-y-[-4%] z-10"
-          label="Custom CRM"
-          stat="2 hires replaced"
-          metric="4.6×"
-          metricLabel="deal velocity"
-        />
-        <AppCard
-          tilt="rotate-[-2deg] translate-x-[14%] translate-y-[18%] z-20"
-          label="Support Agent"
-          stat="24/7 coverage"
-          metric="73%"
-          metricLabel="resolved by AI"
-          highlight
-        />
-      </div>
-    </div>
-  );
-}
-
-function AppCard({
-  tilt,
-  label,
-  stat,
-  metric,
-  metricLabel,
-  dim,
-  highlight,
-}: {
-  tilt: string;
-  label: string;
-  stat: string;
-  metric: string;
-  metricLabel: string;
-  dim?: boolean;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={`${tilt} relative w-full max-w-[260px] overflow-hidden rounded-2xl border ${highlight ? 'border-cyan-500/45 bg-gradient-to-br from-cyan-500/[0.08] to-ink-900 shadow-glow' : 'border-white/[0.08] bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card'} p-5 backdrop-blur-sm ${dim ? 'opacity-75' : ''}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
-          {label}
-        </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-emerald-300 sm:text-[10px]">
-          live
-        </span>
-      </div>
-      <div className="mt-3 font-serif text-3xl tracking-tight text-white sm:text-4xl">
-        {metric}
-      </div>
-      <div className="mt-1 text-[11px] text-ink-200 sm:text-[12px]">{metricLabel}</div>
-
-      {/* Mini sparkline */}
-      <div className="mt-4 flex items-end gap-1">
-        {[40, 60, 35, 78, 55, 90, 70, 95].map((h, i) => (
-          <div
-            key={i}
-            className="w-[3px] flex-1 rounded-full bg-cyan-400"
-            style={{ height: `${h * 0.3}px`, opacity: 0.35 + i * 0.08 }}
-          />
+      <div className="relative space-y-5 py-6 sm:py-10">
+        {STUDENT_BUILDS.map((b, i) => (
+          <a
+            key={b.name}
+            href={b.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`group block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card transition hover:border-cyan-500/40 ${
+              i % 2 === 0 ? 'rotate-[-2deg]' : 'rotate-[2deg]'
+            }`}
+          >
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={b.img}
+                alt={`${b.name} — built live with BOSSLABS AI`}
+                className="aspect-[16/10] w-full object-cover object-top"
+                loading="lazy"
+              />
+              <span className="absolute right-3 top-3 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-300 sm:text-[10px]">
+                Live
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-4">
+              <div className="min-w-0">
+                <div className="font-serif text-lg text-white">{b.name}</div>
+                <div className="truncate text-[12px] text-ink-300">{b.tag}</div>
+              </div>
+              <span className="flex-none rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-cyan-200 transition group-hover:bg-cyan-500/20">
+                See it live ↗
+              </span>
+            </div>
+          </a>
         ))}
-      </div>
-
-      <div className="mt-3 border-t border-white/[0.06] pt-2 text-[10px] uppercase tracking-[0.18em] text-ink-300 sm:text-[11px]">
-        {stat}
       </div>
     </div>
   );

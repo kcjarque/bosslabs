@@ -1,7 +1,8 @@
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { CheckoutFlow } from '@/components/CheckoutFlow';
-import { PILLARS } from '@/lib/config';
+import { ExitIntentModal } from '@/components/ExitIntentModal';
+import { PILLARS, STUDENT_BUILDS } from '@/lib/config';
 
 export default function CheckoutPage({
   searchParams,
@@ -23,6 +24,53 @@ export default function CheckoutPage({
         )}
         <section className="container-tight py-10 sm:py-16">
           <CheckoutFlow />
+        </section>
+
+        {/* Proof — real builds (bawal hao shao) */}
+        <section className="border-t border-white/[0.05] py-14 sm:py-20">
+          <div className="container-tight">
+            <div className="mx-auto max-w-2xl text-center">
+              <div className="eyebrow-danger justify-center">
+                <span className="pulse-dot" /> Bawal hao shao
+              </div>
+              <h2 className="h-section mt-4">
+                Real systems we built — <span className="accent-italic">live</span> in past webinars.
+              </h2>
+              <p className="lead mt-4">
+                Hindi &rsquo;to marketing-marketing lang. Click and see them running, live.
+              </p>
+            </div>
+            <div className="mx-auto mt-10 grid max-w-4xl gap-5 sm:grid-cols-2">
+              {STUDENT_BUILDS.map((b) => (
+                <div
+                  key={b.name}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]"
+                >
+                  <a href={b.url} target="_blank" rel="noopener noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={b.img}
+                      alt={`${b.name} — built with BOSSLABS AI`}
+                      className="aspect-[16/10] w-full border-b border-white/10 object-cover object-top"
+                      loading="lazy"
+                    />
+                  </a>
+                  <div className="p-5">
+                    <div className="font-serif text-xl text-white">{b.name}</div>
+                    <div className="mt-1 text-[13px] text-ink-300">{b.tag}</div>
+                    <a
+                      href={b.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200 transition hover:bg-cyan-500/20"
+                    >
+                      See it live ↗
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* What you'll learn — anchors hesitant buyers near the action */}
@@ -58,6 +106,15 @@ export default function CheckoutPage({
         </section>
       </main>
       <Footer />
+      <ExitIntentModal
+        storageKey="bl_exit_checkout"
+        eyebrow="Sandali lang, boss"
+        title="Still don’t trust us?"
+        titleAccent="Boss, you need to see this."
+        sub="Tignan mo — real, working systems na ginawa namin with our students. Bawal ang hao shao."
+        ctaLabel="I’m in — reserve my seat"
+        ctaHref={null}
+      />
     </>
   );
 }
