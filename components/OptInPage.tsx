@@ -310,7 +310,7 @@ function WhatIsSection() {
           <div>
             <div className="eyebrow">{WHAT_IS.eyebrow}</div>
             <h2 className="h-section mt-5">
-              We turn existing Filipino businesses into{' '}
+              AI is not just marketing. We turn Filipino businesses into{' '}
               <span className="accent-italic">tech-enabled command centers.</span>
             </h2>
             <div className="mt-8 space-y-5 sm:mt-10 sm:space-y-6">

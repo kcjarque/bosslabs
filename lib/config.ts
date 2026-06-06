@@ -57,7 +57,7 @@ export const HEADLINE = {
 };
 
 export const SUBHEADLINE =
-  'For Filipino business owners who are already running real businesses — but are stuck with manual workflows, expensive freelancers, and tools built for the US market.';
+  'Create real systems in less than 24 hours. No coding experience. No developer required. And the best part? Hindi hao shao — boss, hindi ito marketing-marketing lang, this is the real system na hinahanap mo.';
 
 /* Authority / credibility bar — small claims, big trust. */
 export const AUTHORITY = [
@@ -72,12 +72,12 @@ export const AUTHORITY = [
 export const WHAT_IS = {
   eyebrow: 'What is BOSSLABS AI?',
   body: [
-    'Most Filipino businesses are leaving real money on the table. Why? Manual workflows the team will never finish. ₱30K-a-month freelance developers who never deliver. Off-the-shelf tools built for the US market. The result: you do not scale — you just work more hours and hire more people.',
-    'AI Coding flipped the script. In just 24 hours, a Filipino business owner can build a custom CRM, a customer-support agent, or an internal tool that replaces three full-time hires. You do not need a dev team. You just need the right system.',
-    'Our mission is simple: every Filipino business, tech-enabled. Every owner with the power to ship their own tools. Every brand running on AI — built by the boss, not bought from an agency.',
+    'Bawal ang hao shao. AI is not just about marketing — at hindi ’yan puro prompts tapos marketing-marketing. Yuck. The opportunity is right here, right now — pero most people don’t even see the GOLD MINE behind AI. Kasi iba’t ibang guru at agency ang naglilito kung ano ba talaga ang REAL VALUE nito.',
+    'Imagine building the BEST PRODUCT, the BEST VALUE, and the BEST OPERATIONS in your business — all at once. That’s the FULL POTENTIAL of AI na hindi mo pa na-uunlock. Literally, hawak mo na ang World’s Best Developer — a genius sitting right beside you, 24/7, ready to build kung ano man ang kailangan ng business mo.',
+    'Our mission is simple: every Filipino business, tech-enabled — built by the boss, hindi binili sa agency. I want to CHANGE the way you see AI. Hindi ’to tungkol sa more sales lang o puro prompts — it’s about creating REAL CHANGE sa takbo ng business mo.',
   ],
   pullquote:
-    'You already have the business. You already have the customers. Now you get the leverage. Do not waste this moment.',
+    'Wag mo ’ko paniwalaan — here are the actual SYSTEMS our students have built for their own businesses.',
 };
 
 /* --------------------------------------------------------------------- */
