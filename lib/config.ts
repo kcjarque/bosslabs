@@ -7,6 +7,7 @@ export const BRAND = {
 export const FOUNDERS = [
   {
     name: 'Mikey Manago',
+    photo: '/mikey.jpg',
     role: 'Co-Founder · Operator',
     bio: 'Ex-employee turned serial entrepreneur. Owns businesses in car detailing, real estate, healthcare, and more — every one built from zero with real customers, real cash, real outcomes. Came to AI for one reason: lower the cost of running a business so the operator wins. Lives in sales, relationships, and value creation.',
     shipped: ['Multi-business operator', 'Sales + relationships', 'Real PH revenue'],
@@ -18,6 +19,7 @@ export const FOUNDERS = [
   },
   {
     name: 'Kyle Jarque',
+    photo: '/kyle.jpg',
     role: 'Co-Founder · Engineer',
     bio: 'Industrial engineer by training. Marketer in FMCG, then operator in e-commerce, now builder in AI. Believes the advantage goes to business owners who become tech-enabled — not the ones who show off tech. Builds the tools, deploys the AI, ships the systems that actually work.',
     shipped: ['Industrial engineer', 'FMCG → e-com → AI', '5 production PH apps'],

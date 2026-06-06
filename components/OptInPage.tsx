@@ -439,16 +439,28 @@ function FounderCard({ founder }: { founder: Founder }) {
       <Bracket className="absolute right-3 bottom-3 rotate-180" />
 
       <div className="grid items-center gap-5 sm:grid-cols-[140px_1fr] sm:gap-6">
-        {/* Stylized portrait — initials in cyan ring with status dot */}
+        {/* Portrait — photo (fallback to initials) in cyan ring with status dot */}
         <div className="relative mx-auto h-32 w-32 sm:mx-0 sm:h-[140px] sm:w-[140px]">
           {/* Outer ring */}
           <div className="absolute inset-0 rounded-full border border-cyan-500/30" />
           {/* Inner ring with gradient fill */}
           <div className="absolute inset-2 rounded-full border border-cyan-500/50 bg-gradient-to-br from-cyan-500/[0.18] to-ink-900" />
-          {/* Initials */}
-          <div className="absolute inset-0 flex items-center justify-center font-serif text-4xl italic text-white sm:text-5xl">
-            {initials}
-          </div>
+          {founder.photo ? (
+            <div className="absolute inset-2 overflow-hidden rounded-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={founder.photo}
+                alt={founder.name}
+                className="h-full w-full object-cover"
+                style={{ objectPosition: 'center 22%' }}
+                loading="lazy"
+              />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center font-serif text-4xl italic text-white sm:text-5xl">
+              {initials}
+            </div>
+          )}
           {/* Pulsing online dot */}
           <div className="absolute bottom-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 ring-2 ring-[#06070A]">
             <span className="absolute inline-block h-4 w-4 animate-ping rounded-full bg-emerald-400 opacity-60" />
