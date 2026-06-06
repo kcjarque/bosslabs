@@ -13,7 +13,14 @@
 import { NextResponse } from 'next/server';
 import { OFFER } from '@/lib/config';
 import { createInvoice, resolvePaymentMethods, type PaymentMethodGroup } from '@/lib/xendit';
-import { findSignupByEmail } from '@/lib/db';
+import {
+  findSignupByEmail,
+  findPromoCode,
+  computeDiscountCentavos,
+  redeemPromoCode,
+  updateSignup,
+} from '@/lib/db';
+import { closeLeadAndRecordCommission } from '@/lib/closers';
 import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -26,6 +33,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as {
       email?: string;
       paymentMethod?: string;
+      promoCode?: string;
     };
     const email = (body.email || '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -60,10 +68,56 @@ export async function POST(req: Request) {
     const externalId = `BL-OTO-${mainOrder}-${Date.now()}`;
     const base = siteUrl(req);
 
+    // Promo code (optional) — same codes as the main checkout, priced against
+    // the ₱1,997 OTO. Validate, then redeem atomically (so the use is claimed
+    // when the invoice is created, matching /api/checkout's behaviour).
+    let amountCentavos = OFFER.oto.priceCentavos;
+    let promoApplied: string | null = null;
+    const promoCode = (body.promoCode || '').trim();
+    if (promoCode) {
+      const promo = await findPromoCode(promoCode);
+      if (!promo || !promo.active) {
+        return NextResponse.json({ error: 'Promo code is invalid.' }, { status: 400 });
+      }
+      if (promo.expiresAt && new Date(promo.expiresAt).getTime() <= Date.now()) {
+        return NextResponse.json({ error: 'This promo code has expired.' }, { status: 400 });
+      }
+      if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
+        return NextResponse.json({ error: 'This promo code has been fully claimed.' }, { status: 409 });
+      }
+      const discount = computeDiscountCentavos(promo, OFFER.oto.priceCentavos);
+      const redeemed = await redeemPromoCode(promo.code);
+      if (!redeemed) {
+        return NextResponse.json(
+          { error: 'Promo code is no longer available (expired or fully claimed).' },
+          { status: 409 },
+        );
+      }
+      amountCentavos = Math.max(0, OFFER.oto.priceCentavos - discount);
+      promoApplied = redeemed.code;
+    }
+
+    // 100%-off code → no Xendit invoice. Attach the bump directly (mirrors the
+    // OTO webhook's confirmation), then send them to the thank-you page.
+    if (amountCentavos === 0) {
+      await updateSignup(parent.id, {
+        bumped: true,
+        metadata: {
+          ...(parent.metadata ?? {}),
+          otoConfirmed: new Date().toISOString(),
+          otoExternalId: externalId,
+          otoAmount: 0,
+          otoPromoCode: promoApplied,
+        },
+      });
+      await closeLeadAndRecordCommission(parent.id).catch(() => {});
+      return NextResponse.json({ redirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`, free: true });
+    }
+
     const invoice = await createInvoice({
       externalId,
-      amount: OFFER.oto.priceCentavos / 100,
-      description: OFFER.oto.name,
+      amount: amountCentavos / 100,
+      description: promoApplied ? `${OFFER.oto.name} (promo ${promoApplied})` : OFFER.oto.name,
       payerEmail: parent.email,
       successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,
       failureRedirectUrl: `${base}/order-bump?status=failed`,

@@ -27,6 +27,9 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     code?: string;
     bump?: boolean;
+    /** 'oto' prices the discount against the ₱1,997 order-bump instead of the
+     *  main webinar ticket (used by /order-bump). */
+    base?: 'main' | 'oto';
   };
   const code = (body.code ?? '').trim();
   if (!code) return NextResponse.json({ error: 'Code required' }, { status: 400 });
@@ -44,7 +47,9 @@ export async function POST(req: Request) {
 
   const bumped = Boolean(body.bump);
   const totalCentavos =
-    OFFER.main.priceCentavos + (bumped ? OFFER.oto.priceCentavos : 0);
+    body.base === 'oto'
+      ? OFFER.oto.priceCentavos
+      : OFFER.main.priceCentavos + (bumped ? OFFER.oto.priceCentavos : 0);
   const discountCentavos = computeDiscountCentavos(promo, totalCentavos);
   const finalCentavos = Math.max(0, totalCentavos - discountCentavos);
 
