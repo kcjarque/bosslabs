@@ -121,6 +121,28 @@ export function CountdownDisplay({ startsAtIso }: { startsAtIso?: string }) {
   );
 }
 
+/** Compact inline countdown (D·H·M·S) for the hero scarcity block. Reuses the
+ *  thin-bar Cell style; hides itself when there's no valid future date. */
+export function CountdownMini({ startsAtIso }: { startsAtIso?: string }) {
+  const [target] = useState(() => getTarget(startsAtIso));
+  const { mounted, days, hours, mins, secs } = useCountdown(target);
+  if (!target) return null;
+  return (
+    <div
+      suppressHydrationWarning
+      className="inline-flex items-center gap-2 font-serif text-sm tracking-tight text-white sm:text-base"
+    >
+      <Cell n={mounted ? days : 0} label="D" />
+      <Sep />
+      <Cell n={mounted ? hours : 0} label="H" />
+      <Sep />
+      <Cell n={mounted ? mins : 0} label="M" />
+      <Sep />
+      <Cell n={mounted ? secs : 0} label="S" />
+    </div>
+  );
+}
+
 function Cell({ n, label }: { n: number; label: string }) {
   return (
     <span className="inline-flex items-baseline gap-1 tabular-nums">

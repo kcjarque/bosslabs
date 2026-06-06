@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CountdownDisplay } from './CountdownBar';
+import { CountdownDisplay, CountdownMini } from './CountdownBar';
 import { HeroBackground } from './HeroBackground';
 import {
   CategoryAgencyIcon,
@@ -233,6 +233,20 @@ function Hero({ webinar }: { webinar: WebinarInfo }) {
             <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
               Bonuses included · Limited seats per session · 7-day guarantee
             </p>
+
+            {/* Compact scarcity — seats left + mini countdown */}
+            <div className="mt-2 flex flex-col items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-danger-500/40 bg-danger-900/30 px-3.5 py-1.5">
+                <span className="pulse-dot" />
+                <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-danger-200 sm:text-[11px]">
+                  Only <span className="font-serif text-sm text-white">23</span> of 200 seats left this session
+                </span>
+              </div>
+              <CountdownMini startsAtIso={webinar.startsAtIso} />
+              <p className="font-sans text-[9px] uppercase tracking-[0.22em] text-ink-400 sm:text-[10px]">
+                Until your session goes live
+              </p>
+            </div>
           </div>
 
           {/* Quick facts — date/time, format (mirrors the retreat info cards) */}
