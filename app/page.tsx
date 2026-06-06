@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { OptInPage } from '@/components/OptInPage';
+import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { getWebinarInfo } from '@/lib/webinar';
 
 // Render per-request so the live webinar date/time/countdown always reflect
@@ -21,5 +22,10 @@ export const metadata: Metadata = {
 
 export default async function Page() {
   const webinar = await getWebinarInfo();
-  return <OptInPage webinar={webinar} />;
+  return (
+    <>
+      <OptInPage webinar={webinar} />
+      <ExitIntentModal />
+    </>
+  );
 }
