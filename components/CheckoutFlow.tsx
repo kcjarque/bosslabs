@@ -16,7 +16,11 @@ type AppliedPromo = {
   isFree: boolean;
 };
 
-export function CheckoutFlow() {
+export function CheckoutFlow({
+  webinar,
+}: {
+  webinar?: { date: string; time: string; timezone: string };
+}) {
   // `loading` is the method currently in flight — lets us spinner just that
   // button while the other two stay disabled (prevents double-submits).
   const [loading, setLoading] = useState<PayMethod | 'FREE' | null>(null);
@@ -396,6 +400,11 @@ export function CheckoutFlow() {
               <div className="font-serif text-xl text-white">
                 BOSSLABS AI — Live Workshop
               </div>
+              {webinar?.date && (
+                <div className="mt-1 text-[13px] font-medium text-cyan-300">
+                  {webinar.date} · {webinar.time} {webinar.timezone}
+                </div>
+              )}
               <div className="mt-1 text-xs text-ink-200">
                 2 hours · Live on Zoom · 7-day replay · Community access
               </div>

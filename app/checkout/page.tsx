@@ -3,16 +3,24 @@ import { Footer } from '@/components/Footer';
 import { CheckoutFlow } from '@/components/CheckoutFlow';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { PILLARS, STUDENT_BUILDS } from '@/lib/config';
+import { getWebinarInfo } from '@/lib/webinar';
 
-export default function CheckoutPage({
+// Render per-request so the order summary shows whichever event is currently
+// active (dynamic date).
+export const dynamic = 'force-dynamic';
+
+const FB_PAGE = 'https://www.facebook.com/profile.php?id=61589686430234';
+
+export default async function CheckoutPage({
   searchParams,
 }: {
   searchParams: { status?: string };
 }) {
   const failed = searchParams.status === 'failed';
+  const webinar = await getWebinarInfo();
   return (
     <>
-      <Nav ctaLabel="Need help?" ctaHref="mailto:bosslabs@conexmedia.ph" />
+      <Nav ctaLabel="Need help?" ctaHref={FB_PAGE} />
       <main>
         {failed && (
           <div className="border-y border-red-500/30 bg-red-500/10">
@@ -23,7 +31,9 @@ export default function CheckoutPage({
           </div>
         )}
         <section className="container-tight py-10 sm:py-16">
-          <CheckoutFlow />
+          <CheckoutFlow
+            webinar={{ date: webinar.date, time: webinar.time, timezone: webinar.timezone }}
+          />
         </section>
 
         {/* Proof — real builds (bawal hao shao) */}
