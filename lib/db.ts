@@ -1036,20 +1036,21 @@ export async function countPageViews(opts: {
       : opts.pathPrefix
         ? [opts.pathPrefix]
         : null;
-    // Build a query with path-prefix OR-of-likes when filtering.
-    let q = sb.from('page_views').select('path, session_id', { count: 'exact' }).gte('created_at', opts.sinceIso);
-    if (opts.untilIso) q = q.lte('created_at', opts.untilIso);
-    if (prefixes && prefixes.length > 0) {
-      const orClause = prefixes.map((p) => `path.ilike.${p}%`).join(',');
-      q = q.or(orClause);
-    }
-    const { data, error, count } = await q;
+    // Count + distinct-session in SQL via RPC. Doing the de-dup client-side
+    // breaks once page_views exceeds PostgREST's 1000-row response cap: the
+    // distinct count would only see the first 1000 beacons (undercounting
+    // unique visitors). See migration 0013_page_view_count_rpcs.sql.
+    const { data, error } = await sb.rpc('count_page_views', {
+      p_since: opts.sinceIso,
+      p_until: opts.untilIso ?? null,
+      p_prefixes: prefixes && prefixes.length > 0 ? prefixes : null,
+    });
     if (error) throw new Error(`Supabase countPageViews: ${error.message}`);
-    const sessions = new Set<string>();
-    for (const row of (data as Array<{ session_id: string | null }>) ?? []) {
-      if (row.session_id) sessions.add(row.session_id);
-    }
-    return { total: count ?? 0, uniqueSessions: sessions.size };
+    const row = (data as Array<{ total: number; unique_sessions: number }> | null)?.[0];
+    return {
+      total: Number(row?.total ?? 0),
+      uniqueSessions: Number(row?.unique_sessions ?? 0),
+    };
   }
   // JSON fallback for local dev.
   const list = await readJson<Array<PageViewInsert & { createdAt: string }>>('page_views.json', []);
@@ -1110,23 +1111,25 @@ export async function getVisitBuckets(opts: {
       : opts.pathPrefix
         ? [opts.pathPrefix]
         : null;
-    let q = sb
-      .from('page_views')
-      .select('session_id, created_at')
-      .gte('created_at', opts.sinceIso)
-      .lt('created_at', new Date(untilMs).toISOString());
-    if (prefixes && prefixes.length > 0) {
-      const orClause = prefixes.map((p) => `path.ilike.${p}%`).join(',');
-      q = q.or(orClause);
-    }
-    const { data, error } = await q;
+    // Bucket + distinct-session counts in SQL via RPC. Client-side bucketing
+    // breaks once page_views exceeds PostgREST's 1000-row cap (only the first
+    // 1000 beacons would be charted). See migration 0013_page_view_count_rpcs.sql.
+    const { data, error } = await sb.rpc('bucket_page_views', {
+      p_since: opts.sinceIso,
+      p_until: new Date(untilMs).toISOString(),
+      p_bucket_seconds: Math.round(opts.bucketMs / 1000),
+      p_prefixes: prefixes && prefixes.length > 0 ? prefixes : null,
+    });
     if (error) throw new Error(`getVisitBuckets: ${error.message}`);
-    for (const row of (data as Array<{ session_id: string | null; created_at: string }>) ?? []) {
-      const ts = new Date(row.created_at).getTime();
-      const i = bucketIndex(ts);
+    for (const row of (data as Array<{
+      bucket_start: string;
+      total: number;
+      unique_sessions: number;
+    }> | null) ?? []) {
+      const i = Math.round((new Date(row.bucket_start).getTime() - sinceMs) / opts.bucketMs);
       if (i < 0 || i >= buckets.length) continue;
-      buckets[i].total++;
-      if (row.session_id) buckets[i]._sessions.add(row.session_id);
+      buckets[i].total = Number(row.total);
+      buckets[i].uniqueSessions = Number(row.unique_sessions);
     }
   } else {
     // JSON fallback
@@ -1152,7 +1155,8 @@ export async function getVisitBuckets(opts: {
 
   return buckets.map((b) => ({
     bucketStart: b.bucketStart,
-    uniqueSessions: b._sessions.size,
+    // RPC path sets uniqueSessions directly; JSON fallback fills _sessions.
+    uniqueSessions: Math.max(b.uniqueSessions, b._sessions.size),
     total: b.total,
   }));
 }
