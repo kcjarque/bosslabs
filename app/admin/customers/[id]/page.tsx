@@ -94,7 +94,8 @@ function buildCommsTimeline(
     });
   }
 
-  // Confirmation SMS (sent at payment time, alongside the email)
+  // Confirmation SMS (sent at payment time, alongside the email). Real
+  // delivered/failed status arrives via the OneWaySMS DLR webhook.
   if (typeof meta.confirmationSmsSent === 'string') {
     events.push({
       ts: meta.confirmationSmsSent,
@@ -102,7 +103,10 @@ function buildCommsTimeline(
       kind: 'Payment confirmation',
       description: 'Confirmation SMS to mobile',
       ok: meta.confirmationSmsOk !== false,
-      status: meta.confirmationSmsOk === false ? undefined : 'sent',
+      status:
+        (meta.confirmationSmsStatus as CommsEvent['status']) ??
+        (meta.confirmationSmsOk === false ? undefined : 'sent'),
+      statusAt: meta.confirmationSmsStatusAt as string | undefined,
       templateId: 'paid_confirmation',
     });
   }

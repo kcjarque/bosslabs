@@ -145,7 +145,14 @@ async function handleMainPaid(event: XenditEvent) {
       ...(emailRes.ok && emailRes.id
         ? { confirmationMessageId: emailRes.id, confirmationStatus: 'sent' }
         : {}),
-      ...(smsRes ? { confirmationSmsSent: new Date().toISOString(), confirmationSmsOk: smsRes.ok } : {}),
+      ...(smsRes
+        ? {
+            confirmationSmsSent: new Date().toISOString(),
+            confirmationSmsOk: smsRes.ok,
+            confirmationSmsId: smsRes.ok ? smsRes.id : null,
+            confirmationSmsStatus: 'sent',
+          }
+        : {}),
     },
   }).catch(() => {});
 

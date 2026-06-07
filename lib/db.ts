@@ -2231,6 +2231,44 @@ export async function updateConfirmationStatus(
   });
 }
 
+/** Find a signup by the OneWaySMS message-id of its paid_confirmation SMS
+ *  (metadata.confirmationSmsId), so the SMS DLR webhook can stamp its status. */
+export async function findSignupByConfirmationSmsId(messageId: string): Promise<Signup | null> {
+  if (!messageId) return null;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('signups')
+      .select('*')
+      .filter('metadata->>confirmationSmsId', 'eq', messageId)
+      .maybeSingle();
+    if (error) throw new Error(`Supabase findSignupByConfirmationSmsId: ${error.message}`);
+    return data ? rowToSignup(data as SignupRow) : null;
+  }
+  const list = await readJson<Signup[]>('signups.json', []);
+  return (
+    list.find(
+      (s) => (s.metadata as { confirmationSmsId?: string } | undefined)?.confirmationSmsId === messageId,
+    ) ?? null
+  );
+}
+
+/** Upgrade the paid_confirmation SMS delivery status on a signup, never downgrading. */
+export async function updateConfirmationSmsStatus(
+  signupId: string,
+  status: string,
+  statusAt: string,
+): Promise<void> {
+  const s = await getSignupById(signupId);
+  if (!s) return;
+  const cur = (s.metadata as { confirmationSmsStatus?: string } | undefined)?.confirmationSmsStatus;
+  const curRank = cur ? EMAIL_STATUS_RANK[cur] ?? 0 : 0;
+  const newRank = EMAIL_STATUS_RANK[status] ?? 0;
+  if (newRank <= curRank) return; // don't downgrade
+  await updateSignup(signupId, {
+    metadata: { ...(s.metadata ?? {}), confirmationSmsStatus: status, confirmationSmsStatusAt: statusAt },
+  });
+}
+
 /**
  * Step counts grouped by sequence_id — single query instead of N
  * per-sequence calls. Used by /admin/sequences to render the table.
