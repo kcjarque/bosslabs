@@ -94,6 +94,19 @@ function buildCommsTimeline(
     });
   }
 
+  // Confirmation SMS (sent at payment time, alongside the email)
+  if (typeof meta.confirmationSmsSent === 'string') {
+    events.push({
+      ts: meta.confirmationSmsSent,
+      channel: 'sms',
+      kind: 'Payment confirmation',
+      description: 'Confirmation SMS to mobile',
+      ok: meta.confirmationSmsOk !== false,
+      status: meta.confirmationSmsOk === false ? undefined : 'sent',
+      templateId: 'paid_confirmation',
+    });
+  }
+
   // Recovery emails (admin re-fire OR webhook recovery)
   if (typeof meta.recoveryEmailSent === 'string') {
     const status = (meta.recoveryEmailStatus as string | undefined) ?? 'sent';

@@ -100,16 +100,20 @@ export async function markAbandonedCartPaid(
   const emailRes = await sendEmail({ to: signup.email, templateId: 'paid_confirmation', vars }).catch(
     () => null,
   );
-  if (signup.phone) {
-    await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars }).catch(() => {});
-  }
-  // Record the confirmation message-id so the SES delivery webhook can stamp
-  // the real delivered/bounced status onto it later.
-  if (emailRes?.ok && emailRes.id) {
-    await updateSignup(signup.id, {
-      metadata: { ...paidMeta, confirmationMessageId: emailRes.id, confirmationStatus: 'sent' },
-    }).catch(() => {});
-  }
+  const smsRes = signup.phone
+    ? await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars }).catch(() => null)
+    : null;
+  // Record confirmation markers: email message-id (for SES delivery tracking)
+  // + SMS send outcome (so the comms history shows the confirmation SMS too).
+  await updateSignup(signup.id, {
+    metadata: {
+      ...paidMeta,
+      ...(emailRes?.ok && emailRes.id
+        ? { confirmationMessageId: emailRes.id, confirmationStatus: 'sent' }
+        : {}),
+      ...(smsRes ? { confirmationSmsSent: new Date().toISOString(), confirmationSmsOk: smsRes.ok } : {}),
+    },
+  }).catch(() => {});
 
   // 5) Telegram alert — send the actual proof screenshot as a photo (caption
   //    carries the details) so the team can verify it inline. Falls back to a

@@ -133,16 +133,21 @@ async function handleMainPaid(event: XenditEvent) {
     templateId: 'paid_confirmation',
     vars,
   });
-  if (signup.phone) {
-    await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars });
-  }
-  // Record the confirmation's message-id so the SES delivery webhook can stamp
-  // the real delivered/bounced status onto it later.
-  if (emailRes.ok && emailRes.id) {
-    await updateSignup(signup.id, {
-      metadata: { ...paidMeta, confirmationMessageId: emailRes.id, confirmationStatus: 'sent' },
-    }).catch(() => {});
-  }
+  const smsRes = signup.phone
+    ? await sendSms({ to: signup.phone, templateId: 'paid_confirmation', vars })
+    : null;
+  // Record confirmation markers: the email message-id (so the SES delivery
+  // webhook can stamp delivered/bounced) + the SMS send outcome (so the
+  // comms history shows the confirmation SMS too).
+  await updateSignup(signup.id, {
+    metadata: {
+      ...paidMeta,
+      ...(emailRes.ok && emailRes.id
+        ? { confirmationMessageId: emailRes.id, confirmationStatus: 'sent' }
+        : {}),
+      ...(smsRes ? { confirmationSmsSent: new Date().toISOString(), confirmationSmsOk: smsRes.ok } : {}),
+    },
+  }).catch(() => {});
 
   // CAPI Purchase event for the main invoice (₱999 or ₱2,996 if bumped).
   const bumped = Boolean(signup.bumped);
