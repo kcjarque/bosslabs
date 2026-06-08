@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Footer } from '@/components/Footer';
 import { RetreatPayPanel } from '@/components/RetreatPayPanel';
 import { ProofUpload } from '@/components/ProofUpload';
@@ -22,6 +22,8 @@ export default async function ReservePaymentPage({
 }) {
   const r = await getRetreatReservation(params.id);
   if (!r) notFound();
+  // Card payment already cleared — don't show the pay options again.
+  if (r.status === 'paid') redirect(`/vibecode-retreat/reserve/${r.id}/done?paid=card`);
 
   const funnels = await getFunnels();
   const config = (funnels.find((f) => f.slug === 'vibecode-retreat')?.config ??
@@ -76,7 +78,7 @@ export default async function ReservePaymentPage({
               we can match it fast.
             </p>
             <div className="mt-5">
-              <RetreatPayPanel method={r.paymentMethod} transferNote={r.name} />
+              <RetreatPayPanel reservationId={r.id} method={r.paymentMethod} transferNote={r.name} />
             </div>
           </div>
 

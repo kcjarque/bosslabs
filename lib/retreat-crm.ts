@@ -39,8 +39,14 @@ type ResRow = {
   payment_method: string | null;
 };
 
+/** A reservation counts as paid once it has either an uploaded bank-transfer
+ *  proof OR a cleared Xendit card payment. */
+function isResPaid(status: string | undefined): boolean {
+  return status === 'proof_submitted' || status === 'paid';
+}
+
 function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
-  const paid = res?.status === 'proof_submitted';
+  const paid = isResPaid(res?.status);
   return {
     id: r.id,
     reservationId: r.reservation_id ?? null,
@@ -82,7 +88,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
       name: r.name,
       email: r.email,
       phone: r.phone,
-      stage: r.status === 'proof_submitted' ? 'paid' : 'interested',
+      stage: isResPaid(r.status) ? 'paid' : 'interested',
     }));
   if (toInsert.length) {
     const { data: inserted } = await sb
@@ -94,7 +100,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
 
   // Sync 2 — auto-advance: an "interested" card whose reservation is now paid → "paid".
   for (const c of cards) {
-    if (c.reservation_id && c.stage === 'interested' && resById.get(c.reservation_id)?.status === 'proof_submitted') {
+    if (c.reservation_id && c.stage === 'interested' && isResPaid(resById.get(c.reservation_id)?.status)) {
       await sb.from('retreat_crm_cards').update({ stage: 'paid' }).eq('id', c.id);
       c.stage = 'paid';
     }

@@ -20,6 +20,9 @@ export default async function ReserveDonePage({
   const r = await getRetreatReservation(params.id);
   const firstName = r ? r.name.split(' ')[0] : 'there';
   const email = r?.email;
+  // Card payers are auto-confirmed via the Xendit webhook — show "confirmed"
+  // copy, not the "we'll verify your screenshot" copy used for bank transfers.
+  const paid = r?.status === 'paid';
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-white via-[#f6faf7] to-[#fbfdf9] text-slate-600">
@@ -45,15 +48,25 @@ export default async function ReserveDonePage({
               You&apos;re in, {firstName}.
             </h1>
             <p className="mx-auto mt-5 max-w-lg text-[15px] leading-relaxed text-slate-600 sm:text-[17px]">
-              We&apos;ve received your payment proof. Our team will verify it and
-              confirm your seat
+              {paid ? (
+                <>
+                  Your payment is confirmed and your seat is locked 🎉 A
+                  confirmation is on its way
+                </>
+              ) : (
+                <>
+                  We&apos;ve received your payment proof. Our team will verify it
+                  and confirm your seat
+                </>
+              )}
               {email ? (
                 <>
                   {' '}
                   at <span className="font-medium text-slate-800">{email}</span>
                 </>
-              ) : null}{' '}
-              within 24 hours. Keep an eye on your inbox (and spam folder).
+              ) : null}
+              {paid ? '. ' : ' within 24 hours. '}
+              Keep an eye on your inbox (and spam folder).
             </p>
 
             {/* The "rest" — collected here, after payment, to keep sign-up fast. */}
@@ -69,7 +82,7 @@ export default async function ReserveDonePage({
               </div>
               <ul className="mt-3 space-y-2.5 text-sm text-slate-600">
                 <li className="flex items-start gap-2.5">
-                  <Dot /> We verify your payment and lock your slot.
+                  <Dot /> {paid ? 'Your slot is locked ✅' : 'We verify your payment and lock your slot.'}
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Dot /> You get a confirmation + a short prep questionnaire.

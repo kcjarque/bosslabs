@@ -20,7 +20,13 @@
 
 import { NextResponse } from 'next/server';
 import { verifyWebhook } from '@/lib/xendit';
-import { findSignupByExternalId, updateSignup, countPaidOrders } from '@/lib/db';
+import {
+  findSignupByExternalId,
+  updateSignup,
+  countPaidOrders,
+  getRetreatReservation,
+  markRetreatReservationPaid,
+} from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
@@ -66,6 +72,9 @@ export async function POST(req: Request) {
   // Route by externalId prefix.
   if (event.external_id.startsWith('BL-OTO-')) {
     return handleOtoPaid(event);
+  }
+  if (event.external_id.startsWith('BL-RETREAT-')) {
+    return handleRetreatPaid(event);
   }
   if (event.external_id.startsWith('BL-MAIN-')) {
     return handleMainPaid(event);
@@ -317,4 +326,48 @@ async function handleOtoPaid(event: XenditEvent) {
   );
 
   return NextResponse.json({ ok: true, oto: true });
+}
+
+/* --------------------------------------------------------------------- */
+/* RETREAT reservation — card payment for the VibeCode Retreat            */
+/* --------------------------------------------------------------------- */
+async function handleRetreatPaid(event: XenditEvent) {
+  // externalId pattern: BL-RETREAT-<uuid>-<ts>. The reservation id is a UUID,
+  // so pull it out with a regex (robust against the trailing timestamp).
+  const uuid = event.external_id!.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+  )?.[0];
+  if (!uuid) {
+    console.warn('[xendit-webhook] retreat externalId has no uuid', event.external_id);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+
+  const r = await getRetreatReservation(uuid);
+  if (!r) {
+    console.warn('[xendit-webhook] no retreat reservation matched', uuid);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+
+  // Idempotency — Xendit retries; don't double-confirm or double-notify.
+  if (r.status === 'paid') {
+    return NextResponse.json({ ok: true, alreadyPaid: true });
+  }
+
+  await markRetreatReservationPaid(uuid, {
+    invoiceId: event.id,
+    paidAtIso: new Date().toISOString(),
+  });
+
+  const amountPhp = event.amount ?? (r.amountDueCentavos ?? 0) / 100;
+  // AWAITED — void promises can be killed when the serverless fn returns.
+  await sendTelegram(
+    `🏕️ <b>VibeCode Retreat — card payment confirmed!</b>\n\n` +
+      `<b>${esc(r.name)}</b>\n` +
+      `${esc(r.email)}\n` +
+      `📱 ${r.phone ? esc(r.phone) : '—'}\n` +
+      `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
+      `Invoice: <code>${esc(event.external_id ?? '')}</code>`,
+  );
+
+  return NextResponse.json({ ok: true, retreat: true });
 }

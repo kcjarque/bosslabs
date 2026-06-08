@@ -2691,8 +2691,10 @@ export type RetreatReservationInput = {
 export type RetreatReservation = RetreatReservationInput & {
   id: string;
   createdAt: string;
-  status: 'reserved' | 'proof_submitted';
+  status: 'reserved' | 'proof_submitted' | 'paid';
   proofSubmittedAt: string | null;
+  paidAt: string | null;
+  xenditInvoiceId: string | null;
 };
 
 type RetreatReservationRow = {
@@ -2713,6 +2715,8 @@ type RetreatReservationRow = {
   amount_due_centavos: number | null;
   status: string;
   proof_submitted_at: string | null;
+  paid_at: string | null;
+  xendit_invoice_id: string | null;
 };
 
 function rowToReservation(r: RetreatReservationRow): RetreatReservation {
@@ -2732,8 +2736,15 @@ function rowToReservation(r: RetreatReservationRow): RetreatReservation {
     tshirtSize: r.tshirt_size ?? '',
     heardFrom: r.heard_from ?? '',
     amountDueCentavos: r.amount_due_centavos ?? undefined,
-    status: r.status === 'proof_submitted' ? 'proof_submitted' : 'reserved',
+    status:
+      r.status === 'paid'
+        ? 'paid'
+        : r.status === 'proof_submitted'
+          ? 'proof_submitted'
+          : 'reserved',
     proofSubmittedAt: r.proof_submitted_at,
+    paidAt: r.paid_at,
+    xenditInvoiceId: r.xendit_invoice_id,
   };
 }
 
@@ -2789,6 +2800,24 @@ export async function markRetreatReservationProof(id: string): Promise<void> {
     .update({ status: 'proof_submitted', proof_submitted_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw new Error(`markRetreatReservationProof: ${error.message}`);
+}
+
+/** Mark a reservation paid after a successful Xendit card invoice. Stores the
+ *  invoice id + paid timestamp so the webhook is idempotent. */
+export async function markRetreatReservationPaid(
+  id: string,
+  opts: { invoiceId?: string | null; paidAtIso?: string } = {},
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('retreat_reservations')
+    .update({
+      status: 'paid',
+      paid_at: opts.paidAtIso ?? new Date().toISOString(),
+      xendit_invoice_id: opts.invoiceId ?? null,
+    })
+    .eq('id', id);
+  if (error) throw new Error(`markRetreatReservationPaid: ${error.message}`);
 }
 
 /** Fill in the "rest" of a reservation (collected after payment on the

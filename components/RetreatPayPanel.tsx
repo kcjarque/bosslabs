@@ -1,13 +1,21 @@
 // Payment options shown AFTER a seat is reserved: credit card (Xendit) +
 // UnionBank / BPI InstaPay QRs. Highlights the method the buyer picked.
-const CARD_CHECKOUT_URL = 'https://checkout.xendit.co/od/bosslabs-vibecoderetreat';
+import { RetreatCardButton } from '@/components/RetreatCardButton';
 
 const BANKS = [
   { method: 'UnionBank', name: 'UnionBank', holder: 'Manago, Michael Batiquin', img: '/qr-unionbank.jpeg' },
   { method: 'BPI', name: 'BPI', holder: 'BossLabs · MI•••L B MA•••O', img: '/qr-bpi.jpeg' },
 ];
 
-export function RetreatPayPanel({ method, transferNote }: { method?: string; transferNote?: string }) {
+export function RetreatPayPanel({
+  reservationId,
+  method,
+  transferNote,
+}: {
+  reservationId: string;
+  method?: string;
+  transferNote?: string;
+}) {
   return (
     <div className="rounded-3xl border border-cyan-500/25 bg-[#0A0E1A] p-5 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.6)] sm:p-8">
       {/* Credit / debit card */}
@@ -21,16 +29,10 @@ export function RetreatPayPanel({ method, transferNote }: { method?: string; tra
         </div>
         <h3 className="mt-1.5 font-sans text-xl font-bold text-white">Credit / Debit Card</h3>
         <p className="mt-1 text-sm text-ink-300">
-          Visa, Mastercard &amp; more via secure Xendit checkout — instant confirmation.
+          Visa, Mastercard &amp; more via secure Xendit checkout — instant confirmation, no
+          screenshot needed.
         </p>
-        <a
-          href={CARD_CHECKOUT_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-cyan mt-4 inline-flex !px-7 !py-3 text-base"
-        >
-          Pay via Credit Card →
-        </a>
+        <RetreatCardButton reservationId={reservationId} />
       </div>
 
       {/* Bank transfer QRs */}
