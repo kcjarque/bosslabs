@@ -314,7 +314,17 @@ export async function POST(req: Request) {
       },
     };
 
-    if (existing && existing.status === 'registered') {
+    if (existing && (existing.status === 'paid' || existing.status === 'attended')) {
+      // Already a paying customer who reopened checkout and re-submitted.
+      // Do NOT spawn a new 'registered' row — that becomes a phantom
+      // abandoned cart that pollutes the closer pool + win-back drips and
+      // makes the same person show up twice (e.g. "calling" + "Closed —
+      // Won"). Leave their paid order's financials untouched; only refresh
+      // the CAPI match metadata in case they do complete another purchase.
+      await updateSignup(existing.id, {
+        metadata: { ...(existing.metadata ?? {}), ...sharedMetadata },
+      });
+    } else if (existing && existing.status === 'registered') {
       // Same buyer retrying — point the existing row at the new Xendit
       // invoice. Preserve their CAPI event ID + match keys from any
       // earlier attempt so InitiateCheckout deduplicates cleanly.
