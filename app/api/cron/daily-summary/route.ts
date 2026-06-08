@@ -53,33 +53,33 @@ export async function GET(req: Request) {
   const newCheckouts = daySignups.filter((s) => s.source === 'paid').length;
   const freeRegistrations = daySignups.filter((s) => s.source === 'free').length;
 
-  // Paid = anyone who reached status 'paid' today.
-  // We check ALL signups (not just today's) because some may have been
-  // created a day earlier but paid today. We use metadata.confirmationSent
-  // timestamp if available, otherwise just count today's paid signups.
-  const paidToday = daySignups.filter((s) => s.status === 'paid');
-  const paidCount = paidToday.length;
-  const revenue = paidToday.reduce((sum, s) => {
+  // Paid = anyone whose PAYMENT cleared yesterday (Manila), regardless of when
+  // they first registered. Keyed on metadata.confirmationSent (stamped when the
+  // Xendit webhook / manual confirm marks them paid). Counting by creation date
+  // instead — as this did before — drops recovered + next-day payments onto the
+  // wrong day and miscounts the day's real sales.
+  const paidYesterday = allSignups.filter((s) => {
+    if (s.status !== 'paid' && s.status !== 'attended') return false;
+    const meta = (s.metadata ?? {}) as { confirmationSent?: string };
+    const when = meta.confirmationSent ?? s.createdAt;
+    return manilaDate(new Date(when)) === dateStr;
+  });
+  const paidCount = paidYesterday.length;
+  const revenue = paidYesterday.reduce((sum, s) => {
     const meta = (s.metadata ?? {}) as { paidAmount?: number };
     const amount = meta.paidAmount ?? (s.amountCentavos ? s.amountCentavos / 100 : 0);
     return sum + amount;
   }, 0);
-  const bumpCount = paidToday.filter((s) => s.bumped).length;
+  const bumpCount = paidYesterday.filter((s) => s.bumped).length;
 
   // Abandoned = registered today but not paid.
   const abandoned = daySignups.filter(
     (s) => s.source === 'paid' && s.status === 'registered',
   ).length;
 
-  // Page views for the day.
-  const [landingViews, checkoutViews] = await Promise.all([
-    countPageViews({ sinceIso: dayStartIso, pathPrefix: '/' }),
-    countPageViews({ sinceIso: dayStartIso, pathPrefix: '/checkout' }),
-  ]);
-
-  // Filter to only yesterday (countPageViews counts "since", so we'll
-  // just use the numbers as-is since we started from dayStartIso and
-  // the cron runs at midnight — effectively yesterday only).
+  // Unique visitors yesterday (all pages) — bounded to the day so a delayed
+  // or manually-triggered run doesn't bleed in today's traffic.
+  const visits = await countPageViews({ sinceIso: dayStartIso, untilIso: dayEndIso });
 
   const lines = [
     `📊 <b>Daily Summary — ${dateStr}</b>`,
@@ -94,15 +94,18 @@ export async function GET(req: Request) {
     `  With bump: <b>${bumpCount}</b>`,
     `  Abandoned: <b>${abandoned}</b>`,
     '',
-    `<b>Funnel (unique sessions)</b>`,
-    `  Landing: <b>${landingViews.uniqueSessions}</b>`,
-    `  Checkout: <b>${checkoutViews.uniqueSessions}</b>`,
+    `<b>Funnel (yesterday)</b>`,
+    `  Visits: <b>${visits.uniqueSessions}</b>`,
+    `  Checkout started: <b>${newCheckouts}</b>`,
     `  Paid: <b>${paidCount}</b>`,
   ];
 
-  // Conversion rate if we have checkout views.
-  if (checkoutViews.uniqueSessions > 0) {
-    const convRate = ((paidCount / checkoutViews.uniqueSessions) * 100).toFixed(1);
+  // Checkout started → Paid. Same definition as the admin dashboard:
+  // "started" = filled the form + generated an invoice (a signup), NOT just a
+  // visit to the /checkout page — so this matches the dashboard's ~conversion
+  // instead of the much lower page-visit ratio.
+  if (newCheckouts > 0) {
+    const convRate = ((paidCount / newCheckouts) * 100).toFixed(1);
     lines.push(`  Checkout → Paid: <b>${convRate}%</b>`);
   }
 
