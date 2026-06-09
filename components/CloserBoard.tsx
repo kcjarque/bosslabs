@@ -16,7 +16,7 @@ type Lead = {
   closedAt: string | null;
   commissionCentavos: number | null;
   remarks: string;
-  remainingWorkingMin: number | null;
+  remainingHoldMin: number | null;
 };
 
 const peso = (c: number) => `₱${(c / 100).toLocaleString()}`;
@@ -38,14 +38,12 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
   const [over, setOver] = useState<'pool' | 'mine' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState('');
-  const [work, setWork] = useState<{ start: number; end: number }>({ start: 9, end: 20 });
 
   async function load() {
     const r = await fetch('/api/closer/leads');
     const d = await r.json();
     setPool(d.pool ?? []);
     setLeads(d.leads ?? []);
-    if (typeof d.workStart === 'number') setWork({ start: d.workStart, end: d.workEnd });
     setLoading(false);
   }
   useEffect(() => {
@@ -167,11 +165,9 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               </div>
               <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
                 <span>Cart: {peso(l.amountCentavos)}</span>
-                {l.remainingWorkingMin != null && (
+                {l.remainingHoldMin != null && (
                   <ReleaseTimer
-                    remainingMin={l.remainingWorkingMin}
-                    workStart={work.start}
-                    workEnd={work.end}
+                    remainingMin={l.remainingHoldMin}
                     onExpire={load}
                   />
                 )}
@@ -263,29 +259,19 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 /** Current minute-of-day in Asia/Manila (UTC+8, no DST). */
-function manilaMinuteOfDay(): number {
-  const d = new Date();
-  return (d.getUTCHours() * 60 + d.getUTCMinutes() + 8 * 60) % (24 * 60);
-}
-
 /**
- * Working-hours countdown. Shows the working minutes left before a claim
- * auto-releases, ticking down ONLY during work hours and pausing overnight.
- * Fires onExpire (board refresh → server release) when it hits zero.
+ * Hold countdown. Shows the time left before a claim auto-releases to the
+ * pool — a fixed calendar duration that ticks down 24/7. Fires onExpire
+ * (board refresh → server release) when it hits zero.
  */
 function ReleaseTimer({
   remainingMin,
-  workStart,
-  workEnd,
   onExpire,
 }: {
   remainingMin: number;
-  workStart: number;
-  workEnd: number;
   onExpire: () => void;
 }) {
   const [remaining, setRemaining] = useState(remainingMin);
-  const [offHours, setOffHours] = useState(false);
   const lastTick = useRef(Date.now());
   const fired = useRef(false);
 
@@ -298,19 +284,13 @@ function ReleaseTimer({
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
-      const minOfDay = manilaMinuteOfDay();
-      const inWork = minOfDay >= workStart * 60 && minOfDay < workEnd * 60;
-      setOffHours(!inWork);
-      if (inWork) {
-        const elapsedMin = (now - lastTick.current) / 60000;
-        setRemaining((r) => Math.max(0, r - elapsedMin));
-      }
+      const elapsedMin = (now - lastTick.current) / 60000;
       lastTick.current = now;
+      setRemaining((r) => Math.max(0, r - elapsedMin));
     };
-    tick();
-    const id = setInterval(tick, 20_000);
+    const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, [workStart, workEnd]);
+  }, []);
 
   useEffect(() => {
     if (remaining <= 0 && !fired.current) {
@@ -322,20 +302,18 @@ function ReleaseTimer({
   if (remaining <= 0) return <span className="font-medium text-rose-600">⏱ Releasing…</span>;
 
   const total = Math.floor(remaining);
-  const h = Math.floor(total / 60);
+  const d = Math.floor(total / 1440);
+  const h = Math.floor((total % 1440) / 60);
   const m = total % 60;
-  const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const label = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 
-  if (offHours) {
-    return (
-      <span className="font-medium text-slate-400" title={`Paused — outside ${workStart}:00–${workEnd}:00. ${label} of work-time left.`}>
-        ⏸ off hours · {label}
-      </span>
-    );
-  }
-  const urgent = remaining < 15;
+  // Urgent in the last 6 hours before release.
+  const urgent = remaining < 6 * 60;
   return (
-    <span className={`font-medium ${urgent ? 'text-rose-600' : 'text-amber-600'}`} title="Working-hours time left before it releases to the pool">
+    <span
+      className={`font-medium ${urgent ? 'text-rose-600' : 'text-amber-600'}`}
+      title="Time left before this lead releases back to the pool"
+    >
       ⏱ {label} left
     </span>
   );

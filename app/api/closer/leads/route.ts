@@ -18,14 +18,14 @@ export async function GET() {
   if (!closer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const settings = await getSettings();
   const holdHours = settings.closerClaimHoldHours || 6;
-  const work = { startHour: settings.closerWorkStartHour ?? 9, endHour: settings.closerWorkEndHour ?? 20 };
-  // Free up any claims past the WORKING-HOUR window BEFORE reading the board.
-  await releaseExpiredClaims(holdHours, work);
+  // Free up any claims past their hold window (24/7 calendar duration) BEFORE
+  // reading the board.
+  await releaseExpiredClaims(holdHours);
   const [pool, leads] = await Promise.all([
     listUnclaimedAbandoned(),
-    listCloserLeads(closer.id, holdHours, work),
+    listCloserLeads(closer.id, holdHours),
   ]);
-  return NextResponse.json({ pool, leads, holdHours, workStart: work.startHour, workEnd: work.endHour });
+  return NextResponse.json({ pool, leads, holdHours });
 }
 
 export async function POST(req: Request) {

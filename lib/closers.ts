@@ -219,7 +219,7 @@ export type CloserLead = {
   remarks: string;
   /** Working minutes left before this claim auto-releases (null once closed).
    *  Counts only the closer's working hours — pauses overnight. */
-  remainingWorkingMin: number | null;
+  remainingHoldMin: number | null;
 };
 
 /** Working-hours window in Asia/Manila local time (24h). */
@@ -249,24 +249,25 @@ export function workingMinutesBetween(startMs: number, endMs: number, work: Work
   return Math.floor(total);
 }
 
-/** Working minutes left before a claim (claimed at claimedMs) expires. */
-function remainingWorkingMin(claimedMs: number, holdHours: number, work: WorkHours): number {
-  return holdHours * 60 - workingMinutesBetween(claimedMs, Date.now(), work);
+/** Minutes left before a claim (claimed at claimedMs) expires. The hold is a
+ *  fixed calendar duration (holdHours), counted 24/7 — wall-clock, not paused
+ *  outside work hours. */
+function remainingHoldMin(claimedMs: number, holdHours: number): number {
+  return holdHours * 60 - (Date.now() - claimedMs) / 60000;
 }
 
 /**
- * Release every claim whose WORKING-HOUR hold window has elapsed (and isn't
- * closed) back to the pool. The cutoff isn't a simple timestamp (off-hours
- * pause the clock), so we compute per lead — closer_leads is tiny. Lazy-expiry:
- * called whenever the board loads.
+ * Release every claim whose hold window (a fixed calendar duration, counted
+ * 24/7) has elapsed and isn't closed, back to the pool. Lazy-expiry: called
+ * whenever the board loads. closer_leads is tiny, so we compute per lead.
  */
-export async function releaseExpiredClaims(holdHours: number, work: WorkHours): Promise<number> {
+export async function releaseExpiredClaims(holdHours: number): Promise<number> {
   if (!isSupabaseConfigured() || !(holdHours > 0)) return 0;
   const sb = getSupabase();
   const { data } = await sb.from('closer_leads').select('id, claimed_at').neq('stage', 'closed');
   const rows = (data ?? []) as Array<{ id: string; claimed_at: string }>;
   const expired = rows
-    .filter((r) => remainingWorkingMin(new Date(r.claimed_at).getTime(), holdHours, work) <= 0)
+    .filter((r) => remainingHoldMin(new Date(r.claimed_at).getTime(), holdHours) <= 0)
     .map((r) => r.id);
   if (expired.length === 0) return 0;
   const { data: del } = await sb.from('closer_leads').delete().in('id', expired).select('id');
@@ -276,7 +277,6 @@ export async function releaseExpiredClaims(holdHours: number, work: WorkHours): 
 export async function listCloserLeads(
   closerId: string,
   holdHours = 6,
-  work: WorkHours = { startHour: 9, endHour: 20 },
 ): Promise<CloserLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
@@ -309,10 +309,10 @@ export async function listCloserLeads(
       closedAt: r.closed_at,
       commissionCentavos: commMap.get(r.signup_id) ?? null,
       remarks: meta.remarks ?? '',
-      remainingWorkingMin:
+      remainingHoldMin:
         r.stage === 'closed'
           ? null
-          : Math.max(0, remainingWorkingMin(new Date(r.claimed_at).getTime(), holdHours, work)),
+          : Math.max(0, remainingHoldMin(new Date(r.claimed_at).getTime(), holdHours)),
     };
   });
 }
