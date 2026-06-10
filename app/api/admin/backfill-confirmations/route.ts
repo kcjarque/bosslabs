@@ -20,7 +20,7 @@ export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  if (!process.env.CRON_SECRET || url.searchParams.get('key') !== process.env.CRON_SECRET) {
+  if (!process.env.BACKFILL_KEY || url.searchParams.get('key') !== process.env.BACKFILL_KEY) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const sinceIso = url.searchParams.get('since') || '2026-06-02T00:00:00+08:00';
