@@ -17,7 +17,7 @@ const SLUG = 'vibecode-retreat';
 export const metadata: Metadata = {
   title: 'VibeCode Retreat — Walk in with an idea. Walk out with an app.',
   description:
-    'An invite-only, build-or-refund founder retreat. June 26–27, Antipolo City. 10 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
+    'An invite-only, build-or-refund founder retreat. June 26–27, Tagaytay City. 10 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
 };
 
 async function getRetreat() {
@@ -351,7 +351,7 @@ function Hero({ priceCentavos }: { priceCentavos: number | null }) {
   const cards = [
     { icon: IC.calendar, k: 'WHEN', v: 'June 26–27, 10:00 AM', s: 'Friday to Saturday' },
     { icon: IC.people, k: 'WHO', v: 'Only 10 founders', s: 'Invite-only cohort' },
-    { icon: IC.pin, k: 'WHERE', v: 'Antipolo City, Rizal', s: 'The best private villa' },
+    { icon: IC.pin, k: 'WHERE', v: 'Tagaytay City, Cavite', s: 'The best private villa' },
     { icon: IC.rocket, k: 'FORMAT', v: '24 straight hours', s: 'Build · Pitch · Ship' },
   ];
   return (
@@ -561,7 +561,7 @@ function BillionaireSession() {
         items={[
           { icon: IC.calendar, top: 'June 26–27', bottom: '10 AM' },
           { icon: IC.bed, top: '2 Day · 1 Night', bottom: 'Live-in build' },
-          { icon: IC.pin, top: 'Antipolo City', bottom: 'Rizal' },
+          { icon: IC.pin, top: 'Tagaytay City', bottom: 'Cavite' },
         ]}
       />
     </section>
@@ -627,7 +627,7 @@ function FinalCta() {
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.18em] text-ink-300">
           <span className="inline-flex items-center gap-2 text-cyan-300">{IC.refund} Build-or-refund</span>
-          <span>Antipolo City, Rizal</span>
+          <span>Tagaytay City, Cavite</span>
           <span>June 26–27</span>
         </div>
       </div>
