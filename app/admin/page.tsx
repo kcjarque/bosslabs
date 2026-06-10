@@ -5,6 +5,7 @@ import {
   getSettings,
   getSignups,
   getVisitBuckets,
+  getEmailStats,
   type Signup,
 } from '@/lib/db';
 import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
@@ -196,6 +197,7 @@ export default async function AdminDashboard({
     visitsBuckets,
     visitsBucketsPrev,
     closerRecoveredIds,
+    emailStats,
   ] = await Promise.all([
     getSignups(),
     getSettings(),
@@ -213,6 +215,8 @@ export default async function AdminDashboard({
     }),
     // Signups a closer claimed + that paid — flagged "recovered" even if same-day.
     getCloserRecoveredSignupIds(),
+    // Email performance (deliverability / bounce / open / click / recovery).
+    getEmailStats(),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -573,6 +577,59 @@ export default async function AdminDashboard({
         </div>
       </section>
 
+      {/* EMAIL PERFORMANCE — deliverability, bounce, open, click, recovery */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">Email performance</h2>
+          <span className="text-[11px] text-slate-400">
+            {emailStats.totalSent.toLocaleString()} emails ·{' '}
+            {emailStats.pending > 0 ? `${emailStats.pending} awaiting status` : 'all settled'}
+          </span>
+        </div>
+        <p className="mt-1 text-[12px] text-slate-500">
+          Across all drip + confirmation emails. Deliverability &amp; bounce come from real
+          provider events.
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <EmailStat
+            label="Deliverability"
+            value={`${emailStats.deliverabilityPct.toFixed(1)}%`}
+            sub={`${emailStats.reached.toLocaleString()} reached inbox`}
+            tone="good"
+          />
+          <EmailStat
+            label="Bounce rate"
+            value={`${emailStats.bouncePct.toFixed(1)}%`}
+            sub={`${emailStats.bounced.toLocaleString()} bounced`}
+            tone={emailStats.bouncePct >= 5 ? 'bad' : emailStats.bouncePct >= 2 ? 'warn' : 'neutral'}
+          />
+          <EmailStat
+            label="Open rate"
+            value={emailStats.openPct == null ? '—' : `${emailStats.openPct.toFixed(1)}%`}
+            sub={emailStats.openPct == null ? 'not tracked yet' : `${emailStats.opened.toLocaleString()} opened`}
+            tone={emailStats.openPct == null ? 'muted' : 'neutral'}
+          />
+          <EmailStat
+            label="Click rate"
+            value={emailStats.clickPct == null ? '—' : `${emailStats.clickPct.toFixed(1)}%`}
+            sub={emailStats.clickPct == null ? 'not tracked yet' : `${emailStats.clicked.toLocaleString()} clicked`}
+            tone={emailStats.clickPct == null ? 'muted' : 'neutral'}
+          />
+          <EmailStat
+            label="Cart recovery · email"
+            value={`${emailStats.recovery.pct.toFixed(1)}%`}
+            sub={`${emailStats.recovery.paid} of ${emailStats.recovery.emailed} paid`}
+            tone="good"
+          />
+        </div>
+        {!emailStats.openTracking && (
+          <p className="mt-3 text-[11px] text-slate-400">
+            Open &amp; click rates need SES open/click tracking enabled (a one-time setup) —
+            they&rsquo;ll populate going forward once it&rsquo;s on.
+          </p>
+        )}
+      </section>
+
       {/* ABANDONED CART SPOTLIGHT — visible revenue at risk + one-click recovery */}
       {registered.length > 0 && (
         <Link
@@ -893,6 +950,36 @@ function DashboardDateFilter({ activeKey }: { activeKey: string }) {
  * progression: cyan (top, broad), amber (middle, narrowing), emerald
  * (bottom, conversion).
  */
+function EmailStat({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone: 'good' | 'bad' | 'warn' | 'muted' | 'neutral';
+}) {
+  const valueCls =
+    tone === 'good'
+      ? 'text-emerald-600'
+      : tone === 'bad'
+        ? 'text-rose-600'
+        : tone === 'warn'
+          ? 'text-amber-600'
+          : tone === 'muted'
+            ? 'text-slate-300'
+            : 'text-slate-900';
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-3">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`mt-1.5 text-2xl font-semibold tracking-tight ${valueCls}`}>{value}</div>
+      <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>
+    </div>
+  );
+}
+
 function FunnelStage({
   label,
   value,

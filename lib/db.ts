@@ -1162,6 +1162,69 @@ export async function getVisitBuckets(opts: {
 }
 
 /* --------------------------------------------------------------------- */
+/* EMAIL PERFORMANCE                                                     */
+/* --------------------------------------------------------------------- */
+
+export type EmailStats = {
+  totalSent: number;
+  reached: number; // delivered (incl. opened/clicked)
+  bounced: number;
+  complained: number;
+  pending: number; // sent but no terminal event yet
+  opened: number;
+  clicked: number;
+  deliverabilityPct: number;
+  bouncePct: number;
+  complaintPct: number;
+  /** null when open/click tracking isn't enabled (no events ever recorded). */
+  openPct: number | null;
+  clickPct: number | null;
+  openTracking: boolean;
+  recovery: { emailed: number; paid: number; pct: number };
+};
+
+const EMPTY_EMAIL_STATS: EmailStats = {
+  totalSent: 0, reached: 0, bounced: 0, complained: 0, pending: 0, opened: 0, clicked: 0,
+  deliverabilityPct: 0, bouncePct: 0, complaintPct: 0, openPct: null, clickPct: null,
+  openTracking: false, recovery: { emailed: 0, paid: 0, pct: 0 },
+};
+
+/**
+ * Email performance across all sent emails (drip/sequence + transactional
+ * confirmations). Aggregated in SQL (email_stats RPC) so it stays exact as
+ * volume grows past PostgREST's row cap. open/click come back null when no
+ * such events have ever been recorded (SES open/click tracking not enabled).
+ */
+export async function getEmailStats(): Promise<EmailStats> {
+  if (!isSupabaseConfigured()) return EMPTY_EMAIL_STATS;
+  const { data, error } = await getSupabase().rpc('email_stats');
+  if (error) throw new Error(`getEmailStats: ${error.message}`);
+  const d = (data ?? {}) as {
+    reached: number; bounced: number; complained: number; opened: number;
+    clicked: number; pending: number; total: number; recoEmailed: number; recoPaid: number;
+  };
+  const known = d.reached + d.bounced + d.complained;
+  const pct = (n: number, den: number) => (den > 0 ? (n / den) * 100 : 0);
+  const openTracking = d.opened + d.clicked > 0;
+  return {
+    totalSent: d.total,
+    reached: d.reached,
+    bounced: d.bounced,
+    complained: d.complained,
+    pending: d.pending,
+    opened: d.opened,
+    clicked: d.clicked,
+    deliverabilityPct: pct(d.reached, known),
+    bouncePct: pct(d.bounced, known),
+    complaintPct: pct(d.complained, known),
+    openPct: openTracking ? pct(d.opened, d.reached) : null,
+    clickPct: openTracking ? pct(d.clicked, d.reached) : null,
+    openTracking,
+    recovery: { emailed: d.recoEmailed, paid: d.recoPaid, pct: pct(d.recoPaid, d.recoEmailed) },
+  };
+}
+
+/* --------------------------------------------------------------------- */
 /* PROMO CODES                                                           */
 /* --------------------------------------------------------------------- */
 
