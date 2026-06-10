@@ -419,7 +419,7 @@ insert into sms_templates (id, name, body) values
 ),
 ('paid_confirmation',
  'Paid Ticket Confirmation',
- 'BOSSLABS AI: Payment received. {{firstName}}, your seat is locked in for {{webinarDate}} at {{webinarTime}}. Zoom: {{zoomJoinUrl}}'
+ 'BOSSLABS AI: Payment received: {{amount}}. {{firstName}}, your seat is locked for {{webinarDate}} at {{webinarTime}}. Check your email for your Zoom link + details.'
 ),
 ('reminder_24h',
  '24-Hour Reminder',

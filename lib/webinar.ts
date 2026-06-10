@@ -8,6 +8,7 @@
  */
 
 import { getSettings, getEvent, type Signup } from './db';
+import { formatPHP } from './config';
 
 export type WebinarInfo = {
   name: string;
@@ -50,10 +51,20 @@ function pick(...vals: (string | undefined | null)[]): string {
  * caller controls how many times getWebinarInfo() runs.
  */
 export async function templateVarsForSignup(
-  signup: Pick<Signup, 'firstName' | 'lastName' | 'email' | 'phone' | 'eventId'>,
+  signup: Pick<
+    Signup,
+    'firstName' | 'lastName' | 'email' | 'phone' | 'eventId' | 'amountCentavos' | 'metadata'
+  >,
   webinar: WebinarInfo,
 ): Promise<Record<string, string>> {
   let zoomJoinUrl = webinar.zoomJoinUrl;
+  // Amount actually paid (metadata.paidAmount is PHP from the Xendit webhook);
+  // fall back to the cart total. Empty string when unknown so templates that
+  // reference {{amount}} degrade gracefully.
+  const paidPhp = (signup.metadata as { paidAmount?: number } | undefined)?.paidAmount;
+  const amountCentavos =
+    paidPhp != null ? Math.round(paidPhp * 100) : signup.amountCentavos ?? null;
+  const amount = amountCentavos != null ? formatPHP(amountCentavos) : '';
   if (signup.eventId) {
     try {
       const event = await getEvent(signup.eventId);
@@ -67,6 +78,7 @@ export async function templateVarsForSignup(
     lastName: signup.lastName ?? '',
     email: signup.email,
     phone: signup.phone,
+    amount,
     webinarName: webinar.name,
     webinarDate: webinar.date,
     webinarTime: webinar.time,
