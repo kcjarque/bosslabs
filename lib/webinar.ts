@@ -8,7 +8,6 @@
  */
 
 import { getSettings, getEvent, type Signup } from './db';
-import { formatPHP } from './config';
 
 export type WebinarInfo = {
   name: string;
@@ -59,12 +58,15 @@ export async function templateVarsForSignup(
 ): Promise<Record<string, string>> {
   let zoomJoinUrl = webinar.zoomJoinUrl;
   // Amount actually paid (metadata.paidAmount is PHP from the Xendit webhook);
-  // fall back to the cart total. Empty string when unknown so templates that
+  // fall back to the cart total. Formatted as "PHP 999" (NOT "₱999") on
+  // purpose: the ₱ sign isn't in GSM-7, so it would force confirmation SMS into
+  // Unicode (~3x the segments). Empty string when unknown so templates that
   // reference {{amount}} degrade gracefully.
   const paidPhp = (signup.metadata as { paidAmount?: number } | undefined)?.paidAmount;
   const amountCentavos =
     paidPhp != null ? Math.round(paidPhp * 100) : signup.amountCentavos ?? null;
-  const amount = amountCentavos != null ? formatPHP(amountCentavos) : '';
+  const amount =
+    amountCentavos != null ? `PHP ${(amountCentavos / 100).toLocaleString('en-PH')}` : '';
   if (signup.eventId) {
     try {
       const event = await getEvent(signup.eventId);
