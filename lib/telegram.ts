@@ -153,6 +153,20 @@ export async function sendTelegramTo(
   }
 }
 
+/**
+ * Second Telegram chat for the ABANDONED-CART sales team. Receives ONLY
+ * abandoned-cart + recovered-sale alerts — a pure add-on alongside the main
+ * chat (which still gets everything). Configurable via env; falls back to the
+ * team's chat id so it works without extra setup. Uses the same bot token.
+ */
+const ABANDONED_TEAM_CHAT_ID = process.env.TELEGRAM_ABANDONED_CHAT_ID || '-1003782640449';
+
+export async function sendAbandonedTeam(
+  text: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  return sendTelegramTo(ABANDONED_TEAM_CHAT_ID, text);
+}
+
 /** Escape HTML special chars for Telegram HTML parse mode. */
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

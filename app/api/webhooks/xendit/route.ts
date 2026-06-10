@@ -35,7 +35,7 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
 import { OFFER } from '@/lib/config';
-import { sendTelegram, esc } from '@/lib/telegram';
+import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -224,7 +224,7 @@ async function handleMainPaid(event: XenditEvent) {
   const header = isRecovered
     ? `🎉 <b>New Recovered Lead — Paid! Good job Team!</b>`
     : `💰 <b>New payment!</b>`;
-  await sendTelegram(
+  const paymentMsg =
     `${header}\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
@@ -233,8 +233,11 @@ async function handleMainPaid(event: XenditEvent) {
     (closer ? `Confirmed by: <b>${esc(closer.name)}</b>\n` : '') +
     `Invoice: <code>${externalId}</code>\n` +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
-      (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : ''),
-  );
+    (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
+  await sendTelegram(paymentMsg);
+  // Mirror RECOVERED sales (and only those — never regular new payments) to the
+  // abandoned-cart sales team chat. Best-effort add-on.
+  if (isRecovered) await sendAbandonedTeam(paymentMsg).catch(() => {});
 
   return NextResponse.json({ ok: true, emailOk: emailRes.ok });
 }

@@ -12,7 +12,7 @@ import { getSignupById, updateSignup, countPaidOrders } from './db';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
-import { sendTelegram, sendTelegramPhoto, esc } from './telegram';
+import { sendTelegram, sendTelegramPhoto, sendAbandonedTeam, esc } from './telegram';
 import { getWebinarInfo, templateVarsForSignup } from './webinar';
 import { syncCrmCardForSignup } from './crm';
 import { closeLeadAndRecordCommission } from './closers';
@@ -140,6 +140,9 @@ export async function markAbandonedCartPaid(
   } else {
     await sendTelegram(caption + (opts.proofUrl ? `\n📎 <a href="${esc(opts.proofUrl)}">View proof</a>` : ''));
   }
+  // A manual payment confirms an abandoned cart → it's a RECOVERED sale. Mirror
+  // it to the abandoned-cart sales team chat (best-effort add-on).
+  await sendAbandonedTeam(caption).catch(() => {});
 
   return { ok: true };
 }

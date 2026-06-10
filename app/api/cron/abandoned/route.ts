@@ -13,7 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSignups, updateSignup } from '@/lib/db';
-import { sendTelegram, esc } from '@/lib/telegram';
+import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -54,14 +54,17 @@ export async function GET(req: Request) {
     // Telegram outage / the group migrated mid-run), we leave the marker
     // unset so the next cron run retries — no more silent permanent loss.
     // Awaited so Vercel doesn't kill the fetch when the function returns.
-    const res = await sendTelegram(
+    const msg =
       `🚨 <b>Abandoned checkout</b>\n\n` +
-        `<b>${esc(fullName)}</b>\n` +
-        `${esc(s.email)}\n` +
-        (s.phone ? `${esc(s.phone)}\n` : '') +
-        `Amount: <b>${amt}</b>${s.bumped ? ' (with bump)' : ''}\n` +
-        `Stuck for ${ageMin} min`,
-    );
+      `<b>${esc(fullName)}</b>\n` +
+      `${esc(s.email)}\n` +
+      (s.phone ? `${esc(s.phone)}\n` : '') +
+      `Amount: <b>${amt}</b>${s.bumped ? ' (with bump)' : ''}\n` +
+      `Stuck for ${ageMin} min`;
+    const res = await sendTelegram(msg);
+    // Mirror to the abandoned-cart sales team chat (best-effort add-on; never
+    // affects the main send or the notified marker).
+    await sendAbandonedTeam(msg).catch(() => {});
 
     if (res.ok) {
       await updateSignup(s.id, {
