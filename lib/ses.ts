@@ -59,6 +59,13 @@ export async function sendViaSes(
         FromEmailAddress: args.from,
         Destination: { ToAddresses: [args.to] },
         ReplyToAddresses: args.replyTo ? [args.replyTo] : undefined,
+        // Sending through a configuration set is what enables SES open + click
+        // tracking (SES injects the open pixel + rewrites links, then publishes
+        // OPEN/CLICK events to the config set's destination). Env-gated: when
+        // SES_CONFIGURATION_SET is unset this is undefined = a normal send, so
+        // it's a no-op until the config set exists (referencing a non-existent
+        // set would reject every send).
+        ConfigurationSetName: process.env.SES_CONFIGURATION_SET || undefined,
         Content: {
           Simple: {
             Subject: { Data: args.subject, Charset: 'UTF-8' },
