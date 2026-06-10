@@ -153,13 +153,13 @@ async function handleMainPaid(event: XenditEvent) {
       ...paidMeta,
       ...(emailRes.ok && emailRes.id
         ? { confirmationMessageId: emailRes.id, confirmationStatus: 'sent' }
-        : {}),
+        : { confirmationStatus: 'failed' }),
       ...(smsRes
         ? {
             confirmationSmsSent: new Date().toISOString(),
             confirmationSmsOk: smsRes.ok,
             confirmationSmsId: smsRes.ok ? smsRes.id : null,
-            confirmationSmsStatus: 'sent',
+            confirmationSmsStatus: smsRes.ok ? 'sent' : 'failed',
           }
         : {}),
     },

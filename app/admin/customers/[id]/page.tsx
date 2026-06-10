@@ -43,7 +43,8 @@ type CommsEvent = {
     | 'opened'
     | 'clicked'
     | 'bounced'
-    | 'complained';
+    | 'complained'
+    | 'failed';
   statusAt?: string;
   /** Template this event sent — drives the Resend button. Omitted for events
    *  that can't be re-fired (e.g. the internal Telegram alert). */
@@ -85,9 +86,10 @@ function buildCommsTimeline(
       channel: 'email',
       kind: 'Payment confirmation',
       description: 'Confirmation email + Zoom link',
-      ok: true,
+      ok: meta.confirmationStatus !== 'failed',
       // Real delivery status arrives via the SES webhook (defaults to 'sent'
-      // until a delivered/bounced event lands).
+      // until a delivered/bounced event lands). 'failed' = the send itself
+      // errored (e.g. SES rejected it), stamped by the sender.
       status: (meta.confirmationStatus as CommsEvent['status']) ?? 'sent',
       statusAt: meta.confirmationStatusAt as string | undefined,
       templateId: 'paid_confirmation',
@@ -571,6 +573,7 @@ function StatusPill({
     clicked: 'border-cyan-400 bg-cyan-100 text-cyan-800',
     bounced: 'border-red-300 bg-red-50 text-red-700',
     complained: 'border-amber-300 bg-amber-50 text-amber-700',
+    failed: 'border-red-300 bg-red-50 text-red-700',
   };
   const labels: Record<NonNullable<CommsEvent['status']>, string> = {
     sent: 'Sent',
@@ -579,6 +582,7 @@ function StatusPill({
     clicked: 'Clicked',
     bounced: 'Bounced',
     complained: 'Spam',
+    failed: 'Failed',
   };
   return (
     <span
