@@ -1176,18 +1176,29 @@ export type EmailStats = {
   deliverabilityPct: number;
   bouncePct: number;
   complaintPct: number;
-  /** null when open/click tracking isn't enabled (no events ever recorded). */
+  /** Open/click rates are scoped to the trackable window (emails sent after SES
+   *  open/click tracking went live). null until at least one trackable email
+   *  has been delivered — older emails couldn't be tracked. */
   openPct: number | null;
   clickPct: number | null;
   openTracking: boolean;
+  /** Delivered emails in the trackable window — the open/click denominator. */
+  trackableReached: number;
+  trackableOpened: number;
+  trackableClicked: number;
   recovery: { emailed: number; paid: number; pct: number };
 };
 
 const EMPTY_EMAIL_STATS: EmailStats = {
   totalSent: 0, reached: 0, bounced: 0, complained: 0, pending: 0, opened: 0, clicked: 0,
   deliverabilityPct: 0, bouncePct: 0, complaintPct: 0, openPct: null, clickPct: null,
-  openTracking: false, recovery: { emailed: 0, paid: 0, pct: 0 },
+  openTracking: false, trackableReached: 0, trackableOpened: 0, trackableClicked: 0,
+  recovery: { emailed: 0, paid: 0, pct: 0 },
 };
+
+/** When SES open/click tracking went live (the bosslabs config set). Open/click
+ *  rates only count emails sent at/after this — older sends weren't tracked. */
+const SES_OPEN_TRACKING_SINCE = process.env.SES_OPEN_TRACKING_SINCE || '2026-06-10T13:00:00Z';
 
 /**
  * Email performance across all sent emails (drip/sequence + transactional
@@ -1197,15 +1208,21 @@ const EMPTY_EMAIL_STATS: EmailStats = {
  */
 export async function getEmailStats(): Promise<EmailStats> {
   if (!isSupabaseConfigured()) return EMPTY_EMAIL_STATS;
-  const { data, error } = await getSupabase().rpc('email_stats');
+  const { data, error } = await getSupabase().rpc('email_stats', {
+    p_since: SES_OPEN_TRACKING_SINCE,
+  });
   if (error) throw new Error(`getEmailStats: ${error.message}`);
   const d = (data ?? {}) as {
     reached: number; bounced: number; complained: number; opened: number;
-    clicked: number; pending: number; total: number; recoEmailed: number; recoPaid: number;
+    clicked: number; pending: number; total: number;
+    trackReached: number; trackOpened: number; trackClicked: number;
+    recoEmailed: number; recoPaid: number;
   };
   const known = d.reached + d.bounced + d.complained;
   const pct = (n: number, den: number) => (den > 0 ? (n / den) * 100 : 0);
-  const openTracking = d.opened + d.clicked > 0;
+  // Open/click are scoped to the trackable window. Show the rate as soon as one
+  // tracked email has been delivered (even 0%); null until then.
+  const openTracking = d.trackReached > 0;
   return {
     totalSent: d.total,
     reached: d.reached,
@@ -1217,9 +1234,12 @@ export async function getEmailStats(): Promise<EmailStats> {
     deliverabilityPct: pct(d.reached, known),
     bouncePct: pct(d.bounced, known),
     complaintPct: pct(d.complained, known),
-    openPct: openTracking ? pct(d.opened, d.reached) : null,
-    clickPct: openTracking ? pct(d.clicked, d.reached) : null,
+    openPct: openTracking ? pct(d.trackOpened, d.trackReached) : null,
+    clickPct: openTracking ? pct(d.trackClicked, d.trackReached) : null,
     openTracking,
+    trackableReached: d.trackReached,
+    trackableOpened: d.trackOpened,
+    trackableClicked: d.trackClicked,
     recovery: { emailed: d.recoEmailed, paid: d.recoPaid, pct: pct(d.recoPaid, d.recoEmailed) },
   };
 }

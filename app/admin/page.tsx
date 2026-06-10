@@ -606,13 +606,21 @@ export default async function AdminDashboard({
           <EmailStat
             label="Open rate"
             value={emailStats.openPct == null ? '—' : `${emailStats.openPct.toFixed(1)}%`}
-            sub={emailStats.openPct == null ? 'not tracked yet' : `${emailStats.opened.toLocaleString()} opened`}
+            sub={
+              emailStats.openPct == null
+                ? 'awaiting tracked sends'
+                : `${emailStats.trackableOpened} of ${emailStats.trackableReached} tracked`
+            }
             tone={emailStats.openPct == null ? 'muted' : 'neutral'}
           />
           <EmailStat
             label="Click rate"
             value={emailStats.clickPct == null ? '—' : `${emailStats.clickPct.toFixed(1)}%`}
-            sub={emailStats.clickPct == null ? 'not tracked yet' : `${emailStats.clicked.toLocaleString()} clicked`}
+            sub={
+              emailStats.clickPct == null
+                ? 'awaiting tracked sends'
+                : `${emailStats.trackableClicked} of ${emailStats.trackableReached} tracked`
+            }
             tone={emailStats.clickPct == null ? 'muted' : 'neutral'}
           />
           <EmailStat
@@ -622,12 +630,11 @@ export default async function AdminDashboard({
             tone="good"
           />
         </div>
-        {!emailStats.openTracking && (
-          <p className="mt-3 text-[11px] text-slate-400">
-            Open &amp; click rates need SES open/click tracking enabled (a one-time setup) —
-            they&rsquo;ll populate going forward once it&rsquo;s on.
-          </p>
-        )}
+        <p className="mt-3 text-[11px] text-slate-400">
+          Open &amp; click rates cover only emails sent since open-tracking went live
+          {emailStats.trackableReached > 0 ? ` (${emailStats.trackableReached} so far)` : ''} —
+          older sends couldn&rsquo;t be tracked, so they&rsquo;re excluded.
+        </p>
       </section>
 
       {/* ABANDONED CART SPOTLIGHT — visible revenue at risk + one-click recovery */}
