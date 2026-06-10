@@ -13,7 +13,10 @@ let sharedClient: SESv2Client | null = null;
 
 export function getSesClient(): SESv2Client {
   if (sharedClient === null) {
-    const region = process.env.AWS_REGION || process.env.SES_REGION || 'ap-southeast-1';
+    // Our SES identity (conexmedia.ph) is verified in ap-southeast-2 (Sydney).
+    // Default to it so an unset/empty AWS_REGION can't silently send to a
+    // region where the identity isn't verified (every send → MessageRejected).
+    const region = process.env.AWS_REGION || process.env.SES_REGION || 'ap-southeast-2';
     // maxAttempts: light SDK-level retry net (mirrors ConexMail).
     sharedClient = new SESv2Client({ region, maxAttempts: 3 });
   }
