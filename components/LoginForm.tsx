@@ -14,7 +14,7 @@ export function LoginForm() {
     const res = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: fd.get('password') }),
+      body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -28,15 +28,29 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
+        <label className="label" htmlFor="username">
+          Username <span className="font-normal text-slate-400">(staff only)</span>
+        </label>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          autoFocus
+          className="input"
+          placeholder="Leave blank for admin"
+        />
+      </div>
+      <div>
         <label className="label" htmlFor="password">
-          Admin password
+          Password
         </label>
         <input
           id="password"
           name="password"
           type="password"
           required
-          autoFocus
+          autoComplete="current-password"
           className="input"
           placeholder="••••••••"
         />
@@ -50,8 +64,8 @@ export function LoginForm() {
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
       <p className="text-center text-xs text-slate-500">
-        Single-user admin. Password is the <code>ADMIN_PASSWORD</code> env var
-        set in your hosting provider.
+        Admins: leave username blank and enter the admin password. Staff: use the
+        username + password you were given.
       </p>
     </form>
   );

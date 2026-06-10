@@ -94,14 +94,58 @@ export function buildSessionCookie() {
   return `${issuedAt}.${sig}`;
 }
 
+/** Staff cookie: a signed base64url JSON payload carrying the role, the
+ *  display name, and the section allowlist (perms). Distinct from the admin
+ *  cookie (which is bare digits), so getAdminSession can tell them apart. */
+export function buildStaffSessionCookie(perms: string[], name: string): string {
+  const payload = Buffer.from(
+    JSON.stringify({ t: Date.now(), r: 'staff', perms, name }),
+    'utf8',
+  ).toString('base64url');
+  return `${payload}.${sign(payload)}`;
+}
+
+/** Issued-at ms from a (already signature-verified) cookie value. Admin cookies
+ *  are bare digits; staff cookies are a base64url JSON payload with `t`. */
+function issuedAtMs(val: string): number | null {
+  if (/^\d+$/.test(val)) return Number(val);
+  try {
+    const p = JSON.parse(Buffer.from(val, 'base64url').toString('utf8')) as { t?: number };
+    return typeof p.t === 'number' ? p.t : null;
+  } catch {
+    return null;
+  }
+}
+
 export function isValidSession(raw: string | undefined | null) {
   if (!raw) return false;
-  const [issuedAt, sig] = raw.split('.');
-  if (!issuedAt || !sig) return false;
-  const expected = sign(issuedAt);
-  if (!safeEqual(sig, expected)) return false;
-  const age = (Date.now() - Number(issuedAt)) / 1000;
+  const [val, sig] = raw.split('.');
+  if (!val || !sig) return false;
+  if (!safeEqual(sig, sign(val))) return false;
+  const issued = issuedAtMs(val);
+  if (issued == null) return false;
+  const age = (Date.now() - issued) / 1000;
   return age >= 0 && age < 7 * ONE_DAY;
+}
+
+export type AdminSession = { role: 'admin' | 'staff'; name: string; perms: string[] };
+
+/** The current verified session, or null. Admin = full access (perms `['*']`);
+ *  staff = the allowlist baked into their signed cookie at login. */
+export function getAdminSession(): AdminSession | null {
+  const raw = cookies().get(ADMIN_COOKIE)?.value;
+  if (!raw || !isValidSession(raw)) return null;
+  const [val] = raw.split('.');
+  if (/^\d+$/.test(val)) return { role: 'admin', name: 'Admin', perms: ['*'] };
+  try {
+    const p = JSON.parse(Buffer.from(val, 'base64url').toString('utf8')) as {
+      name?: string;
+      perms?: string[];
+    };
+    return { role: 'staff', name: p.name || 'Staff', perms: p.perms ?? [] };
+  } catch {
+    return null;
+  }
 }
 
 /** Server-component guard. Redirects to /admin/login if not signed in. */

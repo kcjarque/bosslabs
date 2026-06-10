@@ -1,5 +1,20 @@
 import { NextResponse } from 'next/server';
-import { adminPassword, buildSessionCookie, safeEqual, ADMIN_COOKIE } from '@/lib/admin-auth';
+import {
+  adminPassword,
+  buildSessionCookie,
+  buildStaffSessionCookie,
+  safeEqual,
+  ADMIN_COOKIE,
+} from '@/lib/admin-auth';
+import { verifyStaffLogin } from '@/lib/staff';
+
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  path: '/',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 60 * 60 * 24 * 7,
+};
 
 export const runtime = 'nodejs';
 
@@ -35,9 +50,23 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { password?: string };
-  // Constant-time compare — leaking timing info on a short password is
-  // a real attack vector on serverless cold-start variance.
+  const body = (await req.json().catch(() => ({}))) as { username?: string; password?: string };
+
+  // Staff login (username + password) — scoped, section-limited access.
+  if (body.username && body.username.trim()) {
+    const staff = await verifyStaffLogin(body.username, body.password ?? '');
+    if (!staff) {
+      return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
+    }
+    ATTEMPTS.delete(ip);
+    const res = NextResponse.json({ ok: true, role: 'staff' });
+    res.cookies.set(ADMIN_COOKIE, buildStaffSessionCookie(staff.perms, staff.name), COOKIE_OPTS);
+    return res;
+  }
+
+  // Admin login (shared password) — full access. Constant-time compare —
+  // leaking timing info on a short password is a real attack vector on
+  // serverless cold-start variance.
   if (!body.password || !safeEqual(body.password, adminPassword())) {
     return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
   }
@@ -46,13 +75,7 @@ export async function POST(req: Request) {
   // doesn't stay locked out.
   ATTEMPTS.delete(ip);
 
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set(ADMIN_COOKIE, buildSessionCookie(), {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  const res = NextResponse.json({ ok: true, role: 'admin' });
+  res.cookies.set(ADMIN_COOKIE, buildSessionCookie(), COOKIE_OPTS);
   return res;
 }

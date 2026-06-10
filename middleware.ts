@@ -13,12 +13,16 @@ import {
  * pretty share link + click logging.
  */
 export function middleware(req: NextRequest) {
-  const ref = req.nextUrl.searchParams.get('ref');
-  if (!ref) return NextResponse.next();
+  // Forward the path to server components — the admin layout reads x-pathname
+  // to gate staff accounts to their allowed sections. Edge-safe (just a
+  // header); the signed-cookie verification happens server-side in the layout.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-pathname', req.nextUrl.pathname);
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
 
-  const res = NextResponse.next();
   // First-touch wins — never overwrite an existing referral cookie.
-  if (!req.cookies.get(REF_COOKIE)) {
+  const ref = req.nextUrl.searchParams.get('ref');
+  if (ref && !req.cookies.get(REF_COOKIE)) {
     const code = ref.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
     if (code) {
       const opts = { maxAge: REF_MAX_AGE_SECONDS, httpOnly: true, sameSite: 'lax' as const, path: '/' };
