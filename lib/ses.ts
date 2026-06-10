@@ -42,8 +42,16 @@ export async function sendViaSes(
   args: SesSendArgs,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   try {
+    // SES requires header values to be printable ASCII (regex [ -~]). Fold any
+    // CR/LF/tab to a space and strip remaining control/non-ASCII chars so a
+    // stray character (from a template var, env, or settings value) can't make
+    // SES reject the WHOLE send. Drop headers that end up empty.
+    const sanitize = (v: string) =>
+      String(v).replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\x7E]/g, '').trim();
     const headerList = args.headers
-      ? Object.entries(args.headers).map(([Name, Value]) => ({ Name, Value }))
+      ? Object.entries(args.headers)
+          .map(([Name, Value]) => ({ Name, Value: sanitize(Value) }))
+          .filter((h) => h.Value.length > 0)
       : undefined;
 
     const res = await getSesClient().send(
