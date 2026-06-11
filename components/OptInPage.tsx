@@ -21,6 +21,7 @@ import { Mark } from './Mark';
 import { AppsStack, StarterPackMockup, TerminalMockup } from './Mockups';
 import { OurAppsShowcase } from './OurAppsShowcase';
 import { StickyMobileCta } from './StickyMobileCta';
+import { HeroB } from './HeroB';
 import {
   AUTHORITY,
   FOUNDERS,
@@ -36,12 +37,23 @@ import {
 } from '@/lib/config';
 import type { WebinarInfo } from '@/lib/webinar';
 
-export function OptInPage({ webinar }: { webinar: WebinarInfo }) {
+/**
+ * variant 'b' swaps ONLY the hero (see components/HeroB.tsx) — every other
+ * section is shared, so the split test isolates the hero angle. Traffic split
+ * is decided in app/page.tsx from the webinar funnel's homeVariantPct.
+ */
+export function OptInPage({
+  webinar,
+  variant = 'control',
+}: {
+  webinar: WebinarInfo;
+  variant?: 'control' | 'b';
+}) {
   return (
     <>
       <MinimalHeader />
       <main className="relative">
-        <Hero webinar={webinar} />
+        {variant === 'b' ? <HeroB webinar={webinar} /> : <Hero webinar={webinar} />}
         <AuthorityBar />
         <WhatIsSection />
         <OurAppsShowcase />
@@ -146,7 +158,7 @@ function MinimalFooter() {
 /* --------------------------------------------------------------------- */
 /* PRIMARY CTA — links to /checkout (paid funnel)                        */
 /* --------------------------------------------------------------------- */
-function PaidCta({ className = '' }: { className?: string }) {
+export function PaidCta({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/checkout"

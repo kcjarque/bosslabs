@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/admin-auth';
 import { getFunnel } from '@/lib/db';
 import { FunnelEditor } from '@/components/FunnelEditor';
+import { HomeSplitCard } from '@/components/HomeSplitCard';
 import { updateFunnelAction } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -31,17 +32,20 @@ export default async function FunnelDetailPage({
       </header>
 
       {funnel.kind === 'webinar' ? (
-        <div className="card">
-          <p className="text-sm text-slate-600">
-            The webinar funnel&rsquo;s live settings (name, date, time, Zoom
-            join + register URLs, replay + Messenger links) are wired into the
-            public site and every email template. Edit them in{' '}
-            <Link href="/admin/settings" className="font-medium text-cyan-700 hover:underline">
-              Settings → Webinar
-            </Link>
-            .
-          </p>
-        </div>
+        <>
+          <HomeSplitCard funnel={funnel} onSave={updateFunnelAction} />
+          <div className="card">
+            <p className="text-sm text-slate-600">
+              The webinar funnel&rsquo;s live settings (name, date, time, Zoom
+              join + register URLs, replay + Messenger links) are wired into the
+              public site and every email template. Edit them in{' '}
+              <Link href="/admin/settings" className="font-medium text-cyan-700 hover:underline">
+                Settings → Webinar
+              </Link>
+              .
+            </p>
+          </div>
+        </>
       ) : (
         <FunnelEditor funnel={funnel} onSave={updateFunnelAction} />
       )}

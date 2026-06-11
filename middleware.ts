@@ -20,6 +20,19 @@ export function middleware(req: NextRequest) {
   requestHeaders.set('x-pathname', req.nextUrl.pathname);
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
+  // A/B bucketing roll — a sticky random 0-99 assigned once per visitor.
+  // The homepage compares it against the funnel's variant-traffic % (so 0%
+  // shows nobody the variant; raising the % only ADDS visitors, never
+  // reshuffles existing ones). Edge-safe: no DB, just a cookie.
+  if (!req.cookies.get('bl_ab_roll')) {
+    res.cookies.set('bl_ab_roll', String(Math.floor(Math.random() * 100)), {
+      maxAge: 60 * 60 * 24 * 180,
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+    });
+  }
+
   // First-touch wins — never overwrite an existing referral cookie.
   const ref = req.nextUrl.searchParams.get('ref');
   if (ref && !req.cookies.get(REF_COOKIE)) {
