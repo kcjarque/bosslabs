@@ -26,6 +26,7 @@ import {
   StickyCtaB,
 } from './kit';
 import { TerminalLive } from './TerminalLive';
+import { HeroAmbient, ScrollProgress, SectionAmbient, SmoothScroll } from './AmbientB';
 import {
   AUTHORITY,
   FOUNDERS,
@@ -60,6 +61,8 @@ export function OptInPageB({ webinar }: { webinar: WebinarInfo }) {
       />
       <div className="relative z-[2]">
         <ScrollMilestones />
+        <ScrollProgress />
+        <SmoothScroll />
         <HeaderB />
         <main>
           <HeroB2 webinar={webinar} />
@@ -96,7 +99,7 @@ function HeaderB() {
         </div>
         <a
           href="/checkout"
-          className={`${mono} hidden rounded-lg border border-cyan-500/40 px-4 py-2 text-[13px] text-cyan-300 transition hover:bg-cyan-500/10 sm:block`}
+          className={`${mono} hidden rounded-lg border border-cyan-500/40 px-4 py-2 text-[13px] text-cyan-300 transition hover:bg-cyan-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:block`}
         >
           Reserve · {OFFER.main.label}
         </a>
@@ -116,16 +119,9 @@ function HeroB2({ webinar }: { webinar: WebinarInfo }) {
   ];
   return (
     <section className="relative isolate overflow-hidden">
-      {/* single restrained radial glow, anchored to brand accent */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10"
-        style={{
-          background:
-            'radial-gradient(58% 44% at 50% -4%, rgba(0,184,230,0.13), transparent 62%), radial-gradient(36% 28% at 88% 16%, rgba(0,184,230,0.05), transparent 60%)',
-        }}
-      />
-      <div className="container-tight pb-14 pt-10 sm:pb-20 sm:pt-16">
+      {/* living background — grid pan, twinkle particles, parallax orbs, beam */}
+      <HeroAmbient />
+      <div className="container-tight relative z-10 pb-14 pt-10 sm:pb-20 sm:pt-16">
         <div className="mx-auto max-w-4xl text-center">
           <div className={`${mono} inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.07] px-4 py-1.5 text-[10px] uppercase tracking-[0.18em] text-cyan-300 sm:text-[11px]`}>
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
@@ -316,7 +312,9 @@ function LiveDemos() {
 
 function AppsBento() {
   return (
-    <section className="relative border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+      <SectionAmbient className="left-[6%] top-[10%]" />
+      <SectionAmbient className="right-[4%] bottom-[8%]" />
       <div className="container-tight">
         <Reveal>
           <SectionHead
@@ -433,7 +431,8 @@ function Secrets() {
 
 function Hosts() {
   return (
-    <section className="border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+      <SectionAmbient className="left-[10%] top-[14%]" />
       <div className="container-tight">
         <Reveal>
           <SectionHead
@@ -555,7 +554,8 @@ function VisionLoop() {
 
 function TerminalSection() {
   return (
-    <section className="border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+      <SectionAmbient className="right-[10%] top-[16%]" />
       <div className="container-tight grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
         <Reveal>
           <div>
@@ -635,7 +635,8 @@ function SkillsPack() {
 
 function Testimonials() {
   return (
-    <section className="border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.012] py-16 sm:py-24">
+      <SectionAmbient className="right-[8%] top-[12%]" />
       <div className="container-tight">
         <Reveal>
           <SectionHead
@@ -816,6 +817,7 @@ function FinalClose({ webinar }: { webinar: WebinarInfo }) {
             'radial-gradient(50% 42% at 50% 100%, rgba(0,184,230,0.12), transparent 65%)',
         }}
       />
+      <SectionAmbient className="left-1/2 top-[10%] -translate-x-1/2" />
       <div className="container-tight">
         <div className="mx-auto max-w-2xl text-center">
           <Reveal>

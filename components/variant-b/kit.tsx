@@ -190,7 +190,7 @@ export function CTAButton({
       <Link
         href="/checkout"
         onClick={() => trackCta(placement)}
-        className="group relative inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-8 py-4 text-center text-[16px] font-semibold tracking-tight text-[#06070A] transition-transform duration-200 ease-out [box-shadow:0_0_0_1px_rgba(0,184,230,0.4),0_8px_30px_-8px_rgba(0,184,230,0.55)] hover:bg-cyan-400 hover:[box-shadow:0_0_0_1px_rgba(0,184,230,0.6),0_10px_40px_-8px_rgba(0,184,230,0.75)] active:scale-[0.98] sm:w-auto"
+        className="group relative inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-8 py-4 text-center text-[16px] font-semibold tracking-tight text-[#06070A] transition-transform duration-200 ease-out [box-shadow:0_0_0_1px_rgba(0,184,230,0.4),0_8px_30px_-8px_rgba(0,184,230,0.55)] hover:bg-cyan-400 hover:[box-shadow:0_0_0_1px_rgba(0,184,230,0.6),0_10px_40px_-8px_rgba(0,184,230,0.75)] active:scale-[0.98] sm:w-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
       >
         {children}
         <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
@@ -232,7 +232,7 @@ export function StickyCtaB({ price }: { price: string }) {
           <Link
             href="/checkout"
             onClick={() => trackCta('sticky-mobile')}
-            className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-cyan-500 px-5 text-[15px] font-semibold text-[#06070A] active:scale-[0.98]"
+            className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-cyan-500 px-5 text-[15px] font-semibold text-[#06070A] active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
           >
             Reserve a Seat →
           </Link>
@@ -257,7 +257,7 @@ export function StickyCtaB({ price }: { price: string }) {
             <Link
               href="/checkout"
               onClick={() => trackCta('sticky-desktop')}
-              className="rounded-lg bg-cyan-500 px-5 py-2 text-sm font-semibold text-[#06070A] transition hover:bg-cyan-400"
+              className="rounded-lg bg-cyan-500 px-5 py-2 text-sm font-semibold text-[#06070A] transition hover:bg-cyan-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               Reserve a Seat →
             </Link>
