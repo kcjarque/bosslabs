@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { OptInPage } from '@/components/OptInPage';
+import { OptInPageB } from '@/components/variant-b/OptInPageB';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { AbBeacon } from '@/components/AbBeacon';
 import { getWebinarInfo } from '@/lib/webinar';
@@ -25,7 +26,8 @@ export const metadata: Metadata = {
 
 /**
  * Homepage split test (GHL-style). Control = the current page; variation 'b'
- * swaps the hero (components/HeroB.tsx). Assignment:
+ * is a full conversion-first rebuild (components/variant-b/OptInPageB.tsx).
+ * Assignment:
  *   - middleware gives every visitor a sticky random roll 0-99 (bl_ab_roll);
  *   - the webinar funnel's homeVariantPct (admin → Funnels) is the traffic %;
  *   - variant shows when roll < pct, so 0% = nobody, and raising the % only
@@ -57,7 +59,7 @@ export default async function Page({
 
   return (
     <>
-      <OptInPage webinar={webinar} variant={variant} />
+      {variant === 'b' ? <OptInPageB webinar={webinar} /> : <OptInPage webinar={webinar} />}
       {/* Log variant views (skip previews so admin peeks don't pollute data). */}
       {variant === 'b' && !preview && <AbBeacon path="/__ab/home-b" />}
       <ExitIntentModal />

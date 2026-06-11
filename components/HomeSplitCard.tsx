@@ -73,7 +73,8 @@ export function HomeSplitCard({
             🧪 Variation B
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            Story hero — &ldquo;Hindi ako programmer pero nakagawa ako ng app ko…&rdquo; (ad-match)
+            Conversion-first redesign — new type system, bento proof grids, self-typing
+            terminal, FAQ + qualifier, sticky CTA
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <a href="/?preview=b" target="_blank" className="text-xs text-cyan-600 hover:underline">

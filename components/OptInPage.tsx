@@ -21,7 +21,6 @@ import { Mark } from './Mark';
 import { AppsStack, StarterPackMockup, TerminalMockup } from './Mockups';
 import { OurAppsShowcase } from './OurAppsShowcase';
 import { StickyMobileCta } from './StickyMobileCta';
-import { HeroB } from './HeroB';
 import {
   AUTHORITY,
   FOUNDERS,
@@ -37,23 +36,12 @@ import {
 } from '@/lib/config';
 import type { WebinarInfo } from '@/lib/webinar';
 
-/**
- * variant 'b' swaps ONLY the hero (see components/HeroB.tsx) — every other
- * section is shared, so the split test isolates the hero angle. Traffic split
- * is decided in app/page.tsx from the webinar funnel's homeVariantPct.
- */
-export function OptInPage({
-  webinar,
-  variant = 'control',
-}: {
-  webinar: WebinarInfo;
-  variant?: 'control' | 'b';
-}) {
+export function OptInPage({ webinar }: { webinar: WebinarInfo }) {
   return (
     <>
       <MinimalHeader />
       <main className="relative">
-        {variant === 'b' ? <HeroB webinar={webinar} /> : <Hero webinar={webinar} />}
+        <Hero webinar={webinar} />
         <AuthorityBar />
         <WhatIsSection />
         <OurAppsShowcase />
@@ -91,7 +79,7 @@ function MinimalHeader() {
 /* --------------------------------------------------------------------- */
 /* FOOTER — minimal, legal-only                                          */
 /* --------------------------------------------------------------------- */
-function MinimalFooter() {
+export function MinimalFooter() {
   return (
     <footer className="border-t border-white/[0.05] bg-[#06070A]/70 py-10 pb-20 sm:pb-10">
       <div className="container-tight space-y-4 text-center">
@@ -158,7 +146,7 @@ function MinimalFooter() {
 /* --------------------------------------------------------------------- */
 /* PRIMARY CTA — links to /checkout (paid funnel)                        */
 /* --------------------------------------------------------------------- */
-export function PaidCta({ className = '' }: { className?: string }) {
+function PaidCta({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/checkout"
