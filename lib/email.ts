@@ -18,6 +18,7 @@ import {
   getEmailTemplates,
   getSettings,
   renderTemplate,
+  isEmailAddressSuppressed,
   type EmailTemplate,
 } from './db';
 import { signUnsubscribeToken } from './admin-auth';
@@ -90,6 +91,16 @@ export async function renderEmail(
  * so the form flows work locally without any setup.
  */
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
+  // Suppression gate — the address previously hard-bounced or filed a spam
+  // complaint. Sending again is pointless (undeliverable) and damages sender
+  // reputation, so refuse here regardless of which flow asked.
+  if (await isEmailAddressSuppressed(args.to).catch(() => false)) {
+    return {
+      ok: false,
+      error: 'Recipient suppressed — this address previously hard-bounced (or reported spam).',
+    };
+  }
+
   const settings = await getSettings();
 
   let subject = args.subject ?? '';

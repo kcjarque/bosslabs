@@ -1993,11 +1993,67 @@ export async function computeListMembers(
   return all.filter((s) => {
     // Unsubscribed seats never receive anything regardless of filter.
     if (s.status === 'unsubscribed') return false;
+    // Hard-bounced / complained addresses are suppressed — auto-removed from
+    // every list (the address is undeliverable; resending tanks sender rep).
+    if (isEmailSuppressed(s)) return false;
     // Event scoping: if the list is tied to an event, signups must match.
     // Null eventId on the list = include all events.
     if (eventId && s.eventId !== eventId) return false;
     return predicates.some((p) => p(s));
   });
+}
+
+/* ─── Email suppression (hard bounces + complaints) ───────────────────── */
+
+/** True when this signup's email is suppressed (hard-bounced or complained). */
+export function isEmailSuppressed(s: Pick<Signup, 'metadata'>): boolean {
+  return Boolean((s.metadata as { emailSuppressed?: string } | undefined)?.emailSuppressed);
+}
+
+/**
+ * Suppress an email address: stamps emailSuppressed (+ reason/time) on EVERY
+ * signup row sharing that address, so dynamic lists drop it and sendEmail
+ * refuses it. Never touches the signup's main status — a paid customer whose
+ * inbox died stays 'paid' for revenue/funnel counting.
+ */
+export async function suppressSignupEmail(
+  email: string,
+  reason: 'hard_bounce' | 'complaint',
+): Promise<number> {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes('@') || !isSupabaseConfigured()) return 0;
+  const sb = getSupabase();
+  const { data } = await sb.from('signups').select('id, metadata').ilike('email', e);
+  const rows = (data ?? []) as Array<{ id: string; metadata: Record<string, unknown> | null }>;
+  let n = 0;
+  for (const r of rows) {
+    if ((r.metadata as { emailSuppressed?: string } | null)?.emailSuppressed) continue;
+    const { error } = await sb
+      .from('signups')
+      .update({
+        metadata: {
+          ...(r.metadata ?? {}),
+          emailSuppressed: new Date().toISOString(),
+          emailSuppressedReason: reason,
+        },
+      })
+      .eq('id', r.id);
+    if (!error) n++;
+  }
+  return n;
+}
+
+/** Suppression lookup by address — used by sendEmail as the last-line gate. */
+export async function isEmailAddressSuppressed(email: string): Promise<boolean> {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes('@') || !isSupabaseConfigured()) return false;
+  const { data } = await getSupabase()
+    .from('signups')
+    .select('id')
+    .ilike('email', e)
+    .not('metadata->>emailSuppressed', 'is', null)
+    .limit(1);
+  return Boolean(data && data.length > 0);
 }
 
 /* ─── Sequences ───────────────────────────────────────────────────────── */

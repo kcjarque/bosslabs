@@ -32,6 +32,7 @@ import {
   updateSequenceSendStatus,
   findSignupByConfirmationMessageId,
   updateConfirmationStatus,
+  suppressSignupEmail,
   type AdminSendStatus,
 } from '@/lib/db';
 
@@ -52,8 +53,11 @@ type SnsEnvelope = {
 type SesEvent = {
   eventType?: string; // configuration-set event publishing
   notificationType?: string; // identity feedback notifications
-  mail?: { messageId?: string };
-  bounce?: { bounceType?: string; bouncedRecipients?: { diagnosticCode?: string }[] };
+  mail?: { messageId?: string; destination?: string[] };
+  bounce?: {
+    bounceType?: string; // 'Permanent' | 'Transient' | 'Undetermined'
+    bouncedRecipients?: { emailAddress?: string; diagnosticCode?: string }[];
+  };
 };
 
 function statusFromSes(type: string | undefined): EmailStatus | null {
@@ -151,6 +155,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: true });
     }
     const matched = await applyStatus(messageId, status, new Date().toISOString());
+
+    // HARD bounce (Permanent) or spam complaint → suppress the address so it
+    // drops out of every dynamic list and all future sends. Transient (soft)
+    // bounces — full mailbox, greylisting — are NOT suppressed; they often
+    // recover. Suppression never changes the signup's main status (a paid
+    // customer stays paid), only flags the email as undeliverable.
+    const isHardBounce = status === 'bounced' && ses.bounce?.bounceType === 'Permanent';
+    if (isHardBounce || status === 'complained') {
+      const addrs = [
+        ...(ses.bounce?.bouncedRecipients?.map((r) => r.emailAddress) ?? []),
+        ...(ses.mail?.destination ?? []),
+      ].filter((a): a is string => Boolean(a));
+      for (const email of new Set(addrs.map((a) => a.toLowerCase()))) {
+        await suppressSignupEmail(email, isHardBounce ? 'hard_bounce' : 'complaint').catch(() => {});
+      }
+    }
+
     return NextResponse.json({ ok: true, matched, status });
   }
 
