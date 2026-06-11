@@ -70,7 +70,6 @@ export function OptInPageB({ webinar }: { webinar: WebinarInfo }) {
           <HeroB2 webinar={webinar} />
           <StatBar />
           <Manifesto />
-          <LiveDemos />
           <AppsBento />
           <Secrets />
           <Hosts />
@@ -244,26 +243,10 @@ function Manifesto() {
           </blockquote>
         </Reveal>
       </div>
-    </section>
-  );
-}
 
-/* ─── live demos — framed, with live badges ───────────────────────────── */
-
-function LiveDemos() {
-  return (
-    <section className="container-tight pb-16 sm:pb-24">
-      <Reveal>
-        <SectionHead
-          eyebrow="Built live, with students"
-          title={
-            <>
-              Two real systems, built in past sessions — <span className="text-cyan-400">still live right now.</span>
-            </>
-          }
-        />
-      </Reveal>
-      <div className="mt-10 grid gap-5 md:grid-cols-2">
+      {/* the receipts — the pull-quote's promise, delivered immediately:
+          real student systems built in past sessions, still live right now */}
+      <div className="mx-auto mt-10 grid max-w-5xl gap-5 md:grid-cols-2">
         {STUDENT_BUILDS.map((b, i) => (
           <Reveal key={b.name} delay={i * 100}>
             <a
@@ -306,6 +289,11 @@ function LiveDemos() {
           </Reveal>
         ))}
       </div>
+      <Reveal delay={120}>
+        <p className={`${mono} mt-5 text-center text-[11px] uppercase tracking-[0.18em] text-ink-300`}>
+          Built live with students in past sessions · still running right now — tap to open
+        </p>
+      </Reveal>
     </section>
   );
 }
