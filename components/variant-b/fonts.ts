@@ -1,23 +1,14 @@
 /**
- * Variant-B typefaces — self-hosted via next/font (zero render-blocking
- * external requests). Loaded ONLY when OptInPageB renders, so the control
- * page ships zero extra font bytes.
+ * Variant-B typefaces — display now matches the control: Instrument Serif,
+ * loaded GLOBALLY in app/layout.tsx (--font-instrument → Tailwind font-serif),
+ * so the variant adds zero display-font bytes. Only the mono accent loads here
+ * (and only when the variant renders).
  *
- *  - Space Grotesk: characterful modern grotesk for display headlines —
- *    tight tracking, confident weight, distinct from the control's serif.
- *  - JetBrains Mono: the mono accent for terminal/numbers/badges — on-brand
- *    for a Claude Code product; makes the proof read as "real system".
- *  - Body stays Inter (already loaded globally as --font-inter) — premium
- *    legibility with no double font cost.
+ *  - Display: Instrument Serif via `font-serif` — the brand's editorial face.
+ *  - Body: Inter (global --font-inter).
+ *  - JetBrains Mono: terminal/numbers/badges — Claude Code-flavored proof.
  */
-import { Space_Grotesk, JetBrains_Mono } from 'next/font/google';
-
-export const displayFont = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-vb-display',
-  display: 'swap',
-});
+import { JetBrains_Mono } from 'next/font/google';
 
 export const monoFont = JetBrains_Mono({
   subsets: ['latin'],

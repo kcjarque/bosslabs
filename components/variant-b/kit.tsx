@@ -246,7 +246,7 @@ export function StickyCtaB({ price }: { price: string }) {
         }`}
       >
         <div className="container-tight flex h-14 items-center justify-between">
-          <span className="font-[family-name:var(--font-vb-display)] text-sm font-semibold tracking-tight text-white">
+          <span className="text-sm font-semibold tracking-tight text-white">
             BOSSLABS <span className="text-cyan-400">AI</span>
           </span>
           <div className="flex items-center gap-4">
@@ -288,7 +288,7 @@ export function PriceAnchor({ crossed, price }: { crossed: string; price: string
         />
       </span>
       <span
-        className="font-[family-name:var(--font-vb-display)] text-6xl font-bold tracking-tight text-white sm:text-7xl"
+        className="font-serif text-6xl font-normal tracking-tight text-white sm:text-7xl"
         style={{
           opacity: on ? 1 : 0,
           transform: on ? 'none' : 'scale(0.92)',

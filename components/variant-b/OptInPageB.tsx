@@ -14,7 +14,7 @@ import { CountdownMini } from '../CountdownBar';
 import { Logo } from '../Logo';
 import { Mark } from '../Mark';
 import { MinimalFooter } from '../OptInPage';
-import { displayFont, monoFont } from './fonts';
+import { monoFont } from './fonts';
 import {
   CTAButton,
   CountUp,
@@ -47,12 +47,14 @@ import type { WebinarInfo } from '@/lib/webinar';
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
 
-const display = `font-[family-name:var(--font-vb-display)]`;
+// Display = Instrument Serif (the control's display face, already loaded
+// globally as font-serif). Single 400 weight — never faux-bolded.
+const display = `font-serif font-normal`;
 const mono = `font-[family-name:var(--font-vb-mono)]`;
 
 export function OptInPageB({ webinar }: { webinar: WebinarInfo }) {
   return (
-    <div className={`${displayFont.variable} ${monoFont.variable} relative bg-[#06070A]`}>
+    <div className={`${monoFont.variable} relative bg-[#06070A]`}>
       {/* grain overlay across the whole dark canvas */}
       <div
         aria-hidden
@@ -128,11 +130,11 @@ function HeroB2({ webinar }: { webinar: WebinarInfo }) {
             Live on Zoom · {webinar.date} · {webinar.time} {webinar.timezone}
           </div>
 
-          <h1 className={`${display} mt-7 text-[34px] font-bold leading-[1.04] tracking-[-0.03em] text-white sm:text-[54px] md:text-[64px]`}>
+          <h1 className={`${display} mt-7 text-[36px] leading-[1.06] tracking-[-0.01em] text-white sm:text-[56px] md:text-[66px]`}>
             {HEADLINE.prefix}{' '}
-            <span className="text-cyan-400">{HEADLINE.outcome}</span>{' '}
+            <span className="accent-italic">{HEADLINE.outcome}</span>{' '}
             {HEADLINE.mechanismPrefix} {HEADLINE.mechanism} —{' '}
-            <span className="text-cyan-400">
+            <span className="accent-italic">
               {HEADLINE.objectionPrefix} {HEADLINE.objection}
             </span>
           </h1>
@@ -171,7 +173,7 @@ function HeroB2({ webinar }: { webinar: WebinarInfo }) {
                   <div className={`${mono} text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300`}>
                     {card.k}
                   </div>
-                  <div className={`${display} mt-2 text-[15px] font-semibold text-white sm:text-[17px]`}>
+                  <div className="mt-2 text-[15px] font-semibold text-white sm:text-[17px]">
                     {card.v}
                   </div>
                   <div className="mt-0.5 text-[12px] text-ink-300 sm:text-[13px]">{card.s}</div>
@@ -223,7 +225,7 @@ function Manifesto() {
           <div className={`${mono} text-[11px] uppercase tracking-[0.24em] text-cyan-400`}>
             {WHAT_IS.eyebrow}
           </div>
-          <h2 className={`${display} mt-4 text-[28px] font-bold leading-[1.1] tracking-[-0.02em] text-white sm:text-[40px]`}>
+          <h2 className={`${display} mt-4 text-[30px] leading-[1.1] tracking-[-0.01em] text-white sm:text-[42px]`}>
             Bawal ang <span className="text-cyan-400">hao shao.</span>
           </h2>
         </Reveal>
@@ -236,7 +238,7 @@ function Manifesto() {
         </div>
         <Reveal delay={150}>
           <blockquote className="mt-9 border-l-2 border-cyan-500 pl-5 sm:pl-6">
-            <p className={`${display} text-[20px] font-semibold leading-snug text-white sm:text-[26px]`}>
+            <p className={`${display} text-[22px] leading-snug text-white sm:text-[28px]`}>
               {WHAT_IS.pullquote}
             </p>
           </blockquote>
@@ -293,7 +295,7 @@ function LiveDemos() {
               </div>
               <div className="flex items-center justify-between px-5 py-4">
                 <div>
-                  <div className={`${display} text-[16px] font-semibold text-white`}>{b.name}</div>
+                  <div className="text-[16px] font-semibold text-white">{b.name}</div>
                   <div className="text-[12px] text-ink-300">{b.tag}</div>
                 </div>
                 <span className={`${mono} text-[12px] text-cyan-300 transition group-hover:translate-x-0.5`}>
@@ -358,7 +360,7 @@ function AppsBento() {
                   )}
                   <div className="px-5 py-4">
                     <div className="flex items-baseline justify-between gap-2">
-                      <div className={`${display} text-[16px] font-semibold text-white`}>{app.name}</div>
+                      <div className="text-[16px] font-semibold text-white">{app.name}</div>
                       <div className={`${mono} text-[13px] font-semibold`} style={{ color: app.accent }}>
                         {app.metric.value}
                       </div>
@@ -409,7 +411,7 @@ function Secrets() {
                 {p.n}
               </div>
               <div>
-                <h3 className={`${display} text-[20px] font-bold leading-tight text-white sm:text-[26px]`}>
+                <h3 className="text-[20px] font-bold leading-tight text-white sm:text-[26px]">
                   {p.brand}
                 </h3>
                 <p className={`${mono} mt-2 text-[12px] uppercase tracking-[0.14em] text-cyan-300 sm:text-[13px]`}>
@@ -453,7 +455,7 @@ function Hosts() {
                     <Image src={f.photo} alt={f.name} fill sizes="64px" className="object-cover" />
                   </div>
                   <div>
-                    <div className={`${display} text-[18px] font-bold text-white`}>{f.name}</div>
+                    <div className="text-[18px] font-bold text-white">{f.name}</div>
                     <div className={`${mono} text-[11px] uppercase tracking-[0.14em] text-cyan-300`}>
                       {f.role}
                     </div>
@@ -533,7 +535,7 @@ function VisionLoop() {
                   {l.n}
                 </div>
                 <div>
-                  <h3 className={`${display} text-[17px] font-bold text-white sm:text-[19px]`}>{l.name}</h3>
+                  <h3 className="text-[17px] font-bold text-white sm:text-[19px]">{l.name}</h3>
                   <p className="mt-1 text-[13px] leading-relaxed text-ink-300 sm:text-[14px]">{l.desc}</p>
                 </div>
               </div>
@@ -562,7 +564,7 @@ function TerminalSection() {
             <div className={`${mono} text-[11px] uppercase tracking-[0.24em] text-cyan-400`}>
               What is Claude Code
             </div>
-            <h2 className={`${display} mt-4 text-[28px] font-bold leading-[1.1] tracking-[-0.02em] text-white sm:text-[38px]`}>
+            <h2 className={`${display} mt-4 text-[30px] leading-[1.1] tracking-[-0.01em] text-white sm:text-[40px]`}>
               The World&rsquo;s Best Developer — <span className="text-cyan-400">sitting in your terminal.</span>
             </h2>
             <p className="mt-5 text-[15px] leading-relaxed text-ink-100 sm:text-[16px]">
@@ -619,7 +621,7 @@ function SkillsPack() {
               <span className={`${mono} text-[11px] uppercase tracking-[0.16em] text-ink-200`}>
                 Total bonus value
               </span>
-              <span className={`${display} text-[20px] font-bold text-cyan-300`}>₱4,997</span>
+              <span className={`${mono} text-[19px] font-semibold text-cyan-300`}>₱4,997</span>
             </div>
           </div>
         </Reveal>
@@ -660,7 +662,7 @@ function Testimonials() {
                 </span>
                 <p className="mt-4 text-[14px] leading-relaxed text-ink-100">&ldquo;{w.quote}&rdquo;</p>
                 <div className="mt-5 flex items-center gap-3">
-                  <span className={`${display} flex h-9 w-9 items-center justify-center rounded-full bg-cyan-500/15 text-[12px] font-bold text-cyan-300`}>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-500/15 text-[12px] font-bold text-cyan-300">
                     {w.name.split(' ').map((n) => n[0]).join('')}
                   </span>
                   <div>
@@ -824,7 +826,7 @@ function FinalClose({ webinar }: { webinar: WebinarInfo }) {
             <div className={`${mono} text-[11px] uppercase tracking-[0.24em] text-cyan-400`}>
               {webinar.date} · {webinar.time} {webinar.timezone} · Live on Zoom
             </div>
-            <h2 className={`${display} mt-5 text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-white sm:text-[44px]`}>
+            <h2 className={`${display} mt-5 text-[32px] leading-[1.08] tracking-[-0.01em] text-white sm:text-[46px]`}>
               One seat. One evening.
               <br />
               <span className="text-cyan-400">A skill na hindi na nila mababawi sa&rsquo;yo.</span>
@@ -847,7 +849,7 @@ function FinalClose({ webinar }: { webinar: WebinarInfo }) {
                 <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-emerald-500/15 text-lg text-emerald-300">
                   🛡
                 </span>
-                <div className={`${display} text-[17px] font-bold text-white`}>
+                <div className="text-[17px] font-bold text-white">
                   You risk nothing — 7-day money-back guarantee
                 </div>
               </div>
@@ -898,7 +900,7 @@ function SectionHead({
   return (
     <div className={center ? 'text-center' : ''}>
       <div className={`${mono} text-[11px] uppercase tracking-[0.24em] text-cyan-400`}>{eyebrow}</div>
-      <h2 className={`${display} mt-4 max-w-3xl text-[26px] font-bold leading-[1.12] tracking-[-0.02em] text-white sm:text-[36px] ${center ? 'mx-auto' : ''}`}>
+      <h2 className={`${display} mt-4 max-w-3xl text-[28px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[38px] ${center ? 'mx-auto' : ''}`}>
         {title}
       </h2>
       {sub && (

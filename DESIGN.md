@@ -26,19 +26,19 @@ Derived (allowed): white/cyan at 1.5–10% opacities for elevation tints, glows
 
 ## Typography
 
-- **Display — Space Grotesk** (`--font-vb-display`, 500/600/700, next/font
-  self-hosted): characterful grotesk, tight tracking (−0.02 to −0.03em) for
-  big confident headlines. Why: premium tech personality without losing PH
-  warmth; distinct from the control's serif so the test reads differently at
-  a glance.
-- **Body — Inter** (already global `--font-inter`): top-tier screen
-  legibility; zero extra font cost.
-- **Mono — JetBrains Mono** (`--font-vb-mono`, 400/600): all numbers,
-  terminal, badges, eyebrows. Why: on-brand for a Claude Code product —
-  makes metrics/proof read as "real system output".
+- **Display — Instrument Serif** (`font-serif`, the global brand face): the
+  same editorial serif the control's headlines use — chosen by the owner over
+  a grotesk direction (ui-ux-pro-max pairing review). Single 400 weight,
+  never faux-bolded; cyan italic accents via the shared `.accent-italic`.
+  Zero extra bytes — already loaded in the root layout.
+- **Body — Inter** (global `--font-inter`): top-tier screen legibility.
+  Card/sub-section titles stay Inter 600 — serif is reserved for display
+  sizes (h1/h2/pull-quotes/price) where it has presence.
+- **Mono — JetBrains Mono** (`--font-vb-mono`, 400/600, the only font the
+  variant loads): numbers, terminal, badges, eyebrows — system-output feel.
 
-Scale (mobile → desktop): h1 34→64px / h2 26→44px / h3 17→26px, body
-14–17px at 1.6–1.75 line-height, micro 10–11px tracked +0.14–0.24em.
+Scale (mobile → desktop): h1 36→66px / h2 28→46px at 400 weight,
+tracking −0.01em; body 14–17px at 1.6–1.75; micro 10–11px tracked.
 
 ## Depth & texture
 
