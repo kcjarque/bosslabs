@@ -314,7 +314,7 @@ export function Faq({ items }: { items: { q: string; a: ReactNode }[] }) {
             <button
               onClick={() => setOpen(isOpen ? null : i)}
               aria-expanded={isOpen}
-              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02] sm:px-6"
+              className="flex min-h-[48px] w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02] sm:px-6"
             >
               <span className="text-[15px] font-medium text-white sm:text-base">{it.q}</span>
               <span
@@ -358,14 +358,14 @@ export function SnapRow({ children }: { children: ReactNode }) {
         <button
           aria-label="Previous"
           onClick={() => scrollBy(-1)}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-ink-200 active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-ink-200 active:scale-95"
         >
           ←
         </button>
         <button
           aria-label="Next"
           onClick={() => scrollBy(1)}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-ink-200 active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-ink-200 active:scale-95"
         >
           →
         </button>
