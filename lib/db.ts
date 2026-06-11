@@ -1559,7 +1559,7 @@ export async function getRecordings(): Promise<Omit<SessionRecording, 'events'>[
       .from('session_recordings')
       .select('id, session_id, page, size_bytes, created_at')
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(1000);
     if (error) throw new Error(`getRecordings: ${error.message}`);
     return (data as RecordingRow[]).map((r) => {
       const { events: _, ...rest } = rowToRecording({ ...r, events: [] } as RecordingRow);
@@ -1588,6 +1588,64 @@ export async function getRecording(id: string): Promise<SessionRecording | null>
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
   const row = rows.find((r) => r.id === id);
   return row ? rowToRecording(row) : null;
+}
+
+/** All chunks for one visitor session, oldest-first — the inputs to a stitched
+ *  full-session replay and to heatmap aggregation. */
+export async function getSessionChunks(sessionId: string): Promise<SessionRecording[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('session_recordings')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true })
+      .limit(60);
+    if (error) throw new Error(`getSessionChunks: ${error.message}`);
+    return (data as RecordingRow[]).map(rowToRecording);
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  return rows
+    .filter((r) => r.session_id === sessionId)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map(rowToRecording);
+}
+
+/** Recent chunks (WITH events) for one recorded page — the raw input to the
+ *  consolidated heatmap. Capped so a busy page can't load unbounded JSON. */
+export async function getChunksForPage(
+  page: string,
+  limit = 150,
+): Promise<SessionRecording[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase()
+      .from('session_recordings')
+      .select('*')
+      .eq('page', page)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(`getChunksForPage: ${error.message}`);
+    return (data as RecordingRow[]).map(rowToRecording);
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  return rows
+    .filter((r) => r.page === page)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, limit)
+    .map(rowToRecording);
+}
+
+/** Delete every chunk of one session (used by the consolidated replay view). */
+export async function deleteRecordingsBySession(sessionId: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabase()
+      .from('session_recordings')
+      .delete()
+      .eq('session_id', sessionId);
+    if (error) throw new Error(`deleteRecordingsBySession: ${error.message}`);
+    return;
+  }
+  const rows = await readJson<RecordingRow[]>('recordings.json', []);
+  await writeJson('recordings.json', rows.filter((r) => r.session_id !== sessionId));
 }
 
 export async function deleteRecording(id: string): Promise<void> {

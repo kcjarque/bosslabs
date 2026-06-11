@@ -3,20 +3,50 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
+/**
+ * Self-hosted session replay (rrweb) capture — load-safe by construction.
+ *
+ * Mounted once in the root layout; self-gates to an allowlist of funnel
+ * routes. rrweb is dynamically imported ONLY after the server kill-switch
+ * returns { enabled: true }, so a visitor who isn't being recorded downloads
+ * zero replay code and the funnel's First-Load-JS is unaffected. Every capture
+ * / flush is wrapped so a failure can never break the page for a real customer.
+ *
+ * Chunking: each recorded page load is its own rrweb session (one Meta +
+ * FullSnapshot, then incrementals). We flush the buffer to POST /api/recordings
+ * every 30s, on SPA route change, when the tab is hidden, and on unload — then
+ * stitch all chunks back into one continuous replay in the admin. A chunk that
+ * starts mid-stream (no snapshot) gets the last-known Meta + FullSnapshot
+ * prepended so every stored row is independently replayable.
+ *
+ * Privacy: maskAllInputs masks ALL typed input (email, name, phone, payment)
+ * — only clicks / scrolls / movement are recorded, never keystroke values.
+ * `.rr-block` elements are excluded entirely.
+ */
+
 const SESSION_KEY = 'bl_session_id';
 const RECORDED_PAGES = ['/checkout', '/oto', '/'];
+const ENDPOINT = '/api/recordings';
 const FLUSH_INTERVAL_MS = 30_000;
 
-// rrweb event types we care about for chunk self-containment.
-const META = 4;
-const FULL_SNAPSHOT = 2;
+// rrweb event type constants (stable wire-format values).
+const EVENT_FULL_SNAPSHOT = 2;
+const EVENT_META = 4;
 
+/** Read the shared funnel session id; create one if missing so a recording is
+ *  never dropped for lack of an id (the key is shared with pageview tracking,
+ *  so the visitor keeps one consistent id across both). */
 function getSessionId(): string {
   if (typeof window === 'undefined') return '';
   try {
-    return window.localStorage.getItem(SESSION_KEY) || '';
+    let id = window.localStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      window.localStorage.setItem(SESSION_KEY, id);
+    }
+    return id;
   } catch {
-    return '';
+    return `anon-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
 
@@ -24,149 +54,157 @@ type RrwebEvent = { type?: number };
 
 export function SessionRecorder() {
   const pathname = usePathname();
-  const stopRef = useRef<(() => void) | null>(null);
-  const eventsRef = useRef<unknown[]>([]);
-  const flushedRef = useRef(false);
-  // Last Meta + FullSnapshot seen — prepended to any flushed chunk that lacks
-  // its own FullSnapshot, so EVERY stored chunk is independently replayable.
-  // Without this, only the first flush replays; later chunks (incrementals
-  // only) rebuild as a blank canvas.
-  const lastMetaRef = useRef<unknown | null>(null);
-  const lastFullRef = useRef<unknown | null>(null);
+  // Buffer survives re-renders; grabbed + cleared synchronously on each flush.
+  const bufferRef = useRef<unknown[]>([]);
 
   useEffect(() => {
     if (!pathname || !RECORDED_PAGES.includes(pathname)) return;
 
     let cancelled = false;
+    let flushTimer: ReturnType<typeof setInterval> | null = null;
+    let stopRecording: (() => void) | null = null;
     const sessionId = getSessionId();
     if (!sessionId) return;
 
-    eventsRef.current = [];
-    flushedRef.current = false;
-    lastMetaRef.current = null;
-    lastFullRef.current = null;
+    // rrweb takes ONE full snapshot per record() session, so a chunk flushed
+    // mid-stream has no snapshot and would replay as a blank frame. Keep the
+    // most recent Meta + FullSnapshot and prepend them to any chunk that
+    // doesn't already begin with one — making every stored row replayable.
+    let lastMeta: RrwebEvent | null = null;
+    let lastFullSnapshot: RrwebEvent | null = null;
 
-    // Build a self-contained chunk: if these events don't include a
-    // FullSnapshot, prepend the last-known [Meta, FullSnapshot] so the
-    // recording rebuilds the real DOM on replay.
-    function selfContained(events: unknown[]): unknown[] {
-      const e0 = events[0] as RrwebEvent | undefined;
-      const e1 = events[1] as RrwebEvent | undefined;
-      // Already begins with Meta + FullSnapshot → replayable as-is.
-      if (e0?.type === META && e1?.type === FULL_SNAPSHOT) return events;
-      // Otherwise prepend the last-known Meta + FullSnapshot so the chunk
-      // rebuilds the real DOM instead of replaying as a blank canvas.
-      if (lastMetaRef.current && lastFullRef.current) {
-        return [lastMetaRef.current, lastFullRef.current, ...events];
-      }
-      return events;
-    }
+    /**
+     * Send buffered events and clear the buffer. Never throws.
+     *
+     * `unloading` selects the transport:
+     *   - false (DEFAULT — interval, SPA route change, tab-hidden): a plain
+     *     fetch. The page is still alive so the request completes normally and
+     *     has NO body-size cap. rrweb chunks carry a full DOM snapshot
+     *     (~400KB–1MB), which sendBeacon's ~64KB cap would silently drop.
+     *   - true (real document unload — tab close / hard reload): sendBeacon +
+     *     keepalive fetch. Both cap at ~64KB, so only a small trailing chunk
+     *     survives — but the interval / route-change / tab-hidden flushes have
+     *     already stored everything up to the last ~30s.
+     */
+    function flush(unloading: boolean) {
+      let events = bufferRef.current;
+      if (!events.length) return;
+      bufferRef.current = [];
 
-    function flush() {
-      if (flushedRef.current) return;
-      if (eventsRef.current.length === 0) return;
-      flushedRef.current = true;
-
-      const payload = JSON.stringify({
-        sessionId,
-        page: pathname,
-        events: selfContained(eventsRef.current),
-      });
-
-      try {
-        if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'application/json' });
-          navigator.sendBeacon('/api/recordings', blob);
-          return;
-        }
-      } catch {
-        /* fall through */
+      const head = (events[0] as RrwebEvent | undefined)?.type;
+      const second = (events[1] as RrwebEvent | undefined)?.type;
+      const startsWithSnapshot =
+        head === EVENT_FULL_SNAPSHOT ||
+        (head === EVENT_META && second === EVENT_FULL_SNAPSHOT);
+      if (!startsWithSnapshot && lastFullSnapshot) {
+        const prefix = lastMeta ? [lastMeta, lastFullSnapshot] : [lastFullSnapshot];
+        events = [...prefix, ...events];
       }
 
+      let payload: string;
       try {
-        void fetch('/api/recordings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        });
-      } catch {
-        /* best effort */
-      }
-    }
-
-    (async () => {
-      try {
-        const res = await fetch('/api/recordings');
-        const data = (await res.json()) as { enabled?: boolean };
-        if (!data.enabled || cancelled) return;
+        payload = JSON.stringify({ sessionId, page: pathname, events });
       } catch {
         return;
       }
 
-      const rrweb = await import('rrweb');
-      if (cancelled) return;
-
-      const { record } = rrweb;
-      const stop = record({
-        emit(event) {
-          const t = (event as RrwebEvent).type;
-          // Remember the most recent Meta + FullSnapshot so we can prepend
-          // them to incremental-only chunks at flush time.
-          if (t === META) lastMetaRef.current = event;
-          if (t === FULL_SNAPSHOT) lastFullRef.current = event;
-          eventsRef.current.push(event);
-        },
-        // Periodically re-take a full checkout (Meta + FullSnapshot) so the
-        // prepended snapshot stays current and replay stays coherent.
-        checkoutEveryNms: FLUSH_INTERVAL_MS,
-        sampling: {
-          mousemove: 100,
-          mouseInteraction: true,
-          scroll: 150,
-          input: 'last',
-        },
-        blockClass: 'rr-block',
-        maskInputOptions: { password: true },
-      });
-
-      stopRef.current = stop ?? null;
-
-      const interval = setInterval(() => {
-        if (eventsRef.current.length > 0 && !flushedRef.current) {
-          const payload = JSON.stringify({
-            sessionId,
-            page: pathname,
-            events: selfContained(eventsRef.current),
-          });
-          eventsRef.current = [];
-
-          try {
-            void fetch('/api/recordings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: payload,
-            });
-          } catch {
-            /* best effort */
-          }
+      if (!unloading) {
+        try {
+          void fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+          }).catch(() => {});
+        } catch {
+          /* swallow — telemetry must not surface errors */
         }
-      }, FLUSH_INTERVAL_MS);
+        return;
+      }
 
-      window.addEventListener('beforeunload', flush);
+      try {
+        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+          const blob = new Blob([payload], { type: 'application/json' });
+          if (navigator.sendBeacon(ENDPOINT, blob)) return;
+        }
+        void fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        /* swallow */
+      }
+    }
 
-      stopRef.current = () => {
-        stop?.();
-        clearInterval(interval);
-        window.removeEventListener('beforeunload', flush);
-        flush();
-      };
+    // Real document-teardown → size-limited beacon path.
+    const onUnload = () => flush(true);
+    // Tab hidden fires while the page is still alive (most reliable "leaving"
+    // signal on mobile) → flush via the plain-fetch path so large chunks land.
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush(false);
+    };
+
+    (async () => {
+      try {
+        // Server kill-switch — only record when explicitly enabled.
+        const res = await fetch(ENDPOINT, { method: 'GET' });
+        const data = (await res.json().catch(() => ({ enabled: false }))) as {
+          enabled?: boolean;
+        };
+        if (cancelled || !data?.enabled) return;
+
+        const rrweb = await import('rrweb');
+        if (cancelled) return;
+
+        const stop = rrweb.record({
+          emit(event) {
+            const e = event as RrwebEvent;
+            if (e.type === EVENT_META) lastMeta = e;
+            if (e.type === EVENT_FULL_SNAPSHOT) lastFullSnapshot = e;
+            bufferRef.current.push(event);
+          },
+          // Re-take a full snapshot every 30s so prepended snapshots stay
+          // current and replay stays coherent on long sessions.
+          checkoutEveryNms: FLUSH_INTERVAL_MS,
+          sampling: {
+            mousemove: 100,
+            scroll: 150,
+            input: 'last',
+            mouseInteraction: true,
+          },
+          blockClass: 'rr-block',
+          // Mask EVERY input value (email, name, phone, payment) — we keep the
+          // behaviour (clicks/scroll/movement), never the keystrokes.
+          maskAllInputs: true,
+        });
+        stopRecording = stop ?? null;
+
+        flushTimer = setInterval(() => flush(false), FLUSH_INTERVAL_MS);
+        window.addEventListener('beforeunload', onUnload);
+        // pagehide is more reliable than beforeunload on mobile Safari.
+        window.addEventListener('pagehide', onUnload);
+        document.addEventListener('visibilitychange', onHide);
+      } catch {
+        /* swallow — rrweb failed to load/record; the page is unaffected */
+      }
     })();
 
+    // Cleanup: SPA route change away or unmount → stop + final flush. A client
+    // route change does NOT unload the document, so flush via the plain-fetch
+    // path (no 64KB cap) — this is the common "left the recorded page" case.
     return () => {
       cancelled = true;
-      stopRef.current?.();
-      stopRef.current = null;
+      if (flushTimer) clearInterval(flushTimer);
+      window.removeEventListener('beforeunload', onUnload);
+      window.removeEventListener('pagehide', onUnload);
+      document.removeEventListener('visibilitychange', onHide);
+      try {
+        stopRecording?.();
+      } catch {
+        /* swallow */
+      }
+      flush(false);
     };
   }, [pathname]);
 
