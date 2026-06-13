@@ -2016,7 +2016,13 @@ export async function deleteList(id: string): Promise<void> {
 function filterPredicate(filterType: ListFilterType): (s: Signup) => boolean {
   switch (filterType) {
     case 'all_paid':
-      return (s) => s.status === 'paid';
+      // Every PAID customer — paid, plus paid-then-attended / paid-no-show.
+      // Excludes 'registered' (started checkout, never paid). Including the
+      // attendance statuses future-proofs the after-webinar drip: if Zoom
+      // attendance ever gets marked, paid attendees stay in the Paid list
+      // instead of silently dropping out. (Today only 'paid' is ever set, so
+      // this changes no current sends.)
+      return (s) => s.status === 'paid' || s.status === 'attended' || s.status === 'no-show';
     case 'all_registered':
       // The default "webinar attendees" filter: registered (in-flight) + paid.
       return (s) => s.source === 'paid' && (s.status === 'registered' || s.status === 'paid');
