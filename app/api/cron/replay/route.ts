@@ -26,6 +26,9 @@ import {
 } from '@/lib/cron';
 
 export const runtime = 'nodejs';
+// Always dynamic — reads request headers + live DB. Without this, Next tries to
+// prerender the route at build time and its no-store fetch (getEvents) throws.
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 function templateVars(signup: Signup, webinar: Awaited<ReturnType<typeof getWebinarInfo>>) {
