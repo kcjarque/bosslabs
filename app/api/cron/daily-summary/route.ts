@@ -77,6 +77,15 @@ export async function GET(req: Request) {
     (s) => s.source === 'paid' && s.status === 'registered',
   ).length;
 
+  // Funnel conversion must be SAME-COHORT: of the people who *started* checkout
+  // yesterday, how many of THEM paid. NOT paidCount — that's a cash-basis count
+  // of every payment that cleared yesterday (incl. people who registered on an
+  // earlier day and paid late). Mixing the two cohorts produced a nonsensical
+  // 100% that contradicted the Abandoned line. cohortPaid + abandoned ≤ newCheckouts.
+  const cohortPaid = daySignups.filter(
+    (s) => s.source === 'paid' && (s.status === 'paid' || s.status === 'attended'),
+  ).length;
+
   // Unique visitors yesterday (all pages) — bounded to the day so a delayed
   // or manually-triggered run doesn't bleed in today's traffic.
   const visits = await countPageViews({ sinceIso: dayStartIso, untilIso: dayEndIso });
@@ -97,15 +106,15 @@ export async function GET(req: Request) {
     `<b>Funnel (yesterday)</b>`,
     `  Visits: <b>${visits.uniqueSessions}</b>`,
     `  Checkout started: <b>${newCheckouts}</b>`,
-    `  Paid: <b>${paidCount}</b>`,
+    `  …of those, paid: <b>${cohortPaid}</b>`,
   ];
 
-  // Checkout started → Paid. Same definition as the admin dashboard:
-  // "started" = filled the form + generated an invoice (a signup), NOT just a
-  // visit to the /checkout page — so this matches the dashboard's ~conversion
-  // instead of the much lower page-visit ratio.
+  // Checkout started → Paid, SAME cohort: of yesterday's checkout-starters,
+  // how many have paid. "started" = filled the form + generated an invoice (a
+  // signup), not just a /checkout page-visit. cohortPaid (not paidCount) keeps
+  // this internally consistent with the Abandoned line and ≤ 100%.
   if (newCheckouts > 0) {
-    const convRate = ((paidCount / newCheckouts) * 100).toFixed(1);
+    const convRate = ((cohortPaid / newCheckouts) * 100).toFixed(1);
     lines.push(`  Checkout → Paid: <b>${convRate}%</b>`);
   }
 
@@ -115,6 +124,6 @@ export async function GET(req: Request) {
     ok: true,
     sent: result.ok,
     date: dateStr,
-    stats: { newCheckouts, freeRegistrations, paidCount, revenue, abandoned },
+    stats: { newCheckouts, freeRegistrations, paidCount, cohortPaid, revenue, abandoned },
   });
 }
