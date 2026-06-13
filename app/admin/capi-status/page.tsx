@@ -234,7 +234,7 @@ function PaidRow({ signup }: { signup: Signup }) {
           {signup.lastName ?? ''} · {signup.email} · ₱{(signup.amountCentavos ?? 0) / 100}
         </p>
         <p className="text-[11px] text-slate-500">
-          Created {new Date(signup.createdAt).toLocaleString('en-PH')}
+          Created {new Date(signup.createdAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
         </p>
       </div>
       <form action={refireCapiForAction}>

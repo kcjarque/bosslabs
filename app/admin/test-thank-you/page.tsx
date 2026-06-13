@@ -266,7 +266,7 @@ function DemoCard({
             </span>
           </div>
           <p className="mt-2 text-[11px] text-slate-500">
-            Created {new Date(signup.createdAt).toLocaleString('en-PH')}
+            Created {new Date(signup.createdAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
           </p>
         </div>
         <form action={flipBumpAction}>

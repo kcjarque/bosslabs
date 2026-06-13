@@ -27,7 +27,7 @@ export default async function ReplayPage({ params }: { params: Promise<{ id: str
             Session replay
           </h1>
           <p className="text-[12px] text-slate-500">
-            {recording.page} &middot; {new Date(recording.createdAt).toLocaleString()} &middot;{' '}
+            {recording.page} &middot; {new Date(recording.createdAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })} &middot;{' '}
             {recording.events.length} events
           </p>
         </div>

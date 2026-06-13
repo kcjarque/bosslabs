@@ -92,7 +92,7 @@ export default async function SessionReplayPage({
             {journey.map((j) => j.page).join('  →  ') || 'Session'}
           </h1>
           <p className="mt-1 text-[12px] text-slate-500">
-            {firstAt ? new Date(firstAt).toLocaleString() : '—'} · {fmtDuration(durationMs)} ·{' '}
+            {firstAt ? new Date(firstAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '—'} · {fmtDuration(durationMs)} ·{' '}
             {merged.length} events · {chunks.length} chunk{chunks.length === 1 ? '' : 's'} ·{' '}
             {fmtBytes(totalBytes)} · <span className="font-mono">{sessionId}</span>
           </p>
