@@ -71,13 +71,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: 'no replayUrl configured in /admin/settings' });
   }
 
-  // Audience = THIS webinar's registrants only (not other weeks').
+  // Audience = THIS webinar's PAID customers only. The replay is a paid asset —
+  // never send it to 'registered' (started checkout but didn't pay / abandoned),
+  // which would also undercut the cart-recovery sequence chasing those same people.
   const replayKey = `replay_${lastWebinar.id}` as ReminderKey;
   const signups = await getSignups();
   const eligible = signups.filter(
     (s) =>
       s.eventId === lastWebinar.id &&
-      ['registered', 'paid', 'attended', 'no-show'].includes(s.status),
+      ['paid', 'attended', 'no-show'].includes(s.status),
   );
 
   const sent = { email: 0, sms: 0, alreadySent: 0, failed: 0 };
