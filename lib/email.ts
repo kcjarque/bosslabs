@@ -23,6 +23,7 @@ import {
 } from './db';
 import { signUnsubscribeToken } from './admin-auth';
 import { renderEmailMarkdown } from './email-markdown';
+import { validateRecipient } from './email-validation';
 
 export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'ses' | 'demo' }
@@ -98,6 +99,21 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     return {
       ok: false,
       error: 'Recipient suppressed — this address previously hard-bounced (or reported spam).',
+    };
+  }
+
+  // Validity gate — never SEND to an address that physically can't receive mail:
+  // bad syntax, a known disposable domain, or a domain with no MX records (a
+  // typo'd "@gmial.com"). These would hard-bounce, so skipping them keeps junk
+  // off our bounce rate and protects sender reputation. This does NOT touch
+  // checkout — it only stops the SEND. We fail OPEN on DNS uncertainty
+  // (validateRecipient only returns !ok when DNS is certain), and on any error
+  // here we send rather than risk dropping a real recipient.
+  const validity = await validateRecipient(args.to).catch(() => ({ ok: true as const }));
+  if (!validity.ok) {
+    return {
+      ok: false,
+      error: `Recipient undeliverable (${validity.reason}) — not sent, to protect sender reputation.`,
     };
   }
 
