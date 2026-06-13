@@ -974,42 +974,40 @@ export type PageViewCounts = {
 };
 
 /**
- * Count paid orders for the Telegram sales alerts: all-time total + today.
- * "Paid" = signups.status === 'paid'. "Today" is by created_at in
- * Asia/Manila, matching the daily-summary convention. Best-effort — returns
- * zeros if Supabase isn't configured or a query errors, so it can never
- * block (or break) a payment notification.
+ * Count paid orders for the Telegram sales alerts, on the SAME basis as the
+ * admin dashboard so the two never disagree:
+ *   - total          = all completed sales ever (paid + attended)
+ *   - today          = DIRECT payments RECEIVED today (Manila) — same-day, not
+ *                      recovered
+ *   - recoveredToday = RECOVERED payments received today (abandoned-then-paid,
+ *                      or closer-claimed)
+ * "Received today" is by payment day (metadata.confirmationSent, falling back to
+ * created_at). today and recoveredToday are DISJOINT, so today + recoveredToday
+ * = every payment that arrived today. (The old version counted "today" by signup
+ * day and overlapped recovered — a closer-claimed sale created+paid the same day
+ * landed in BOTH, double-counting.) Best-effort: returns zeros on any error so it
+ * can never block a payment notification.
  */
 export async function countPaidOrders(): Promise<{ total: number; today: number; recoveredToday: number }> {
   if (!isSupabaseConfigured()) return { total: 0, today: 0, recoveredToday: 0 };
   try {
     const sb = getSupabase();
-    const { count: total } = await sb
-      .from('signups')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'paid');
-    // Manila calendar date (YYYY-MM-DD) → start-of-day at +08:00.
     const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
-    const { count: today } = await sb
-      .from('signups')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'paid')
-      .gte('created_at', `${todayStr}T00:00:00+08:00`);
-    // Recovered-today = payments that ARRIVED today (confirmationSent) from an
-    // earlier signup — abandoned-then-paid, or closer-claimed-then-paid. These
-    // sit OUTSIDE the created-today "today" count (their signup day is past),
-    // so they compose: today + recoveredToday = all payments received today.
     const [{ data: comms }, { data: paidRows }] = await Promise.all([
       sb.from('closer_commissions').select('signup_id'),
       sb.from('signups').select('id, status, created_at, metadata').in('status', ['paid', 'attended']),
     ]);
     const closerIds = new Set(((comms ?? []) as { signup_id: string }[]).map((c) => c.signup_id));
+    const rows = (paidRows ?? []) as Array<{ id: string; status: SignupStatus; created_at: string; metadata: Record<string, unknown> | null }>;
+    let today = 0;
     let recoveredToday = 0;
-    for (const r of (paidRows ?? []) as Array<{ id: string; status: SignupStatus; created_at: string; metadata: Record<string, unknown> | null }>) {
+    for (const r of rows) {
       const s = { id: r.id, status: r.status, createdAt: r.created_at, metadata: r.metadata ?? undefined };
-      if (paymentDayOf(s) === todayStr && isRecoveredPaid(s, closerIds)) recoveredToday++;
+      if (paymentDayOf(s) !== todayStr) continue; // only payments that arrived today
+      if (isRecoveredPaid(s, closerIds)) recoveredToday++;
+      else today++;
     }
-    return { total: total ?? 0, today: today ?? 0, recoveredToday };
+    return { total: rows.length, today, recoveredToday };
   } catch {
     return { total: 0, today: 0, recoveredToday: 0 };
   }
