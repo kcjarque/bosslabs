@@ -1187,13 +1187,16 @@ export type EmailStats = {
   trackableOpened: number;
   trackableClicked: number;
   recovery: { emailed: number; paid: number; pct: number };
+  /** Addresses we REFUSED to send to before sending (invalid syntax / disposable
+   *  domain / no mail server). These never become bounces — bounces prevented. */
+  blocked: number;
 };
 
 const EMPTY_EMAIL_STATS: EmailStats = {
   totalSent: 0, reached: 0, bounced: 0, complained: 0, pending: 0, opened: 0, clicked: 0,
   deliverabilityPct: 0, bouncePct: 0, complaintPct: 0, openPct: null, clickPct: null,
   openTracking: false, trackableReached: 0, trackableOpened: 0, trackableClicked: 0,
-  recovery: { emailed: 0, paid: 0, pct: 0 },
+  recovery: { emailed: 0, paid: 0, pct: 0 }, blocked: 0,
 };
 
 /** When SES open/click tracking went live (the bosslabs config set). Open/click
@@ -1223,7 +1226,14 @@ export async function getEmailStats(): Promise<EmailStats> {
   // Open/click are scoped to the trackable window. Show the rate as soon as one
   // tracked email has been delivered (even 0%); null until then.
   const openTracking = d.trackReached > 0;
+  // Pre-send blocks: distinct signups we refused to send to (best-effort — a
+  // failed count must never break the dashboard).
+  const { count: blocked } = await getSupabase()
+    .from('signups')
+    .select('id', { count: 'exact', head: true })
+    .not('metadata->>emailBlocked', 'is', null);
   return {
+    blocked: blocked ?? 0,
     totalSent: d.total,
     reached: d.reached,
     bounced: d.bounced,
@@ -2093,6 +2103,45 @@ export async function suppressSignupEmail(
           ...(r.metadata ?? {}),
           emailSuppressed: new Date().toISOString(),
           emailSuppressedReason: reason,
+        },
+      })
+      .eq('id', r.id);
+    if (!error) n++;
+  }
+  return n;
+}
+
+/** True when this signup's email was blocked pre-send (invalid/disposable/no-MX). */
+export function isEmailBlocked(s: Pick<Signup, 'metadata'>): boolean {
+  return Boolean((s.metadata as { emailBlocked?: string } | undefined)?.emailBlocked);
+}
+
+/**
+ * Record that we REFUSED to send to an address (the pre-send validity gate in
+ * sendEmail). Stamps emailBlocked (+ reason/time) on every signup row sharing
+ * that address so the dashboard can count "bounces prevented". Best-effort and
+ * idempotent — already-blocked rows are left untouched (one write per address).
+ * Does NOT suppress or change status; the send is simply skipped each time.
+ */
+export async function recordBlockedEmail(
+  email: string,
+  reason: 'syntax' | 'disposable' | 'no_mx',
+): Promise<number> {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes('@') || !isSupabaseConfigured()) return 0;
+  const sb = getSupabase();
+  const { data } = await sb.from('signups').select('id, metadata').ilike('email', e);
+  const rows = (data ?? []) as Array<{ id: string; metadata: Record<string, unknown> | null }>;
+  let n = 0;
+  for (const r of rows) {
+    if ((r.metadata as { emailBlocked?: string } | null)?.emailBlocked) continue;
+    const { error } = await sb
+      .from('signups')
+      .update({
+        metadata: {
+          ...(r.metadata ?? {}),
+          emailBlocked: new Date().toISOString(),
+          emailBlockedReason: reason,
         },
       })
       .eq('id', r.id);

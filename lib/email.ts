@@ -19,6 +19,7 @@ import {
   getSettings,
   renderTemplate,
   isEmailAddressSuppressed,
+  recordBlockedEmail,
   type EmailTemplate,
 } from './db';
 import { signUnsubscribeToken } from './admin-auth';
@@ -111,6 +112,8 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   // here we send rather than risk dropping a real recipient.
   const validity = await validateRecipient(args.to).catch(() => ({ ok: true as const }));
   if (!validity.ok) {
+    // Track it so the dashboard can show "bounces prevented" (best-effort).
+    await recordBlockedEmail(args.to, validity.reason).catch(() => {});
     return {
       ok: false,
       error: `Recipient undeliverable (${validity.reason}) — not sent, to protect sender reputation.`,

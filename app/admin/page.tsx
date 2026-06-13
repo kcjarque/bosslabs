@@ -590,7 +590,7 @@ export default async function AdminDashboard({
           Across all drip + confirmation emails. Deliverability &amp; bounce come from real
           provider events.
         </p>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <EmailStat
             label="Deliverability"
             value={`${emailStats.deliverabilityPct.toFixed(1)}%`}
@@ -602,6 +602,12 @@ export default async function AdminDashboard({
             value={`${emailStats.bouncePct.toFixed(1)}%`}
             sub={`${emailStats.bounced.toLocaleString()} bounced`}
             tone={emailStats.bouncePct >= 5 ? 'bad' : emailStats.bouncePct >= 2 ? 'warn' : 'neutral'}
+          />
+          <EmailStat
+            label="Blocked · pre-send"
+            value={emailStats.blocked.toLocaleString()}
+            sub="bad address, never sent"
+            tone={emailStats.blocked > 0 ? 'good' : 'muted'}
           />
           <EmailStat
             label="Open rate"
@@ -633,7 +639,10 @@ export default async function AdminDashboard({
         <p className="mt-3 text-[11px] text-slate-400">
           Open &amp; click rates cover only emails sent since open-tracking went live
           {emailStats.trackableReached > 0 ? ` (${emailStats.trackableReached} so far)` : ''} —
-          older sends couldn&rsquo;t be tracked, so they&rsquo;re excluded.
+          older sends couldn&rsquo;t be tracked, so they&rsquo;re excluded.{' '}
+          <span className="text-slate-500">Blocked</span> = addresses refused before sending
+          (bad syntax, disposable domain, or no mail server) — they never become bounces, so
+          each one is a bounce prevented.
         </p>
       </section>
 
