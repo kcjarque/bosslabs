@@ -4,6 +4,7 @@ import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { ReplayOffer } from '@/components/ReplayOffer';
 import { ReplayGate } from '@/components/ReplayGate';
+import { OUR_APPS } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +15,15 @@ export const metadata: Metadata = {
 };
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
-const REPLAY_YOUTUBE_ID = '6XBSwt0swHY';
-const APP_URL = 'https://preclarus-app.vercel.app';
+const REPLAY_YOUTUBE_ID = 'DadhAnMXdfI';
+const APP_URL = 'https://bescost-ops.vercel.app/dashboard';
+// Screenshot of the app we built live this session (drop the file in /public).
+const APP_SCREENSHOT = '/bescost-ops.png';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
 // opens tomorrow (the morning after the webinar) and runs 7 days. Change this
 // single line to move the close date.
-const REPLAY_CLOSES_AT = '2026-06-12T23:59:00+08:00';
+const REPLAY_CLOSES_AT = '2026-06-20T23:59:00+08:00';
 
 export default function ReplayPage({
   searchParams,
@@ -108,7 +111,7 @@ export default function ReplayPage({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/preclarus-app.png"
+                src={APP_SCREENSHOT}
                 alt="Live preview of the app we built during the session"
                 className="w-full border-b border-white/[0.06] transition group-hover:opacity-95"
                 loading="lazy"
@@ -129,6 +132,47 @@ export default function ReplayPage({
                 </a>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Past apps — the back catalog of live builds */}
+        <section className="mx-auto mt-16 max-w-5xl sm:mt-24">
+          <div className="text-center">
+            <div className="eyebrow justify-center">The back catalog</div>
+            <h2 className="h-sub mt-4">
+              And here&apos;s what we&apos;ve <span className="accent-italic">built before.</span>
+            </h2>
+            <p className="lead mx-auto mt-4 max-w-xl">
+              Every one shipped in a single focused session — real, working software
+              running real businesses today.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {OUR_APPS.filter((app) => app.screenshot).map((app) => (
+              <div
+                key={app.slug}
+                className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] transition hover:-translate-y-1 hover:border-cyan-500/40"
+              >
+                <div className="relative aspect-[16/10] overflow-hidden border-b border-white/[0.06]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={app.screenshot}
+                    alt={`${app.name} — ${app.business}`}
+                    className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-[1.02]"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-serif text-lg text-white">{app.name}</span>
+                    <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/[0.07] px-2.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-cyan-300">
+                      {app.built}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-300">{app.tagline}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
