@@ -83,27 +83,30 @@ export async function GET(req: Request) {
   );
 
   const sent = { email: 0, sms: 0, alreadySent: 0, failed: 0 };
+  const fresh = eligible.filter((s) => !hasReminderSent(s.metadata, replayKey));
+  sent.alreadySent = eligible.length - fresh.length;
 
-  for (const signup of eligible) {
-    if (hasReminderSent(signup.metadata, replayKey)) {
-      sent.alreadySent += 1;
-      continue;
-    }
-
-    const vars = templateVars(signup, webinar);
-
-    const emailRes = await sendEmail({ to: signup.email, templateId: 'replay', vars });
-    if (emailRes.ok) sent.email += 1;
-    else sent.failed += 1;
-
-    if (signup.phone) {
-      const smsRes = await sendSms({ to: signup.phone, templateId: 'replay', vars });
-      if (smsRes.ok) sent.sms += 1;
-    }
-
-    await updateSignup(signup.id, {
-      metadata: markReminderSent(signup.metadata, replayKey),
-    });
+  // Send in small parallel batches so the whole audience clears in ONE cron
+  // tick (sequential email+SMS is ~2.5s each → 47 people would blow the 60s
+  // function limit and spill into the next hour). Batches of 6 keep us well
+  // under any provider rate limit while finishing in seconds.
+  const BATCH = 6;
+  for (let i = 0; i < fresh.length; i += BATCH) {
+    await Promise.all(
+      fresh.slice(i, i + BATCH).map(async (signup) => {
+        const vars = templateVars(signup, webinar);
+        const emailRes = await sendEmail({ to: signup.email, templateId: 'replay', vars });
+        if (emailRes.ok) sent.email += 1;
+        else sent.failed += 1;
+        if (signup.phone) {
+          const smsRes = await sendSms({ to: signup.phone, templateId: 'replay', vars });
+          if (smsRes.ok) sent.sms += 1;
+        }
+        await updateSignup(signup.id, {
+          metadata: markReminderSent(signup.metadata, replayKey),
+        });
+      }),
+    );
   }
 
   return NextResponse.json({
