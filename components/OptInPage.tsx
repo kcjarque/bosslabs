@@ -306,29 +306,30 @@ function WhatIsSection() {
   return (
     <section className="border-t border-white/[0.05] py-20 sm:py-28">
       <div className="container-tight">
-        <div className="grid items-start gap-12 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
-          <div>
-            <div className="eyebrow">{WHAT_IS.eyebrow}</div>
-            <h2 className="h-section mt-5">
-              AI is not just marketing. We turn Filipino businesses into{' '}
-              <span className="accent-italic">tech-enabled command centers.</span>
-            </h2>
-            <div className="mt-8 space-y-5 sm:mt-10 sm:space-y-6">
-              {WHAT_IS.body.map((p) => (
-                <p key={p} className="lead">
-                  {p}
-                </p>
-              ))}
-            </div>
-            <blockquote className="mt-10 border-l-2 border-cyan-500/60 pl-5 font-serif text-xl italic leading-snug text-white sm:mt-12 sm:pl-6 sm:text-2xl md:text-3xl">
-              {WHAT_IS.pullquote}
-            </blockquote>
+        {/* Editorial intro — constrained for readable line length. The
+            pullquote teases "the actual systems," which the gallery below
+            then delivers — so the cards read as the payoff, not a side rail. */}
+        <div className="max-w-3xl">
+          <div className="eyebrow">{WHAT_IS.eyebrow}</div>
+          <h2 className="h-section mt-5">
+            AI is not just marketing. We turn Filipino businesses into{' '}
+            <span className="accent-italic">tech-enabled command centers.</span>
+          </h2>
+          <div className="mt-8 space-y-5 sm:mt-10 sm:space-y-6">
+            {WHAT_IS.body.map((p) => (
+              <p key={p} className="lead">
+                {p}
+              </p>
+            ))}
           </div>
+          <blockquote className="mt-10 border-l-2 border-cyan-500/60 pl-5 font-serif text-xl italic leading-snug text-white sm:mt-12 sm:pl-6 sm:text-2xl md:text-3xl">
+            {WHAT_IS.pullquote}
+          </blockquote>
+        </div>
 
-          {/* Right — AppsStack visual */}
-          <div className="relative">
-            <AppsStack />
-          </div>
+        {/* Student builds — full-width 3-up gallery below the intro */}
+        <div className="mt-14 sm:mt-16">
+          <AppsStack />
         </div>
       </div>
     </section>

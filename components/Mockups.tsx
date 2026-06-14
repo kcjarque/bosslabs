@@ -207,18 +207,18 @@ function PackCard({
 
 export function AppsStack() {
   return (
-    <div className="relative h-full w-full">
+    <div className="relative w-full">
       <div className="absolute -inset-10 rounded-[40px] bg-cyan-500/5 blur-3xl" aria-hidden />
 
-      {/* Old card style (image + footer), but ALIGNED — no rotation/tilt. */}
-      <div className="relative space-y-5 py-4 sm:py-6">
+      {/* Old card style (image + footer), aligned in a 3-up row (stacks on mobile). */}
+      <div className="relative grid gap-5 sm:gap-6 md:grid-cols-3">
         {STUDENT_BUILDS.map((b) => (
           <a
             key={b.name}
             href={b.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card transition hover:-translate-y-0.5 hover:border-cyan-500/40"
+            className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card transition hover:-translate-y-0.5 hover:border-cyan-500/40"
           >
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -233,9 +233,10 @@ export function AppsStack() {
                 Live
               </span>
             </div>
-            <div className="flex items-center justify-between gap-3 p-4">
+            <div className="mt-auto flex items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <div className="font-serif text-lg text-white">{b.name}</div>
+
                 <div className="truncate text-[12px] text-ink-300">{b.tag}</div>
               </div>
               <span className="flex-none rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-cyan-200 transition group-hover:bg-cyan-500/20">

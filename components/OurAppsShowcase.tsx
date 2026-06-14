@@ -37,11 +37,12 @@ export function OurAppsShowcase() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-5 sm:mt-14 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Flex (not grid) so the orphan last row — 2 cards on desktop, 1 on
+            tablet — stays centered instead of left-anchored with a dead gap. */}
+        <div className="mt-12 flex flex-wrap justify-center gap-5 sm:mt-14 sm:gap-6">
           {OUR_APPS.map((app) => (
             <AppCard key={app.slug} app={app} />
           ))}
-          {/* Fifth card on third row, left-anchored on lg → keeps the grid tight */}
         </div>
 
         <p className="mt-10 text-center font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
@@ -58,7 +59,7 @@ function AppCard({ app }: { app: AppShowcase }) {
   const hasImage = Boolean(screenshot);
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] to-white/[0.005] shadow-card transition hover:border-cyan-500/30">
+    <article className="group relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] to-white/[0.005] shadow-card transition hover:border-cyan-500/30 sm:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)]">
       {/* Browser-chrome strip */}
       <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.025] px-4 py-2">
         <span className="h-2 w-2 rounded-full bg-red-400/70" />

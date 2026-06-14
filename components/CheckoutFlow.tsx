@@ -286,10 +286,16 @@ export function CheckoutFlow({
     }
   }
 
+  // Mobile sticky pay bar can't duplicate the three payment-method buttons in
+  // a compact bar, so it scrolls the buyer to the real CTAs instead.
+  const payRef = useRef<HTMLDivElement>(null);
+  const scrollToPay = () =>
+    payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
   return (
     <form
       onSubmit={(e) => e.preventDefault()}
-      className="grid gap-10 lg:grid-cols-[1.1fr_1fr]"
+      className="grid gap-10 pb-28 lg:grid-cols-[1.1fr_1fr] lg:pb-0"
     >
       {/* Left — fields + bump + CTA */}
       <div>
@@ -361,49 +367,51 @@ export function CheckoutFlow({
             When a 100%-off promo is applied, swap them for a single
             "Claim free seat" button that bypasses Xendit and goes straight
             to /accepted. */}
-        {isFree ? (
-          <div className="mt-6">
-            <ClaimFreeSeatButton
-              loading={loading === 'FREE'}
-              disabled={loading !== null}
-              onClick={(e) => claimFreeSeat(e.currentTarget.form!)}
-            />
-            <p className="mt-3 text-center text-[11px] leading-snug text-cyan-300 sm:text-[12px]">
-              No payment needed — promo <strong className="font-semibold text-white">{appliedPromo?.code}</strong>{' '}
-              covers your seat in full.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-6 space-y-3">
-            <PayButton
-              method="GCASH"
-              label="Pay via GCash"
-              icon={<GCashIcon />}
-              price={formatPHP(total)}
-              loading={loading === 'GCASH'}
-              disabled={loading !== null}
-              onClick={(e) => payWith('GCASH', e.currentTarget.form!)}
-            />
-            <PayButton
-              method="CREDIT_CARD"
-              label="Pay via Credit Card"
-              icon={<CreditCardIcon />}
-              price={formatPHP(total)}
-              loading={loading === 'CREDIT_CARD'}
-              disabled={loading !== null}
-              onClick={(e) => payWith('CREDIT_CARD', e.currentTarget.form!)}
-            />
-            <PayButton
-              method="BANKS"
-              label="Pay via Bank with QRPH"
-              icon={<BankIcon />}
-              price={formatPHP(total)}
-              loading={loading === 'BANKS'}
-              disabled={loading !== null}
-              onClick={(e) => payWith('BANKS', e.currentTarget.form!)}
-            />
-          </div>
-        )}
+        <div ref={payRef} className="scroll-mt-6">
+          {isFree ? (
+            <div className="mt-6">
+              <ClaimFreeSeatButton
+                loading={loading === 'FREE'}
+                disabled={loading !== null}
+                onClick={(e) => claimFreeSeat(e.currentTarget.form!)}
+              />
+              <p className="mt-3 text-center text-[11px] leading-snug text-cyan-300 sm:text-[12px]">
+                No payment needed — promo <strong className="font-semibold text-white">{appliedPromo?.code}</strong>{' '}
+                covers your seat in full.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              <PayButton
+                method="GCASH"
+                label="Pay via GCash"
+                icon={<GCashIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'GCASH'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('GCASH', e.currentTarget.form!)}
+              />
+              <PayButton
+                method="CREDIT_CARD"
+                label="Pay via Credit Card"
+                icon={<CreditCardIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'CREDIT_CARD'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('CREDIT_CARD', e.currentTarget.form!)}
+              />
+              <PayButton
+                method="BANKS"
+                label="Pay via Bank with QRPH"
+                icon={<BankIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'BANKS'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('BANKS', e.currentTarget.form!)}
+              />
+            </div>
+          )}
+        </div>
 
         {/* GCash gotcha hint — the QR on Xendit's page expires fast (~60s)
             and buyers who screenshot it then upload to GCash's scanner get
@@ -540,6 +548,32 @@ export function CheckoutFlow({
           </p>
         </div>
       </aside>
+
+      {/* Mobile sticky pay bar — keeps the live total + a one-tap path to the
+          pay buttons in view as the buyer scrolls. Desktop keeps the sticky
+          order-summary instead, so this is mobile-only (lg:hidden). */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-500/30 bg-[#06070A]/95 px-4 pt-3 backdrop-blur-md lg:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-300">
+              Total today
+            </div>
+            <div className="font-serif text-xl leading-none text-white">
+              {isFree ? 'FREE' : formatPHP(total)}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={scrollToPay}
+            className="flex-none rounded-full border border-cyan-400 bg-gradient-to-r from-cyan-500/30 via-cyan-500/15 to-cyan-500/5 px-6 py-3 font-serif text-[15px] text-white shadow-glow-sm transition active:scale-[0.98]"
+          >
+            {isFree ? 'Claim free seat' : 'Reserve my seat →'}
+          </button>
+        </div>
+      </div>
     </form>
   );
 }
