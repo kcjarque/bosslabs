@@ -249,23 +249,26 @@ function Hero({ webinar }: { webinar: WebinarInfo }) {
             </div>
           </div>
 
-          {/* Quick facts — date/time, format (mirrors the retreat info cards) */}
-          <div className="mt-10 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+          {/* Quick facts — date/time, format. 2×2 on mobile (compact) → 4-up on
+              desktop, so the block stays short above the fold on phones. */}
+          <div className="mt-10 grid grid-cols-2 gap-3 text-left sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
             {facts.map((card) => (
               <div
                 key={card.k}
-                className="rounded-2xl border border-cyan-500/25 bg-white/[0.03] p-5"
+                className="rounded-2xl border border-cyan-500/25 bg-white/[0.03] p-4 sm:p-5"
               >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 sm:h-9 sm:w-9">
                     {card.icon}
                   </span>
-                  <span className="font-sans text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
+                  <span className="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-300 sm:text-sm sm:tracking-[0.18em]">
                     {card.k}
                   </span>
                 </div>
-                <div className="mt-4 font-sans text-[17px] font-semibold text-white">{card.v}</div>
-                <div className="mt-1 text-[13px] text-ink-300">{card.s}</div>
+                <div className="mt-2.5 font-sans text-[15px] font-semibold leading-tight text-white sm:mt-4 sm:text-[17px]">
+                  {card.v}
+                </div>
+                <div className="mt-1 text-[12px] leading-snug text-ink-300 sm:text-[13px]">{card.s}</div>
               </div>
             ))}
           </div>
@@ -306,10 +309,11 @@ function WhatIsSection() {
   return (
     <section className="border-t border-white/[0.05] py-20 sm:py-28">
       <div className="container-tight">
-        {/* Editorial intro — constrained for readable line length. The
-            pullquote teases "the actual systems," which the gallery below
-            then delivers — so the cards read as the payoff, not a side rail. */}
-        <div className="max-w-3xl">
+        {/* Editorial intro — spans the full column so it lines up flush with
+            the gallery row below (even left/right edges, no dead right margin).
+            The pullquote teases "the actual systems," which the gallery then
+            delivers — so the cards read as the payoff, not a side rail. */}
+        <div>
           <div className="eyebrow">{WHAT_IS.eyebrow}</div>
           <h2 className="h-section mt-5">
             AI is not just marketing. We turn Filipino businesses into{' '}

@@ -293,10 +293,12 @@ export function CheckoutFlow({
     payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   return (
-    <form
-      onSubmit={(e) => e.preventDefault()}
-      className="grid gap-10 pb-28 lg:grid-cols-[1.1fr_1fr] lg:pb-0"
-    >
+    <>
+      <SeatHoldTimer />
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="grid gap-10 pb-28 lg:grid-cols-[1.1fr_1fr] lg:pb-0"
+      >
       {/* Left — fields + bump + CTA */}
       <div>
         <div className="eyebrow">Step 1 of 2 · Secure checkout</div>
@@ -359,76 +361,6 @@ export function CheckoutFlow({
           </div>
         )}
 
-        {/* Trust line — single testimonial right above Pay button */}
-        <CheckoutSocialProof />
-
-        {/* Three explicit pay buttons — each routes to its own Xendit channel,
-            so a buyer who clicks "Pay via GCash" lands directly on GCash.
-            When a 100%-off promo is applied, swap them for a single
-            "Claim free seat" button that bypasses Xendit and goes straight
-            to /accepted. */}
-        <div ref={payRef} className="scroll-mt-6">
-          {isFree ? (
-            <div className="mt-6">
-              <ClaimFreeSeatButton
-                loading={loading === 'FREE'}
-                disabled={loading !== null}
-                onClick={(e) => claimFreeSeat(e.currentTarget.form!)}
-              />
-              <p className="mt-3 text-center text-[11px] leading-snug text-cyan-300 sm:text-[12px]">
-                No payment needed — promo <strong className="font-semibold text-white">{appliedPromo?.code}</strong>{' '}
-                covers your seat in full.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-6 space-y-3">
-              <PayButton
-                method="GCASH"
-                label="Pay via GCash"
-                icon={<GCashIcon />}
-                price={formatPHP(total)}
-                loading={loading === 'GCASH'}
-                disabled={loading !== null}
-                onClick={(e) => payWith('GCASH', e.currentTarget.form!)}
-              />
-              <PayButton
-                method="CREDIT_CARD"
-                label="Pay via Credit Card"
-                icon={<CreditCardIcon />}
-                price={formatPHP(total)}
-                loading={loading === 'CREDIT_CARD'}
-                disabled={loading !== null}
-                onClick={(e) => payWith('CREDIT_CARD', e.currentTarget.form!)}
-              />
-              <PayButton
-                method="BANKS"
-                label="Pay via Bank with QRPH"
-                icon={<BankIcon />}
-                price={formatPHP(total)}
-                loading={loading === 'BANKS'}
-                disabled={loading !== null}
-                onClick={(e) => payWith('BANKS', e.currentTarget.form!)}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* GCash gotcha hint — the QR on Xendit's page expires fast (~60s)
-            and buyers who screenshot it then upload to GCash's scanner get
-            an "invalid QR" error. Real fix is to scan the QR live OR let the
-            deep-link open GCash directly. We can't change Xendit's flow but
-            we can tell the buyer ahead of time. Saw 5+ retries on a single
-            buyer in production before adding this. */}
-        <p className="mt-3 text-center text-[11px] leading-snug text-ink-300 sm:text-[12px]">
-          💡 <strong className="text-ink-100">Paying via GCash?</strong>{' '}
-          Don&rsquo;t screenshot the QR — it expires in 60 seconds. On phone:
-          tap above and confirm in your GCash app. On desktop: scan the QR
-          directly with your phone&rsquo;s GCash camera (don&rsquo;t take a photo).
-        </p>
-
-        {/* Security + payment methods — single trust block under the Pay button */}
-        <SecurePaymentStrip />
-
       </div>
 
       {/* Right — order summary (reactive) */}
@@ -442,7 +374,7 @@ export function CheckoutFlow({
           <div className="mt-5 flex items-start justify-between gap-4">
             <div>
               <div className="font-serif text-xl text-white">
-                BOSSLABS AI — Live Workshop
+                BOSSLABS AI — Build Your System Live Workshop
               </div>
               {webinar?.date && (
                 <div className="mt-1 text-[13px] font-medium text-cyan-300">
@@ -538,6 +470,79 @@ export function CheckoutFlow({
           </div>
         </div>
 
+        {/* Pay — directly below the price breakdown, inside the (sticky) summary
+            column. Buyer reviews the total, then pays right under it; stays
+            persistent on desktop and falls below the breakdown on mobile. */}
+        {/* Trust line — single testimonial right above the Pay button */}
+        <CheckoutSocialProof />
+
+        {/* Three explicit pay buttons — each routes to its own Xendit channel,
+            so a buyer who clicks "Pay via GCash" lands directly on GCash.
+            When a 100%-off promo is applied, swap them for a single
+            "Claim free seat" button that bypasses Xendit and goes straight
+            to /accepted. */}
+        <div ref={payRef} className="scroll-mt-6">
+          {isFree ? (
+            <div className="mt-6">
+              <ClaimFreeSeatButton
+                loading={loading === 'FREE'}
+                disabled={loading !== null}
+                onClick={(e) => claimFreeSeat(e.currentTarget.form!)}
+              />
+              <p className="mt-3 text-center text-[11px] leading-snug text-cyan-300 sm:text-[12px]">
+                No payment needed — promo <strong className="font-semibold text-white">{appliedPromo?.code}</strong>{' '}
+                covers your seat in full.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              <PayButton
+                method="GCASH"
+                label="Pay via GCash"
+                icon={<GCashIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'GCASH'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('GCASH', e.currentTarget.form!)}
+              />
+              <PayButton
+                method="CREDIT_CARD"
+                label="Pay via Credit Card"
+                icon={<CreditCardIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'CREDIT_CARD'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('CREDIT_CARD', e.currentTarget.form!)}
+              />
+              <PayButton
+                method="BANKS"
+                label="Pay via Bank with QRPH"
+                icon={<BankIcon />}
+                price={formatPHP(total)}
+                loading={loading === 'BANKS'}
+                disabled={loading !== null}
+                onClick={(e) => payWith('BANKS', e.currentTarget.form!)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* GCash gotcha hint — the QR on Xendit's page expires fast (~60s)
+            and buyers who screenshot it then upload to GCash's scanner get
+            an "invalid QR" error. Real fix is to scan the QR live OR let the
+            deep-link open GCash directly. We can't change Xendit's flow but
+            we can tell the buyer ahead of time. Saw 5+ retries on a single
+            buyer in production before adding this. */}
+        <p className="mt-3 text-center text-[11px] leading-snug text-ink-300 sm:text-[12px]">
+          💡 <strong className="text-ink-100">Paying via GCash?</strong>{' '}
+          Don&rsquo;t screenshot the QR — it expires in 60 seconds. On phone:
+          tap above and confirm in your GCash app. On desktop: scan the QR
+          directly with your phone&rsquo;s GCash camera (don&rsquo;t take a photo).
+        </p>
+
+        {/* Security + payment methods — single trust block under the Pay button */}
+        <SecurePaymentStrip />
+
         <div className="mt-5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.04] p-4 text-[12px] leading-relaxed text-ink-200">
           <div className="uppercase tracking-[0.2em] text-emerald-300 text-[10px]">
             100% Full Refund Guarantee
@@ -574,7 +579,82 @@ export function CheckoutFlow({
           </button>
         </div>
       </div>
-    </form>
+      </form>
+    </>
+  );
+}
+
+/**
+ * SeatHoldTimer — booking-style scarcity banner (think Agoda/airline "your seat
+ * is held for 10:00"). Live MM:SS countdown, persisted per-tab so a reload
+ * doesn't reset the hold. It's a nudge only — never blocks payment; at 0:00 it
+ * turns red and tells the buyer to finish. Resets on a fresh tab/visit.
+ */
+function SeatHoldTimer() {
+  const HOLD_SECONDS = 10 * 60;
+  const [remaining, setRemaining] = useState(HOLD_SECONDS);
+
+  useEffect(() => {
+    const KEY = 'bl_seat_hold_deadline';
+    let deadline = Number(sessionStorage.getItem(KEY) || 0);
+    if (!deadline || deadline < Date.now()) {
+      deadline = Date.now() + HOLD_SECONDS * 1000;
+      try {
+        sessionStorage.setItem(KEY, String(deadline));
+      } catch {
+        /* private mode — fall back to an in-memory 10-min countdown */
+      }
+    }
+    const tick = () =>
+      setRemaining(Math.max(0, Math.round((deadline - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const ss = String(remaining % 60).padStart(2, '0');
+  const expired = remaining <= 0;
+  const urgent = remaining <= 60; // last minute → escalate to red
+
+  return (
+    <div
+      className={[
+        'mb-7 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:px-5',
+        urgent ? 'border-danger-500/50 bg-danger-900/30' : 'border-amber-400/40 bg-amber-400/[0.06]',
+      ].join(' ')}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className={[
+            'h-2 w-2 flex-none animate-pulse rounded-full',
+            urgent ? 'bg-danger-400' : 'bg-amber-400',
+          ].join(' ')}
+        />
+        <span className="text-[12px] leading-snug text-ink-100 sm:text-[13px]">
+          {expired ? (
+            <>
+              <strong className="font-semibold text-white">Your held seat is expiring</strong> — complete
+              checkout now to keep ₱999
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold text-white">Your seat is reserved</strong> — held for the
+              next 10 minutes
+            </>
+          )}
+        </span>
+      </div>
+      <div
+        className={[
+          'flex-none rounded-lg border bg-[#06070A]/70 px-3 py-1.5 font-mono text-[17px] font-bold tabular-nums tracking-wider sm:text-[19px]',
+          urgent ? 'border-danger-500/50 text-danger-200' : 'border-amber-400/40 text-white',
+        ].join(' ')}
+        aria-live="off"
+      >
+        {mm}:{ss}
+      </div>
+    </div>
   );
 }
 
@@ -599,13 +679,13 @@ function BumpCard({
   return (
     <label
       className={[
-        'block cursor-pointer rounded-2xl border-2 p-5 transition sm:p-6',
+        'block cursor-pointer rounded-2xl border-2 p-4 transition sm:p-6',
         checked
           ? 'border-cyan-500/70 bg-cyan-500/[0.08] shadow-glow-sm'
           : 'border-cyan-500/30 bg-cyan-500/[0.03] hover:border-cyan-500/55',
       ].join(' ')}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 sm:gap-4">
         <input
           type="checkbox"
           checked={checked}
@@ -616,10 +696,10 @@ function BumpCard({
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
             {offer.eyebrow} · {offer.discountLabel} · this page only
           </div>
-          <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
+          <h3 className="mt-1.5 font-serif text-[17px] leading-snug text-white sm:mt-2 sm:text-xl">
             YES — Add {offer.name}
           </h3>
-          <ul className="mt-3 space-y-1.5">
+          <ul className="mt-2.5 space-y-1 sm:mt-3 sm:space-y-1.5">
             {offer.inclusions.map((line) => (
               <li
                 key={line}
@@ -639,7 +719,7 @@ function BumpCard({
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex items-baseline gap-3">
+          <div className="mt-3 flex items-baseline gap-3 sm:mt-4">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">
               {offer.label}
             </span>
@@ -650,7 +730,7 @@ function BumpCard({
               {offer.savings}
             </span>
           </div>
-          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-1 text-[11px] font-medium text-cyan-200">
+          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-1 text-[11px] font-medium text-cyan-200 sm:mt-3">
             {offer.footerNote}
           </div>
         </div>
