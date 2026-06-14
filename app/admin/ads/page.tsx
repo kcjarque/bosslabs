@@ -169,7 +169,7 @@ function AdsDashboard({
   }
   const c = campaign;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 sm:gap-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-4">
       <Stat label="Ad spend" value={peso(c.spend)} />
       <Stat label="Results" value={intf(c.results)} sub={`${adCount} ${activeOnly ? 'active ' : ''}ads`} />
       <Stat label="Cost / result" value={c.costPerResult == null ? '—' : peso(c.costPerResult)} />
@@ -193,9 +193,9 @@ function Stat({
   tone?: Tone;
 }) {
   return (
-    <div className="card">
+    <div className="card min-w-0">
       <div
-        className={`text-base font-semibold leading-tight tracking-tight tabular-nums sm:text-2xl ${
+        className={`truncate text-base font-semibold leading-tight tracking-tight tabular-nums sm:text-xl ${
           tone ? toneCls[tone] : 'text-slate-900'
         }`}
       >
