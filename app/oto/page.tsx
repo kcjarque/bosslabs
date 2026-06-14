@@ -1,10 +1,11 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OTOActions } from '@/components/OTOActions';
 import { PurchasePixel } from '@/components/PurchasePixel';
-import { OFFER, formatPHP } from '@/lib/config';
+import { OFFER } from '@/lib/config';
 import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 
 // Xendit's successRedirectUrl points here, not /thank-you — so /oto is the
@@ -115,14 +116,50 @@ function LastChance({ orderId }: { orderId: string }) {
             before your webinar.
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Operators who walk in with a{' '}
-            <span className="text-white">{OFFER.oto.name}</span>{' '}
-            ship their first app <span className="text-white">3× faster</span> on average.
-            This is the only page where you can add it for{' '}
+            Add the <span className="text-white">{OFFER.oto.name}</span> and walk in with
+            every past build recorded end-to-end, the full tutorial library, and the Hub —
+            the exact assets our operators use to ship{' '}
+            <span className="text-white">3× faster</span>. Only on this page:{' '}
             <span className="text-white">{OFFER.oto.label}</span>{' '}
-            <span className="text-ink-300 line-through">{OFFER.oto.crossed}</span>.
-            After this page, the price goes back up.
+            <span className="text-ink-300 line-through">{OFFER.oto.totalValue}</span>.
           </p>
+        </div>
+
+        {/* Proof gallery — real sessions + the Hub (what's inside the Vault) */}
+        <div className="mx-auto mt-10 max-w-4xl">
+          <div className="mb-3 text-center text-[11px] uppercase tracking-[0.22em] text-cyan-400">
+            Real sessions + the Hub · this is what&rsquo;s inside
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {[
+              { src: '/OTO/session-build.png', cap: 'Apps built live, end-to-end' },
+              { src: '/OTO/session-group.png', cap: 'Live group build calls' },
+              { src: '/OTO/hub.png', cap: 'Inside the BossLabs Hub' },
+              { src: '/OTO/session-1on1.png', cap: '1:1 founder sessions' },
+            ].map((g) => (
+              <figure
+                key={g.src}
+                className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0C12]"
+              >
+                <div className="relative aspect-[16/9]">
+                  <Image
+                    src={g.src}
+                    alt={g.cap}
+                    fill
+                    sizes="(max-width: 768px) 50vw, 380px"
+                    className="object-cover object-top"
+                  />
+                  <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/25 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur">
+                    <span className="h-1 w-1 animate-pulse rounded-full bg-emerald-400" />
+                    Real
+                  </span>
+                </div>
+                <figcaption className="px-3 py-2 text-[11px] text-ink-200 sm:text-[12px]">
+                  {g.cap}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
         </div>
 
         <div className="mx-auto mt-10 max-w-3xl">
@@ -135,16 +172,30 @@ function LastChance({ orderId }: { orderId: string }) {
               {OFFER.oto.promise}
             </p>
 
-            <ul className="mt-7 space-y-3">
-              {OFFER.oto.inclusions.map((line) => (
-                <li key={line} className="flex items-start gap-3 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[2px] flex-none text-cyan-400">
-                    <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span>{line}</span>
-                </li>
+            {/* Value stack — each asset + its value, summing to ₱9,997 */}
+            <div className="mt-7 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.015]">
+              {OFFER.oto.valueStack.map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="flex items-start gap-2.5 font-sans text-[13px] leading-snug text-ink-100 sm:text-[14px]">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[2px] flex-none text-cyan-400">
+                      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>{row.label}</span>
+                  </span>
+                  <span className="flex-none font-serif text-[14px] text-ink-300 sm:text-[15px]">
+                    {row.value}
+                  </span>
+                </div>
               ))}
-            </ul>
+              <div className="flex items-center justify-between gap-3 bg-white/[0.02] px-4 py-3">
+                <span className="font-sans text-[12px] uppercase tracking-[0.16em] text-ink-200">
+                  Total value
+                </span>
+                <span className="font-serif text-[16px] text-ink-300 line-through sm:text-[18px]">
+                  {OFFER.oto.totalValue}
+                </span>
+              </div>
+            </div>
 
             <div className="mt-8 flex flex-col items-start gap-5 border-t border-white/[0.07] pt-7 sm:mt-10 sm:pt-8 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -156,11 +207,11 @@ function LastChance({ orderId }: { orderId: string }) {
                     {OFFER.oto.label}
                   </div>
                   <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">
-                    {OFFER.oto.crossed}
+                    {OFFER.oto.totalValue}
                   </div>
                 </div>
                 <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-                  One-time · No subscription · {formatPHP(OFFER.oto.priceCentavos)}
+                  One-time · No subscription · Instant access
                 </div>
               </div>
               <OTOActions orderId={orderId} />

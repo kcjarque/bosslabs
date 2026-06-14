@@ -295,6 +295,14 @@ export const OFFER = {
       'The BossLabs Hub — exclusive prompts, skills & starter repos',
       '4-Step Vision-to-Reality App Blueprint',
     ],
+    // Value-stack breakdown for the OTO page — sums to the crossed ₱9,997.
+    valueStack: [
+      { label: 'All live build recordings — full end-to-end', value: '₱4,000' },
+      { label: 'BossLabs AI-Flix — tutorials, 1-year access', value: '₱3,000' },
+      { label: 'The BossLabs Hub — prompts, skills & repos', value: '₱2,000' },
+      { label: '4-Step Vision-to-Reality App Blueprint', value: '₱997' },
+    ],
+    totalValue: '₱9,997',
   },
   // Second order bump — the original 1:1 founder session, now ₱3,997.
   oto2: {
