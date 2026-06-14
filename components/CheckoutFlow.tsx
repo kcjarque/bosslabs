@@ -533,10 +533,10 @@ function BumpCard({
         />
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
-            {OFFER.oto.eyebrow} · Save 50%
+            {OFFER.oto.eyebrow} · 80% off · this page only
           </div>
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
-            YES — Add the {OFFER.oto.name}
+            YES — Add {OFFER.oto.name}
           </h3>
           <ul className="mt-3 space-y-1.5">
             {OFFER.oto.inclusions.map((line) => (
@@ -565,9 +565,12 @@ function BumpCard({
             <span className="font-serif text-base text-ink-300 line-through sm:text-lg">
               {OFFER.oto.crossed}
             </span>
-            <span className="text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-              this page only
+            <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300 sm:text-[11px]">
+              Save ₱8,000
             </span>
+          </div>
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-1 text-[11px] font-medium text-cyan-200">
+            ⚡ Get instant access upon payment
           </div>
         </div>
       </div>

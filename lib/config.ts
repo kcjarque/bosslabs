@@ -275,23 +275,22 @@ export const OFFER = {
     ],
   },
   oto: {
+    // SKU unchanged so payment/webhook/tracking keep matching — only the
+    // displayed offer changed (1:1 session → The Build Vault). Same ₱1,997.
     sku: 'BL_OTO_AUDIT',
-    name: '1on1 MVP Session',
+    name: 'The Build Vault',
     priceCentavos: 199700,
     currency: 'PHP',
     label: '₱1,997',
-    crossed: '₱3,997',
-    // Pre-webinar urgency framing — this is the "action taker" rate.
-    eyebrow: 'Action Taker Bonus',
+    crossed: '₱9,997',
+    eyebrow: 'Bonus',
     promise:
-      'A 1-hour exclusive 1:1 call with the founders — claimed before the webinar. We map your full AI integration roadmap, build out the vision for your app, and hand you the exact prompts to start coding, so you can get your project started in under 24 hours.',
+      'Everything we use to ship apps fast: every past live build recorded end-to-end, our growing step-by-step tutorial library, the prompts + skills + starter-repo hub, and the exact vision-to-app blueprint. Instant access — this page only.',
     inclusions: [
-      '1 Hour Exclusive 1:1 Call with the Founders',
-      'Your full AI Integration Roadmap',
-      'Build your vision for your app',
-      'Get you started on what to code',
-      'The Ultimate Prompt Build',
-      'Start your project in less than 24 hours',
+      'All live past build recordings — full end-to-end (EstateConnect, Sentinel, Bescost Ops…)',
+      'BossLabs AI-Flix — step-by-step tutorials, growing weekly · 1-year access',
+      'The BossLabs Hub — exclusive prompts, skills & starter repos',
+      '4-Step Vision-to-Reality App Blueprint',
     ],
   },
 };

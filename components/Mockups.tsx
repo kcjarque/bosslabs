@@ -210,16 +210,15 @@ export function AppsStack() {
     <div className="relative h-full w-full">
       <div className="absolute -inset-10 rounded-[40px] bg-cyan-500/5 blur-3xl" aria-hidden />
 
-      <div className="relative space-y-5 py-6 sm:py-10">
-        {STUDENT_BUILDS.map((b, i) => (
+      {/* Old card style (image + footer), but ALIGNED — no rotation/tilt. */}
+      <div className="relative space-y-5 py-4 sm:py-6">
+        {STUDENT_BUILDS.map((b) => (
           <a
             key={b.name}
             href={b.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`group block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card transition hover:border-cyan-500/40 ${
-              i % 2 === 0 ? 'rotate-[-2deg]' : 'rotate-[2deg]'
-            }`}
+            className="group block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900 shadow-card transition hover:-translate-y-0.5 hover:border-cyan-500/40"
           >
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -229,7 +228,8 @@ export function AppsStack() {
                 className="aspect-[16/10] w-full object-cover object-top"
                 loading="lazy"
               />
-              <span className="absolute right-3 top-3 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-300 sm:text-[10px]">
+              <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-300 sm:text-[10px]">
+                <span className="h-1 w-1 animate-pulse rounded-full bg-emerald-400" />
                 Live
               </span>
             </div>

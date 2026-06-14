@@ -1723,6 +1723,21 @@ export async function purgeIdleRecordings(
   return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0 };
 }
 
+/** Time-based retention: delete non-purchase recordings older than `maxAgeDays`
+ *  (paid/attended customers' replays are always kept). Caps total storage so it
+ *  plateaus instead of growing forever. Wraps purge_old_recordings. Best-effort. */
+export async function purgeOldRecordings(
+  maxAgeDays = 5,
+): Promise<{ sessions: number; bytes: number }> {
+  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0 };
+  const { data, error } = await getSupabase().rpc('purge_old_recordings', {
+    max_age_days: maxAgeDays,
+  });
+  if (error) return { sessions: 0, bytes: 0 };
+  const d = (data ?? {}) as { sessions?: number; bytes?: number };
+  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0 };
+}
+
 export type SessionCustomer = {
   signupId: string;
   name: string;

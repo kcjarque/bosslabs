@@ -11,7 +11,12 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getSignups, countPageViews, purgeIdleRecordings } from '@/lib/db';
+import {
+  getSignups,
+  countPageViews,
+  purgeIdleRecordings,
+  purgeOldRecordings,
+} from '@/lib/db';
 import { sendTelegram } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
@@ -120,15 +125,17 @@ export async function GET(req: Request) {
 
   const result = await sendTelegram(lines.join('\n'));
 
-  // Daily storage hygiene — delete idle, non-purchase recordings (tabs left
-  // open). Light now that the recorder caps each page at 12 min. Best-effort.
+  // Daily storage hygiene — delete idle non-purchase recordings (tabs left
+  // open) AND enforce a 5-day retention on non-purchase recordings so storage
+  // plateaus instead of growing. Paid customers' replays are always kept.
   const purged = await purgeIdleRecordings(10).catch(() => ({ sessions: 0, bytes: 0 }));
+  const purgedOld = await purgeOldRecordings(5).catch(() => ({ sessions: 0, bytes: 0 }));
 
   return NextResponse.json({
     ok: true,
     sent: result.ok,
     date: dateStr,
     stats: { newCheckouts, freeRegistrations, paidCount, cohortPaid, revenue, abandoned },
-    recordingsPurged: purged,
+    recordingsPurged: { idle: purged, old: purgedOld },
   });
 }

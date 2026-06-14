@@ -95,6 +95,7 @@ function bucketDaily(
 const DASH_RANGES = [
   { key: 'all', label: 'All time' },
   { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
   { key: '7d', label: '7 days' },
   { key: '30d', label: '30 days' },
   { key: 'mtd', label: 'This month' },
@@ -113,6 +114,8 @@ function resolveDashRange(dr?: string, from?: string, to?: string): DashRange {
   switch (dr) {
     case 'today':
       return { key: 'today', label: 'today', startMs: midnight, endMs: now };
+    case 'yesterday':
+      return { key: 'yesterday', label: 'yesterday', startMs: midnight - 86400_000, endMs: midnight };
     case '7d':
       return { key: '7d', label: 'the last 7 days', startMs: now - 7 * 86400_000, endMs: now };
     case '30d':

@@ -25,7 +25,11 @@ import { usePathname } from 'next/navigation';
  */
 
 const SESSION_KEY = 'bl_session_id';
-const RECORDED_PAGES = ['/checkout', '/oto', '/'];
+// Record ONLY the buyer-intent pages. Homepage-only bounces were the bulk of
+// storage (~500MB/day) for little value — a visitor who reaches /checkout or
+// /oto still gets a full replay of the part that matters; pure homepage
+// browsers are no longer recorded at all.
+const RECORDED_PAGES = ['/checkout', '/oto'];
 const ENDPOINT = '/api/recordings';
 const FLUSH_INTERVAL_MS = 30_000;
 // Hard cap per page: a tab left open keeps the live countdown mutating the DOM,
