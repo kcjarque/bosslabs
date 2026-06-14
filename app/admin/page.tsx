@@ -1084,9 +1084,11 @@ function DashboardDateFilter({ activeKey }: { activeKey: string }) {
             key={r.key}
             href={`/admin?dr=${r.key}`}
             scroll={false}
+            // inline white wins over admin.css `.admin-shell a { color: inherit }`.
+            style={active ? { color: '#fff' } : undefined}
             className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
               active
-                ? 'bg-slate-900 text-white shadow-sm'
+                ? 'bg-slate-900 shadow-sm'
                 : 'text-slate-600 hover:bg-white hover:text-slate-900'
             }`}
           >

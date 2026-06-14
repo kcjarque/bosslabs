@@ -12,6 +12,8 @@
  * shows a connect-token prompt instead of erroring.
  */
 
+import { upsertAdSpendDay } from './db';
+
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
 const CAMPAIGN_ID = process.env.META_ADS_CAMPAIGN_ID || '120247301997590236';
 const CAMPAIGN_NAME = 'BOSSLABS AI | SALES';
@@ -207,5 +209,64 @@ export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsRe
       rangeLabel: range.label,
       error: String(err),
     };
+  }
+}
+
+/** YYYY-MM-DD in Manila for a ms timestamp. */
+function manilaDate(ms: number): string {
+  return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
+}
+
+/**
+ * Pull daily campaign spend for the last `daysBack` days THROUGH today and
+ * upsert into ad_spend_daily, OVERWRITING each day. Re-running corrects a
+ * partial day (today, or a yesterday that was synced before midnight) to the
+ * full day's total — that's why the Refresh button re-pulls a wide window.
+ * Shared by the nightly cron and the Refresh button. Best-effort.
+ */
+export async function syncAdSpendDaily(
+  daysBack = 3,
+): Promise<{ synced: string[]; error?: string }> {
+  const token = process.env.META_ADS_TOKEN;
+  if (!token) return { synced: [], error: 'META_ADS_TOKEN not configured' };
+
+  const now = Date.now();
+  const since = manilaDate(now - daysBack * 86400_000);
+  const until = manilaDate(now); // include today so partial days get refreshed
+  const url =
+    `https://graph.facebook.com/${GRAPH_VERSION}/${CAMPAIGN_ID}/insights` +
+    `?fields=spend,impressions,clicks,reach&level=campaign&time_increment=1` +
+    `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
+    `&access_token=${encodeURIComponent(token)}`;
+
+  const synced: string[] = [];
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = (await res.json()) as {
+      data?: Array<{
+        date_start?: string;
+        spend?: string;
+        impressions?: string;
+        clicks?: string;
+        reach?: string;
+      }>;
+      error?: { message?: string };
+    };
+    if (json.error) return { synced, error: json.error.message };
+    for (const row of json.data ?? []) {
+      if (!row.date_start) continue;
+      const ok = await upsertAdSpendDay({
+        date: row.date_start,
+        spendCentavos: Math.round(parseFloat(row.spend ?? '0') * 100),
+        impressions: parseInt(row.impressions ?? '0', 10) || 0,
+        clicks: parseInt(row.clicks ?? '0', 10) || 0,
+        reach: parseInt(row.reach ?? '0', 10) || 0,
+        campaignId: CAMPAIGN_ID,
+      });
+      if (ok) synced.push(row.date_start);
+    }
+    return { synced };
+  } catch (err) {
+    return { synced, error: String(err) };
   }
 }

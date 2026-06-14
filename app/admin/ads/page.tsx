@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
+import { RefreshButton } from './RefreshButton';
 import {
   getAdsReport,
   ADS_RANGES,
@@ -50,11 +51,24 @@ const cprTone = (n: number | null, benchmark: number | null): Tone => {
 export default async function AdsPage({
   searchParams,
 }: {
-  searchParams: { range?: string };
+  searchParams: { range?: string; active?: string };
 }) {
   requireAdmin();
   const rangeKey: AdsRangeKey = isRangeKey(searchParams?.range) ? searchParams.range : 'all';
+  const activeOnly = searchParams?.active === '1';
   const report = await getAdsReport(rangeKey);
+
+  // Active-only filters the table rows (the summary stays campaign-level).
+  const adsets = report.configured
+    ? activeOnly
+      ? report.adsets.filter((a) => a.active)
+      : report.adsets
+    : [];
+  const ads = report.configured
+    ? activeOnly
+      ? report.ads.filter((a) => a.active)
+      : report.ads
+    : [];
 
   return (
     <div className="space-y-6">
@@ -72,8 +86,8 @@ export default async function AdsPage({
         <ConnectTokenCard />
       ) : (
         <>
-          {/* Range filter */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Controls: period · active-only · refresh */}
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
               Period
             </span>
@@ -83,11 +97,13 @@ export default async function AdsPage({
                 return (
                   <Link
                     key={r.key}
-                    href={`/admin/ads?range=${r.key}`}
+                    href={`/admin/ads?range=${r.key}${activeOnly ? '&active=1' : ''}`}
                     scroll={false}
+                    // inline white wins over admin.css `.admin-shell a { color: inherit }`.
+                    style={active ? { color: '#fff' } : undefined}
                     className={`rounded-full px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
                       active
-                        ? 'bg-slate-900 text-white shadow-sm'
+                        ? 'bg-slate-900 shadow-sm'
                         : 'text-slate-600 hover:bg-white hover:text-slate-900'
                     }`}
                   >
@@ -96,9 +112,27 @@ export default async function AdsPage({
                 );
               })}
             </div>
-            <span className="ml-auto text-[11px] text-slate-400">
-              {report.rangeLabel} · live from Meta
-            </span>
+
+            {/* Active-only toggle */}
+            <Link
+              href={`/admin/ads?range=${rangeKey}${activeOnly ? '' : '&active=1'}`}
+              scroll={false}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition sm:text-xs ${
+                activeOnly
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${activeOnly ? 'bg-emerald-500' : 'bg-slate-400'}`}
+              />
+              Active only
+            </Link>
+
+            <div className="ml-auto flex items-center gap-3">
+              <span className="text-[11px] text-slate-400">{report.rangeLabel} · live from Meta</span>
+              <RefreshButton />
+            </div>
           </div>
 
           {report.error && (
@@ -107,13 +141,9 @@ export default async function AdsPage({
             </div>
           )}
 
-          <AdsDashboard campaign={report.campaign} adCount={report.ads.length} />
+          <AdsDashboard campaign={report.campaign} adCount={ads.length} activeOnly={activeOnly} />
 
-          <AdsTable
-            campaign={report.campaign}
-            adsets={report.adsets}
-            ads={report.ads}
-          />
+          <AdsTable campaign={report.campaign} adsets={adsets} ads={ads} />
         </>
       )}
     </div>
@@ -121,7 +151,15 @@ export default async function AdsPage({
 }
 
 /* ── summary dashboard (campaign totals) ─────────────────────────────────── */
-function AdsDashboard({ campaign, adCount }: { campaign: AdEntity | null; adCount: number }) {
+function AdsDashboard({
+  campaign,
+  adCount,
+  activeOnly,
+}: {
+  campaign: AdEntity | null;
+  adCount: number;
+  activeOnly: boolean;
+}) {
   if (!campaign) {
     return (
       <div className="card text-center text-sm text-slate-500">
@@ -133,7 +171,7 @@ function AdsDashboard({ campaign, adCount }: { campaign: AdEntity | null; adCoun
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 sm:gap-4">
       <Stat label="Ad spend" value={peso(c.spend)} />
-      <Stat label="Results" value={intf(c.results)} sub={`${adCount} ads`} />
+      <Stat label="Results" value={intf(c.results)} sub={`${adCount} ${activeOnly ? 'active ' : ''}ads`} />
       <Stat label="Cost / result" value={c.costPerResult == null ? '—' : peso(c.costPerResult)} />
       <Stat label="CTR (link)" value={pct(c.linkCtr)} />
       <Stat label="CPM" value={c.cpm == null ? '—' : peso(c.cpm)} />
