@@ -383,9 +383,16 @@ export default async function AdminDashboard({
   const chartStart = manilaDate(new Date(funnelSinceMs));
   const chartEnd = manilaDate(new Date(rangeEnd));
   const daily = bucketDaily(signups, chartStart, chartEnd, closerRecoveredIds);
+  // Wide windows (esp. "all time" = 365 days) start long before the first
+  // signup, squishing the real bars into an unhoverable sliver on the right.
+  // Drop the leading empty stretch so the bars are wide enough to read + hover.
+  const firstActiveIdx = daily.findIndex(
+    (d) => d.total > 0 || d.paid > 0 || d.recovered > 0,
+  );
+  const dailyVisible = firstActiveIdx > 0 ? daily.slice(firstActiveIdx) : daily;
   // Recovered stacks on top of the signups bar, so size the axis to the
   // tallest signups + recovered column (not just signups).
-  const dailyMax = Math.max(1, ...daily.map((d) => d.total + d.recovered));
+  const dailyMax = Math.max(1, ...dailyVisible.map((d) => d.total + d.recovered));
 
   // Channel mix on PAID signups (not stuck) — which method works best.
   const paidChannelMix = channelMix(paid);
@@ -827,7 +834,7 @@ export default async function AdminDashboard({
             </span>
           </div>
         </div>
-        <DailyChart data={daily} max={dailyMax} />
+        <DailyChart data={dailyVisible} max={dailyMax} />
       </div>
 
       {/* CHANNEL MIX + OTO ATTACH + TIME-TO-PAY */}
