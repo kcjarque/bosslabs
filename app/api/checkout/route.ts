@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         fbp?: string;
         fbc?: string;
         sourceUrl?: string;
+        sessionId?: string;
       };
     };
 
@@ -136,6 +137,8 @@ export async function POST(req: Request) {
       const baseMeta = {
         externalId: acceptedSlug,
         ...affiliateMeta,
+        // Session-replay id — links this signup to its recording.
+        ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
         demo: false as boolean,
         paymentMethodGroup: 'FREE',
         promoCode: promoApplied.code,
@@ -294,6 +297,8 @@ export async function POST(req: Request) {
     const sharedMetadata = {
       externalId,
       ...affiliateMeta,
+      // Session-replay id — links this signup to its recording.
+      ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
       demo: invoice.demo,
       paymentMethodGroup: group ?? 'ALL',
       ...(promoApplied

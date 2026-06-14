@@ -334,6 +334,17 @@ export default async function CustomerProfilePage({
               <EventPill name={eventName} />
             </>
           )}
+          {typeof meta.blSessionId === 'string' && meta.blSessionId && (
+            <>
+              <span className="text-slate-300">·</span>
+              <Link
+                href={`/admin/recordings/session/${encodeURIComponent(meta.blSessionId)}`}
+                className="inline-flex items-center gap-1 rounded-full bg-cyan-600 px-2.5 py-0.5 text-[12px] font-medium text-white hover:bg-cyan-700"
+              >
+                🎥 Watch session replay
+              </Link>
+            </>
+          )}
         </div>
       </header>
 

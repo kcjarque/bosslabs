@@ -50,6 +50,12 @@ export async function GET(req: Request) {
       : '₱0';
     const ageMin = Math.round((now - new Date(s.createdAt).getTime()) / 60000);
 
+    // Link straight to this person's session replay (captured at checkout).
+    const blSessionId = (s.metadata as { blSessionId?: string } | undefined)?.blSessionId;
+    const replayLine = blSessionId
+      ? `\n🎥 <a href="${(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bosslabs.live').replace(/\/$/, '')}/admin/recordings/session/${encodeURIComponent(blSessionId)}">Watch their session replay →</a>`
+      : '';
+
     // Send FIRST, mark notified only on success. If the send fails (e.g.
     // Telegram outage / the group migrated mid-run), we leave the marker
     // unset so the next cron run retries — no more silent permanent loss.
@@ -60,7 +66,8 @@ export async function GET(req: Request) {
       `${esc(s.email)}\n` +
       (s.phone ? `${esc(s.phone)}\n` : '') +
       `Amount: <b>${amt}</b>${s.bumped ? ' (with bump)' : ''}\n` +
-      `Stuck for ${ageMin} min`;
+      `Stuck for ${ageMin} min` +
+      replayLine;
     const res = await sendTelegram(msg);
     // Mirror to the abandoned-cart sales team chat (best-effort add-on; never
     // affects the main send or the notified marker).

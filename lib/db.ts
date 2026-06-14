@@ -1692,6 +1692,44 @@ export async function getRecordingsStorageBytes(): Promise<number> {
   return rows.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }
 
+export type SessionCustomer = {
+  signupId: string;
+  name: string;
+  email: string;
+  status: SignupStatus;
+};
+
+/** Map of recording session_id → the customer it belongs to, resolved from the
+ *  signup's metadata.blSessionId (captured at checkout). Lets the recordings
+ *  admin show WHO each anonymous session is. Empty for sessions with no signup
+ *  (never checked out, or recorded before session-capture shipped). */
+export async function getCustomersBySession(): Promise<Map<string, SessionCustomer>> {
+  const map = new Map<string, SessionCustomer>();
+  if (!isSupabaseConfigured()) return map;
+  const { data } = await getSupabase()
+    .from('signups')
+    .select('id, first_name, last_name, email, status, metadata')
+    .not('metadata->>blSessionId', 'is', null);
+  for (const s of (data ?? []) as Array<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    status: SignupStatus;
+    metadata: Record<string, unknown> | null;
+  }>) {
+    const sid = (s.metadata as { blSessionId?: string } | null)?.blSessionId;
+    if (!sid) continue;
+    map.set(sid, {
+      signupId: s.id,
+      name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
+      email: s.email ?? '',
+      status: s.status,
+    });
+  }
+  return map;
+}
+
 /* --------------------------------------------------------------------- */
 /* EMAIL SEQUENCE ENGINE                                                  */
 /* --------------------------------------------------------------------- */

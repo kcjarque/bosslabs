@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { getSettings, getRecordings, getRecordingsStorageBytes } from '@/lib/db';
+import {
+  getSettings,
+  getRecordings,
+  getRecordingsStorageBytes,
+  getCustomersBySession,
+} from '@/lib/db';
 import { RecordingsControls } from '@/components/RecordingsControls';
 import {
   FUNNEL_TABS,
@@ -44,10 +49,11 @@ export default async function RecordingsPage({
   const sp = await searchParams;
   const tab: FunnelTab = isFunnelTab(sp.tab) ? sp.tab : 'all';
 
-  const [settings, recordings, totalBytes] = await Promise.all([
+  const [settings, recordings, totalBytes, customers] = await Promise.all([
     getSettings(),
     getRecordings(),
     getRecordingsStorageBytes(),
+    getCustomersBySession(),
   ]);
 
   // Group chunks → one row per visitor session (a visit spans many pages +
@@ -151,9 +157,33 @@ export default async function RecordingsPage({
         </div>
       ) : (
         <div className="space-y-2">
-          {sessions.map((s) => (
+          {sessions.map((s) => {
+            const cust = customers.get(s.sessionId);
+            return (
             <div key={s.sessionId} className="card flex items-center justify-between gap-4">
               <div className="min-w-0">
+                {cust ? (
+                  <Link
+                    href={`/admin/customers/${cust.signupId}`}
+                    className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+                  >
+                    <span className="text-sm font-semibold text-slate-900 hover:underline">
+                      {cust.name}
+                    </span>
+                    <span className="text-[12px] text-slate-500">{cust.email}</span>
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        cust.status === 'paid' || cust.status === 'attended'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {cust.status}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="mb-1 text-[12px] text-slate-400">Anonymous visitor</div>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {s.pages.slice(0, 5).map((p, i) => (
                     <span key={`${p}-${i}`} className="flex items-center gap-1.5">
@@ -184,7 +214,8 @@ export default async function RecordingsPage({
                 Replay visit
               </Link>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -7,6 +7,17 @@ import { PaymentLogos } from './PaymentLogos';
 
 type PayMethod = 'GCASH' | 'CREDIT_CARD' | 'BANKS';
 
+/** The session-replay id (set by the recorder/pageview tracker). Captured at
+ *  checkout so the signup can be matched to its session recording. */
+function readSessionId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    return window.localStorage.getItem('bl_session_id') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 type AppliedPromo = {
   code: string;
   discountType: 'free' | 'percent' | 'fixed';
@@ -160,6 +171,7 @@ export function CheckoutFlow({
         fbp: fb.fbp,
         fbc: fb.fbc,
         sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+        sessionId: readSessionId(),
       },
     };
 
@@ -230,6 +242,7 @@ export function CheckoutFlow({
         fbp: fb.fbp,
         fbc: fb.fbc,
         sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+        sessionId: readSessionId(),
       },
     };
 
