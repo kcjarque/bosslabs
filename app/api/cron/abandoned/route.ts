@@ -56,7 +56,13 @@ export async function GET(req: Request) {
     const blSessionId = (s.metadata as { blSessionId?: string } | undefined)?.blSessionId;
     let replayLine = '';
     if (blSessionId && (await sessionHasRecording(blSessionId))) {
-      const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bosslabs.live').replace(/\/$/, '');
+      // Telegram strips <a> links pointing at localhost / non-https hosts, so
+      // never trust NEXT_PUBLIC_SITE_URL here (it's "http://localhost:3000" in
+      // some envs) — only use it when it's a real https URL, else the prod site.
+      let base = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+      if (!/^https:\/\//.test(base) || /localhost|127\.0\.0\.1/.test(base)) {
+        base = 'https://www.bosslabs.live';
+      }
       replayLine = `\n🎥 <a href="${base}/admin/recordings/session/${encodeURIComponent(blSessionId)}">Watch their session replay →</a>`;
     }
 
