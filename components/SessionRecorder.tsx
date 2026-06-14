@@ -28,6 +28,11 @@ const SESSION_KEY = 'bl_session_id';
 const RECORDED_PAGES = ['/checkout', '/oto', '/'];
 const ENDPOINT = '/api/recordings';
 const FLUSH_INTERVAL_MS = 30_000;
+// Hard cap per page: a tab left open keeps the live countdown mutating the DOM,
+// so rrweb re-snapshots every 30s and records forever — that's what produced a
+// 54-hour / 737-chunk session. Stop after 12 min; the useful part of a funnel
+// visit is the first few minutes anyway.
+const MAX_RECORD_MS = 12 * 60 * 1000;
 
 // rrweb event type constants (stable wire-format values).
 const EVENT_FULL_SNAPSHOT = 2;
@@ -62,6 +67,7 @@ export function SessionRecorder() {
 
     let cancelled = false;
     let flushTimer: ReturnType<typeof setInterval> | null = null;
+    let capTimer: ReturnType<typeof setTimeout> | null = null;
     let stopRecording: (() => void) | null = null;
     const sessionId = getSessionId();
     if (!sessionId) return;
@@ -181,6 +187,21 @@ export function SessionRecorder() {
         stopRecording = stop ?? null;
 
         flushTimer = setInterval(() => flush(false), FLUSH_INTERVAL_MS);
+        // Stop recording this page after the hard cap so a left-open tab can't
+        // bloat storage forever. Flush what we have, then halt rrweb.
+        capTimer = setTimeout(() => {
+          flush(false);
+          try {
+            stopRecording?.();
+          } catch {
+            /* ignore */
+          }
+          stopRecording = null;
+          if (flushTimer) {
+            clearInterval(flushTimer);
+            flushTimer = null;
+          }
+        }, MAX_RECORD_MS);
         window.addEventListener('beforeunload', onUnload);
         // pagehide is more reliable than beforeunload on mobile Safari.
         window.addEventListener('pagehide', onUnload);
@@ -196,6 +217,7 @@ export function SessionRecorder() {
     return () => {
       cancelled = true;
       if (flushTimer) clearInterval(flushTimer);
+      if (capTimer) clearTimeout(capTimer);
       window.removeEventListener('beforeunload', onUnload);
       window.removeEventListener('pagehide', onUnload);
       document.removeEventListener('visibilitychange', onHide);

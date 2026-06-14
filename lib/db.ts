@@ -1692,6 +1692,22 @@ export async function getRecordingsStorageBytes(): Promise<number> {
   return rows.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }
 
+/** Auto-delete idle/abandoned recordings — sessions that span more than
+ *  `maxMinutes` of wall-clock AND aren't linked to a paid customer (tabs left
+ *  open; pure storage waste). Wraps the purge_idle_recordings SQL function.
+ *  Best-effort — never throws into a cron. Returns sessions + bytes freed. */
+export async function purgeIdleRecordings(
+  maxMinutes = 10,
+): Promise<{ sessions: number; bytes: number }> {
+  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0 };
+  const { data, error } = await getSupabase().rpc('purge_idle_recordings', {
+    max_min: maxMinutes,
+  });
+  if (error) return { sessions: 0, bytes: 0 };
+  const d = (data ?? {}) as { sessions?: number; bytes?: number };
+  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0 };
+}
+
 export type SessionCustomer = {
   signupId: string;
   name: string;

@@ -11,7 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getSignups, countPageViews } from '@/lib/db';
+import { getSignups, countPageViews, purgeIdleRecordings } from '@/lib/db';
 import { sendTelegram } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
@@ -120,10 +120,15 @@ export async function GET(req: Request) {
 
   const result = await sendTelegram(lines.join('\n'));
 
+  // Daily storage hygiene — delete idle, non-purchase recordings (tabs left
+  // open). Light now that the recorder caps each page at 12 min. Best-effort.
+  const purged = await purgeIdleRecordings(10).catch(() => ({ sessions: 0, bytes: 0 }));
+
   return NextResponse.json({
     ok: true,
     sent: result.ok,
     date: dateStr,
     stats: { newCheckouts, freeRegistrations, paidCount, cohortPaid, revenue, abandoned },
+    recordingsPurged: purged,
   });
 }
