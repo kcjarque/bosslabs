@@ -9,3 +9,6 @@ next-env.d.ts
 /data/signups.json
 /data/settings.json
 .vercel
+
+# Supabase CLI local state
+supabase/.temp/
