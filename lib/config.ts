@@ -284,6 +284,9 @@ export const OFFER = {
     label: '₱1,997',
     crossed: '₱9,997',
     eyebrow: 'Bonus',
+    discountLabel: '80% off',
+    savings: 'Save ₱8,000',
+    footerNote: '⚡ Get instant access upon payment',
     promise:
       'Everything we use to ship apps fast: every past live build recorded end-to-end, our growing step-by-step tutorial library, the prompts + skills + starter-repo hub, and the exact vision-to-app blueprint. Instant access — this page only.',
     inclusions: [
@@ -291,6 +294,28 @@ export const OFFER = {
       'BossLabs AI-Flix — step-by-step tutorials, growing weekly · 1-year access',
       'The BossLabs Hub — exclusive prompts, skills & starter repos',
       '4-Step Vision-to-Reality App Blueprint',
+    ],
+  },
+  // Second order bump — the original 1:1 founder session, now ₱3,997.
+  oto2: {
+    sku: 'BL_OTO_1ON1',
+    name: '1:1 Build Session with Kyle & Mikey',
+    priceCentavos: 399700,
+    currency: 'PHP',
+    label: '₱3,997',
+    crossed: '₱7,997',
+    eyebrow: 'Action Taker Bonus',
+    discountLabel: '50% off',
+    savings: 'Save ₱4,000',
+    footerNote: '📅 Book your 1:1 right after you pay',
+    promise:
+      'A 1-hour exclusive 1:1 call with the founders — we map your full AI integration roadmap, build out your app vision, and hand you the exact prompts to start coding in under 24 hours.',
+    inclusions: [
+      '1-hour exclusive 1:1 call with Kyle & Mikey',
+      'Your full AI integration roadmap',
+      'We build out the vision for your app',
+      'The exact prompts to start coding',
+      'Get your project started in under 24 hours',
     ],
   },
 };

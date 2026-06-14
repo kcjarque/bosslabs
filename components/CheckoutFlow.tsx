@@ -36,7 +36,8 @@ export function CheckoutFlow({
   // button while the other two stay disabled (prevents double-submits).
   const [loading, setLoading] = useState<PayMethod | 'FREE' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [bump, setBump] = useState(false);
+  const [bump, setBump] = useState(false); // The AI Secrets Builder Vault (₱1,997)
+  const [bump2, setBump2] = useState(false); // 1:1 with Kyle & Mikey (₱3,997)
 
   // Promo state — the input value, the applied promo (when validation OK),
   // and the in-flight + error state for the Apply button. The applied
@@ -47,7 +48,10 @@ export function CheckoutFlow({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
 
-  const baseTotal = OFFER.main.priceCentavos + (bump ? OFFER.oto.priceCentavos : 0);
+  const baseTotal =
+    OFFER.main.priceCentavos +
+    (bump ? OFFER.oto.priceCentavos : 0) +
+    (bump2 ? OFFER.oto2.priceCentavos : 0);
   const total = appliedPromo ? appliedPromo.finalCentavos : baseTotal;
   const isFree = Boolean(appliedPromo?.isFree);
 
@@ -56,28 +60,32 @@ export function CheckoutFlow({
   // (not when un-checked — no AddToCart un-fire event exists). Also
   // re-validates any applied promo because the discount math depends on
   // the new total (e.g. a 20% code on the bumped order is bigger).
-  const handleBumpChange = (next: boolean) => {
+  const fireAddToCart = (offer: { priceCentavos: number; name: string; sku: string }) =>
+    trackPixelEvent('AddToCart', {
+      value: offer.priceCentavos / 100,
+      currency: 'PHP',
+      content_name: offer.name,
+      content_ids: [offer.sku],
+      content_type: 'product',
+    });
+
+  const handleBump1 = (next: boolean) => {
     setBump(next);
-    if (next) {
-      trackPixelEvent('AddToCart', {
-        value: OFFER.oto.priceCentavos / 100,
-        currency: 'PHP',
-        content_name: OFFER.oto.name,
-        content_ids: [OFFER.oto.sku],
-        content_type: 'product',
-      });
-    }
-    if (appliedPromo) {
-      void reapplyPromo(appliedPromo.code, next);
-    }
+    if (next) fireAddToCart(OFFER.oto);
+    if (appliedPromo) void reapplyPromo(appliedPromo.code, next, bump2);
+  };
+  const handleBump2 = (next: boolean) => {
+    setBump2(next);
+    if (next) fireAddToCart(OFFER.oto2);
+    if (appliedPromo) void reapplyPromo(appliedPromo.code, bump, next);
   };
 
-  async function reapplyPromo(code: string, bumpedNow: boolean) {
+  async function reapplyPromo(code: string, b1: boolean, b2: boolean) {
     try {
       const res = await fetch('/api/checkout/promo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, bump: bumpedNow }),
+        body: JSON.stringify({ code, bump: b1, bump2: b2 }),
       });
       const data = await res.json();
       if (data?.valid) setAppliedPromo(data as AppliedPromo);
@@ -96,7 +104,7 @@ export function CheckoutFlow({
       const res = await fetch('/api/checkout/promo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, bump }),
+        body: JSON.stringify({ code, bump, bump2 }),
       });
       const data = await res.json();
       if (!res.ok || !data?.valid) {
@@ -155,11 +163,17 @@ export function CheckoutFlow({
     const eventId = newEventId('ic');
     const fb = getFbCookies();
 
+    // Content id + item count reflecting whichever bumps are ticked.
+    const bumpSkus = [bump && OFFER.oto.sku, bump2 && OFFER.oto2.sku].filter(Boolean) as string[];
+    const contentId = [OFFER.main.sku, ...bumpSkus].join('+');
+    const numItems = 1 + bumpSkus.length;
+
     const payload = {
       name: String(fd.get('name') || '').trim(),
       email: String(fd.get('email') || '').trim(),
       mobile: String(fd.get('mobile') || '').trim(),
       bump,
+      bump2,
       paymentMethod: method,
       // Include the applied promo so the server can revalidate + redeem
       // atomically. Partial-discount path still routes through Xendit.
@@ -182,7 +196,7 @@ export function CheckoutFlow({
       value: totalPhp,
       currency: 'PHP',
       content_name: OFFER.main.name,
-      content_ids: [bump ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
+      content_ids: [contentId],
       payment_method: method, // GCASH / CREDIT_CARD / BANKS — custom param
     });
 
@@ -194,8 +208,8 @@ export function CheckoutFlow({
         value: totalPhp,
         currency: 'PHP',
         content_name: OFFER.main.name,
-        content_ids: [bump ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
-        num_items: bump ? 2 : 1,
+        content_ids: [contentId],
+        num_items: numItems,
       },
       eventId,
     );
@@ -236,6 +250,7 @@ export function CheckoutFlow({
       email: String(fd.get('email') || '').trim(),
       mobile: String(fd.get('mobile') || '').trim(),
       bump,
+      bump2,
       promoCode: appliedPromo.code,
       meta: {
         eventId,
@@ -308,8 +323,16 @@ export function CheckoutFlow({
           </div>
         </div>
 
-        {/* Order bump card */}
-        <BumpCard checked={bump} onChange={handleBumpChange} />
+        {/* Order bumps — two add-ons, consistent design */}
+        <div className="mt-6">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400/80 sm:text-[11px]">
+            Add to your order — limited-time
+          </div>
+          <div className="space-y-3">
+            <BumpCard offer={OFFER.oto} checked={bump} onChange={handleBump1} />
+            <BumpCard offer={OFFER.oto2} checked={bump2} onChange={handleBump2} />
+          </div>
+        </div>
 
         {/* Promo code row — small, lives between bump card and Pay buttons.
             Pressing Apply hits /api/checkout/promo for a preview; on a 100%
@@ -509,16 +532,27 @@ export function CheckoutFlow({
 }
 
 function BumpCard({
+  offer,
   checked,
   onChange,
 }: {
+  offer: {
+    name: string;
+    label: string;
+    crossed: string;
+    eyebrow: string;
+    discountLabel: string;
+    savings: string;
+    footerNote: string;
+    inclusions: string[];
+  };
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <label
       className={[
-        'mt-6 block cursor-pointer rounded-2xl border-2 p-5 transition sm:p-6',
+        'block cursor-pointer rounded-2xl border-2 p-5 transition sm:p-6',
         checked
           ? 'border-cyan-500/70 bg-cyan-500/[0.08] shadow-glow-sm'
           : 'border-cyan-500/30 bg-cyan-500/[0.03] hover:border-cyan-500/55',
@@ -533,13 +567,13 @@ function BumpCard({
         />
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-400 sm:text-[11px]">
-            {OFFER.oto.eyebrow} · 80% off · this page only
+            {offer.eyebrow} · {offer.discountLabel} · this page only
           </div>
           <h3 className="font-serif text-lg leading-snug text-white mt-2 sm:text-xl">
-            YES — Add {OFFER.oto.name}
+            YES — Add {offer.name}
           </h3>
           <ul className="mt-3 space-y-1.5">
-            {OFFER.oto.inclusions.map((line) => (
+            {offer.inclusions.map((line) => (
               <li
                 key={line}
                 className="flex items-start gap-2 font-sans text-[13px] leading-snug text-ink-100 sm:text-[14px]"
@@ -560,17 +594,17 @@ function BumpCard({
           </ul>
           <div className="mt-4 flex items-baseline gap-3">
             <span className="font-serif text-2xl text-cyan-400 sm:text-3xl">
-              {OFFER.oto.label}
+              {offer.label}
             </span>
             <span className="font-serif text-base text-ink-300 line-through sm:text-lg">
-              {OFFER.oto.crossed}
+              {offer.crossed}
             </span>
             <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300 sm:text-[11px]">
-              Save ₱8,000
+              {offer.savings}
             </span>
           </div>
           <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-1 text-[11px] font-medium text-cyan-200">
-            ⚡ Get instant access upon payment
+            {offer.footerNote}
           </div>
         </div>
       </div>

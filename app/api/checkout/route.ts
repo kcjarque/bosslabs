@@ -34,6 +34,7 @@ export async function POST(req: Request) {
       email?: string;
       mobile?: string;
       bump?: boolean;
+      bump2?: boolean;
       paymentMethod?: PaymentMethodGroup;
       promoCode?: string;
       meta?: {
@@ -60,10 +61,16 @@ export async function POST(req: Request) {
     // Keep the prefix in sync with backend/routes/public.js in orderko.
     const externalId = `BL-MAIN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const base = siteUrl(req);
-    const bumped = Boolean(body.bump);
+    // Two independent order bumps. `bumped` = took ANY bump (drives the column,
+    // Telegram label, and /oto redirect); the amount/description use each flag.
+    const bumpVault = Boolean(body.bump);
+    const bumpSession = Boolean(body.bump2);
+    const bumped = bumpVault || bumpSession;
 
     const baseAmountCentavos =
-      OFFER.main.priceCentavos + (bumped ? OFFER.oto.priceCentavos : 0);
+      OFFER.main.priceCentavos +
+      (bumpVault ? OFFER.oto.priceCentavos : 0) +
+      (bumpSession ? OFFER.oto2.priceCentavos : 0);
 
     // Promo path: validate first (preview), then atomically redeem. If the
     // atomic redeem fails (race lost or just turned exhausted between the
@@ -97,9 +104,13 @@ export async function POST(req: Request) {
       amountCentavos = Math.max(0, baseAmountCentavos - previewDiscount);
     }
 
-    const description = bumped
-      ? `${OFFER.main.name} + ${OFFER.oto.name}`
-      : OFFER.main.name;
+    const description = [
+      OFFER.main.name,
+      bumpVault ? OFFER.oto.name : null,
+      bumpSession ? OFFER.oto2.name : null,
+    ]
+      .filter(Boolean)
+      .join(' + ');
 
     const [firstName, ...rest] = body.name.trim().split(' ');
     // Capture Meta matching data here so the webhook (which has none of
