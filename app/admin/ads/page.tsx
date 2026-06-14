@@ -195,7 +195,7 @@ function Stat({
   return (
     <div className="card">
       <div
-        className={`text-xl font-semibold tracking-tight sm:text-2xl ${
+        className={`text-base font-semibold leading-tight tracking-tight tabular-nums sm:text-2xl ${
           tone ? toneCls[tone] : 'text-slate-900'
         }`}
       >
