@@ -293,19 +293,36 @@ export function CheckoutFlow({
     payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   return (
-    <>
-      <SeatHoldTimer />
-      <form
-        onSubmit={(e) => e.preventDefault()}
-        className="grid gap-10 pb-28 lg:grid-cols-[1.1fr_1fr] lg:pb-0"
-      >
-      {/* Left — fields + bump + CTA */}
+    <form
+      onSubmit={(e) => e.preventDefault()}
+      className="grid gap-10 pb-28 lg:grid-cols-[1.1fr_1fr] lg:pb-0"
+    >
+      {/* Left — event details + fields + bump */}
       <div>
         <div className="eyebrow">Step 1 of 2 · Secure checkout</div>
-        <h1 className="h-section mt-3">Reserve your seat.</h1>
+        <h1 className="h-section mt-3">
+          Build Your System <span className="accent-italic">Live Workshop</span>
+        </h1>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex items-baseline gap-2">
+            <span className="font-serif text-3xl tracking-tight text-white">{OFFER.main.label}</span>
+            <span className="font-serif text-base text-ink-300 line-through">{OFFER.main.crossed}</span>
+          </div>
+          {webinar?.date && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-1.5 text-[12px] font-medium text-cyan-100 sm:text-[13px]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-none text-cyan-400" aria-hidden="true">
+                <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              {webinar.date} · {webinar.time} {webinar.timezone}
+            </span>
+          )}
+        </div>
         <p className="mt-3 max-w-md text-sm text-ink-100">
-          Pay once. Get the Zoom link, the replay, and the Free Tools stack — instantly.
+          Pay once. Get the Zoom link. See you Live!
         </p>
+
+        <SeatHoldTimer />
 
         <div className="mt-8 space-y-5">
           <div>
@@ -579,8 +596,7 @@ export function CheckoutFlow({
           </button>
         </div>
       </div>
-      </form>
-    </>
+    </form>
   );
 }
 
@@ -620,7 +636,7 @@ function SeatHoldTimer() {
   return (
     <div
       className={[
-        'mb-7 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:px-5',
+        'mt-6 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:px-5',
         urgent ? 'border-danger-500/50 bg-danger-900/30' : 'border-amber-400/40 bg-amber-400/[0.06]',
       ].join(' ')}
     >
