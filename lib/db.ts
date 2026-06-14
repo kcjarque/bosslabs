@@ -1747,6 +1747,71 @@ export async function getCustomersBySession(): Promise<Map<string, SessionCustom
 }
 
 /* --------------------------------------------------------------------- */
+/* AD SPEND (Meta) — daily spend points for the budget + ROAS metric.    */
+/* --------------------------------------------------------------------- */
+
+export type AdSpendDay = {
+  /** YYYY-MM-DD (Asia/Manila, matched to the ad account's tz). */
+  date: string;
+  /** Spend in centavos (PHP × 100) so it sums cleanly against revenue. */
+  spendCentavos: number;
+  impressions: number;
+  clicks: number;
+  reach: number;
+};
+
+/** All recorded daily ad-spend rows, ascending by date. Empty in demo mode
+ *  (no Supabase) — the dashboard then renders the ROAS card as "no data yet". */
+export async function getAdSpendByDay(): Promise<AdSpendDay[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('ad_spend_daily')
+    .select('date, spend_centavos, impressions, clicks, reach')
+    .order('date', { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as Array<{
+    date: string;
+    spend_centavos: number | null;
+    impressions: number | null;
+    clicks: number | null;
+    reach: number | null;
+  }>).map((r) => ({
+    date: r.date,
+    spendCentavos: r.spend_centavos ?? 0,
+    impressions: r.impressions ?? 0,
+    clicks: r.clicks ?? 0,
+    reach: r.reach ?? 0,
+  }));
+}
+
+/** Upsert one day's ad spend (used by the daily ads-sync cron). Idempotent on
+ *  date — re-running the same day overwrites. Best-effort: returns false on any
+ *  error so a cron can log + carry on. */
+export async function upsertAdSpendDay(row: {
+  date: string;
+  spendCentavos: number;
+  impressions?: number;
+  clicks?: number;
+  reach?: number;
+  campaignId?: string;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  const { error } = await getSupabase().from('ad_spend_daily').upsert(
+    {
+      date: row.date,
+      spend_centavos: Math.round(row.spendCentavos),
+      impressions: row.impressions ?? 0,
+      clicks: row.clicks ?? 0,
+      reach: row.reach ?? 0,
+      campaign_id: row.campaignId ?? null,
+      synced_at: new Date().toISOString(),
+    },
+    { onConflict: 'date' },
+  );
+  return !error;
+}
+
+/* --------------------------------------------------------------------- */
 /* EMAIL SEQUENCE ENGINE                                                  */
 /* --------------------------------------------------------------------- */
 

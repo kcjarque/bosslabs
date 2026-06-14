@@ -6,6 +6,7 @@ import {
   getSignups,
   getVisitBuckets,
   getEmailStats,
+  getAdSpendByDay,
   type Signup,
 } from '@/lib/db';
 import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
@@ -198,6 +199,7 @@ export default async function AdminDashboard({
     visitsBucketsPrev,
     closerRecoveredIds,
     emailStats,
+    adSpendByDay,
   ] = await Promise.all([
     getSignups(),
     getSettings(),
@@ -217,6 +219,8 @@ export default async function AdminDashboard({
     getCloserRecoveredSignupIds(),
     // Email performance (deliverability / bounce / open / click / recovery).
     getEmailStats(),
+    // Daily Meta ad spend (backfilled + synced 12:01am) for the ROAS metric.
+    getAdSpendByDay(),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -305,6 +309,51 @@ export default async function AdminDashboard({
   const sRecoveredRevenueCentavos = sRecoveredList.reduce((sum, s) => sum + revOf(s), 0);
   const sDirectRevenueCentavos = sDirectList.reduce((sum, s) => sum + revOf(s), 0);
   const sRevenueByPaymentCentavos = sDirectRevenueCentavos + sRecoveredRevenueCentavos;
+
+  // ── Ad spend & ROAS (period-scoped). Spend is keyed by calendar day
+  // (Manila); revenue is the cash received in the period. ROAS = front-end
+  // revenue ÷ spend — back-end webinar sales are upside on top.
+  const adDayInPeriod = (d: { date: string }) => {
+    if (!dashRange) return true; // all time
+    const dayStart = new Date(d.date + 'T00:00:00+08:00').getTime();
+    const dayEnd = dayStart + 86400_000;
+    return dayEnd > dashRange.startMs && dayStart <= rangeEnd;
+  };
+  const adSpendInPeriodCentavos = adSpendByDay.reduce(
+    (sum, d) => (adDayInPeriod(d) ? sum + d.spendCentavos : sum),
+    0,
+  );
+  const adPaidCount = sPaidByPaymentList.length;
+  const adRoas =
+    adSpendInPeriodCentavos > 0 ? sRevenueByPaymentCentavos / adSpendInPeriodCentavos : null;
+  const adCostPerSaleCentavos =
+    adPaidCount > 0 ? Math.round(adSpendInPeriodCentavos / adPaidCount) : 0;
+  const adNetCentavos = sRevenueByPaymentCentavos - adSpendInPeriodCentavos;
+  // Revenue per payment-day (Manila), for the daily spend-vs-revenue table.
+  const revenueByDayCentavos = new Map<string, number>();
+  for (const s of paid) {
+    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string; confirmationSent?: string } | undefined) ?? {};
+    const payDay = manilaDate(new Date(meta.confirmationSent ?? s.createdAt));
+    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+    revenueByDayCentavos.set(
+      payDay,
+      (revenueByDayCentavos.get(payDay) ?? 0) + (s.amountCentavos ?? 0) + otoExtra,
+    );
+  }
+  // Daily rows for the table — period days (or all of them for all-time),
+  // newest first, capped so the table stays compact.
+  const adDailyRows = [...adSpendByDay.filter(adDayInPeriod)]
+    .reverse()
+    .slice(0, 31)
+    .map((d) => {
+      const rev = revenueByDayCentavos.get(d.date) ?? 0;
+      return {
+        date: d.date,
+        spendCentavos: d.spendCentavos,
+        revCentavos: rev,
+        roas: d.spendCentavos > 0 ? rev / d.spendCentavos : null,
+      };
+    });
 
   // Last-N-hours splits — broken out by paid vs registered for actual signal.
   const last24Paid = within(24, (s) => s.status === 'paid');
@@ -478,6 +527,96 @@ export default async function AdminDashboard({
           sub={`${last7dPaid} paid · ${last7dReg} stuck`}
         />
       </div>
+
+      {/* AD SPEND & ROAS — Meta spend vs actual paid revenue, period-scoped */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">Ad spend &amp; ROAS</h2>
+          <span className="text-[11px] text-slate-400">
+            BOSSLABS AI | SALES · {periodLabel} · Meta, synced 12:01am
+          </span>
+        </div>
+        <p className="mt-1 text-[12px] text-slate-500">
+          Spend vs cash received in the period. ROAS = revenue ÷ spend on the ₱999
+          front-end — any high-ticket closed at the webinar is upside on top.
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <StatCard
+            label="Ad spend"
+            value={formatPHP(adSpendInPeriodCentavos)}
+            sub={`${periodLabel} · Meta`}
+          />
+          <StatCard
+            label="ROAS"
+            value={adRoas == null ? '—' : `${adRoas.toFixed(2)}×`}
+            sub={`${formatPHP(sRevenueByPaymentCentavos)} revenue`}
+            tone={adRoas == null ? undefined : adRoas >= 1 ? 'green' : 'amber'}
+          />
+          <StatCard
+            label="Cost / sale"
+            value={
+              adPaidCount > 0 && adSpendInPeriodCentavos > 0
+                ? formatPHP(adCostPerSaleCentavos)
+                : '—'
+            }
+            sub={`${adPaidCount} paid in period`}
+          />
+          <StatCard
+            label="Net (rev − spend)"
+            value={formatPHP(adNetCentavos)}
+            sub="front-end only"
+            tone={adNetCentavos >= 0 ? 'green' : 'amber'}
+          />
+        </div>
+
+        {adDailyRows.length > 0 ? (
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-100">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50/60 text-[11px] uppercase tracking-[0.06em] text-slate-500">
+                  <th className="px-3 py-2 text-left font-medium">Date</th>
+                  <th className="px-3 py-2 text-right font-medium">Spend</th>
+                  <th className="px-3 py-2 text-right font-medium">Revenue</th>
+                  <th className="px-3 py-2 text-right font-medium">ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adDailyRows.map((r) => (
+                  <tr key={r.date} className="border-t border-slate-100">
+                    <td className="px-3 py-1.5 text-slate-700">
+                      {new Date(r.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
+                        month: 'short',
+                        day: 'numeric',
+                        timeZone: 'Asia/Manila',
+                      })}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                      {formatPHP(r.spendCentavos)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-900">
+                      {formatPHP(r.revCentavos)}
+                    </td>
+                    <td
+                      className={`px-3 py-1.5 text-right font-medium tabular-nums ${
+                        r.roas == null
+                          ? 'text-slate-300'
+                          : r.roas >= 1
+                            ? 'text-emerald-600'
+                            : 'text-amber-600'
+                      }`}
+                    >
+                      {r.roas == null ? '—' : `${r.roas.toFixed(2)}×`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-5 text-[13px] text-slate-500">No ad-spend data in this period.</p>
+        )}
+      </section>
 
       {/* FUNNEL — Visits → Checkout Started → Paid, range-filterable */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">

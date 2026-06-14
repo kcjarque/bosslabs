@@ -1,0 +1,211 @@
+/**
+ * Meta Ads — live insights for the BOSSLABS AI | SALES campaign.
+ *
+ * Server-only. Fetches the campaign + its ad sets + its ads from the Graph API
+ * (one call per level, entity attributes + nested insights via field expansion)
+ * and normalises every metric the dashboard/table shows. No data is stored —
+ * the page reads this live, so it's always current. Matches how BrandHub pulls
+ * Meta, minus all the AI/advisor/recommendation logic.
+ *
+ * Needs META_ADS_TOKEN (System-User token, ads_read on the SSA Back up 2
+ * account). Without it, getAdsReport returns { configured: false } and the page
+ * shows a connect-token prompt instead of erroring.
+ */
+
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
+const CAMPAIGN_ID = process.env.META_ADS_CAMPAIGN_ID || '120247301997590236';
+const CAMPAIGN_NAME = 'BOSSLABS AI | SALES';
+
+/** Date windows the page can request → Graph date_preset. */
+export const ADS_RANGES = [
+  { key: 'today', label: 'Today', preset: 'today' },
+  { key: '7d', label: '7 days', preset: 'last_7d' },
+  { key: '30d', label: '30 days', preset: 'last_30d' },
+  { key: '90d', label: '90 days', preset: 'last_90d' },
+  { key: 'all', label: 'All time', preset: 'maximum' },
+] as const;
+
+export type AdsRangeKey = (typeof ADS_RANGES)[number]['key'];
+
+export type AdMetrics = {
+  spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  results: number;
+  costPerResult: number | null;
+  linkCtr: number | null; // % (inline link-click CTR)
+  ctr: number | null; // % (all clicks)
+  cpm: number | null;
+  frequency: number | null;
+  roas: number | null;
+};
+
+export type AdEntity = AdMetrics & {
+  level: 'campaign' | 'adset' | 'ad';
+  id: string;
+  name: string;
+  status: string; // raw effective_status
+  active: boolean;
+  parentId?: string; // ad → adset id
+};
+
+export type AdsReport =
+  | { configured: false }
+  | {
+      configured: true;
+      campaign: AdEntity | null;
+      adsets: AdEntity[];
+      ads: AdEntity[];
+      rangeLabel: string;
+      error?: string;
+    };
+
+/* ── parse helpers (Graph shapes are messy: strings, arrays, nested) ──────── */
+
+function num(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string') {
+    const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+/** results / cost_per_result arrive as [{indicator, values:[{value}]}] (raw) or
+ *  {value:[...]} (some clients). Missing `values` = zero results that window. */
+function nestedMetric(field: unknown): number | null {
+  if (field == null) return null;
+  let arr: unknown = field;
+  if (!Array.isArray(arr) && typeof arr === 'object' && arr && 'value' in arr) {
+    arr = (arr as { value: unknown }).value;
+  }
+  if (Array.isArray(arr)) {
+    const v = (arr[0] as { values?: Array<{ value?: unknown }> } | undefined)?.values?.[0]?.value;
+    return v == null ? null : num(v);
+  }
+  return num(field);
+}
+
+/** purchase_roas: [{action_type, value}] (raw) | "Not available" | number. */
+function roasVal(field: unknown): number | null {
+  if (field == null) return null;
+  if (Array.isArray(field)) {
+    const v = (field[0] as { value?: unknown } | undefined)?.value;
+    return v == null ? null : num(v);
+  }
+  if (typeof field === 'string') {
+    if (/not available/i.test(field)) return null;
+    const n = parseFloat(field);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof field === 'number') return field;
+  return null;
+}
+
+type RawInsights = { data?: Array<Record<string, unknown>> };
+
+function metricsFrom(insights: RawInsights | undefined): AdMetrics {
+  const d = insights?.data?.[0] ?? {};
+  return {
+    spend: num(d.spend),
+    impressions: num(d.impressions),
+    reach: num(d.reach),
+    clicks: num(d.clicks),
+    results: nestedMetric(d.results) ?? 0,
+    costPerResult: nestedMetric(d.cost_per_result),
+    linkCtr: d.inline_link_click_ctr != null ? num(d.inline_link_click_ctr) : null,
+    ctr: d.ctr != null ? num(d.ctr) : null,
+    cpm: d.cpm != null ? num(d.cpm) : null,
+    frequency: d.frequency != null ? num(d.frequency) : null,
+    roas: roasVal(d.purchase_roas),
+  };
+}
+
+const INSIGHT_FIELDS =
+  'spend,impressions,reach,clicks,ctr,cpm,frequency,inline_link_click_ctr,results,cost_per_result,purchase_roas';
+
+async function graph(path: string, fields: string): Promise<unknown> {
+  const token = process.env.META_ADS_TOKEN as string;
+  const url =
+    `https://graph.facebook.com/${GRAPH_VERSION}/${path}` +
+    `?fields=${encodeURIComponent(fields)}&limit=500&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  return res.json();
+}
+
+/**
+ * Live report for the BOSSLABS campaign at the given window. Best-effort: any
+ * Graph failure returns { configured:true, error } with whatever resolved, so
+ * the page degrades instead of 500-ing.
+ */
+export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsReport> {
+  if (!process.env.META_ADS_TOKEN) return { configured: false };
+
+  const range = ADS_RANGES.find((r) => r.key === rangeKey) ?? ADS_RANGES[ADS_RANGES.length - 1];
+  const win = `insights.date_preset(${range.preset}){${INSIGHT_FIELDS}}`;
+
+  try {
+    const [campRaw, adsetsRaw, adsRaw] = await Promise.all([
+      graph(CAMPAIGN_ID, `id,name,effective_status,${win}`),
+      graph(`${CAMPAIGN_ID}/adsets`, `id,name,effective_status,${win}`),
+      graph(`${CAMPAIGN_ID}/ads`, `id,name,effective_status,adset{id,name},${win}`),
+    ]);
+
+    const firstError =
+      (campRaw as { error?: { message?: string } })?.error?.message ||
+      (adsetsRaw as { error?: { message?: string } })?.error?.message ||
+      (adsRaw as { error?: { message?: string } })?.error?.message;
+
+    const c = campRaw as {
+      id?: string;
+      name?: string;
+      effective_status?: string;
+      insights?: RawInsights;
+    };
+    const campaign: AdEntity | null = c?.id
+      ? {
+          level: 'campaign',
+          id: c.id,
+          name: c.name || CAMPAIGN_NAME,
+          status: c.effective_status || '',
+          active: (c.effective_status || '').toUpperCase() === 'ACTIVE',
+          ...metricsFrom(c.insights),
+        }
+      : null;
+
+    const adsets: AdEntity[] = (
+      (adsetsRaw as { data?: Array<Record<string, unknown>> })?.data ?? []
+    ).map((a) => ({
+      level: 'adset' as const,
+      id: String(a.id),
+      name: String(a.name ?? ''),
+      status: String(a.effective_status ?? ''),
+      active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+      ...metricsFrom(a.insights as RawInsights | undefined),
+    }));
+
+    const ads: AdEntity[] = (
+      (adsRaw as { data?: Array<Record<string, unknown>> })?.data ?? []
+    ).map((a) => ({
+      level: 'ad' as const,
+      id: String(a.id),
+      name: String(a.name ?? ''),
+      status: String(a.effective_status ?? ''),
+      active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+      parentId: (a.adset as { id?: string } | undefined)?.id,
+      ...metricsFrom(a.insights as RawInsights | undefined),
+    }));
+
+    return { configured: true, campaign, adsets, ads, rangeLabel: range.label, error: firstError };
+  } catch (err) {
+    return {
+      configured: true,
+      campaign: null,
+      adsets: [],
+      ads: [],
+      rangeLabel: range.label,
+      error: String(err),
+    };
+  }
+}

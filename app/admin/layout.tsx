@@ -21,7 +21,10 @@ export const metadata = { title: 'Admin · BOSSLABS AI' };
 const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[] = [
   {
     heading: 'Overview',
-    items: [{ href: '/admin', label: 'Dashboard' }],
+    items: [
+      { href: '/admin', label: 'Dashboard' },
+      { href: '/admin/ads', label: 'Ads' },
+    ],
   },
   {
     heading: 'Audience',
