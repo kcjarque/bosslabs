@@ -460,25 +460,38 @@ export function CheckoutFlow({
             ))}
           </ul>
 
-          {/* Bump line — appears when ticked */}
-          {bump && (
-            <div className="mt-6 border-t border-cyan-500/30 pt-6">
+          {/* Bump lines — one per ticked order bump (each with its own copy) */}
+          {(bump || bump2) && (
+            <div className="mt-6 space-y-4 border-t border-cyan-500/30 pt-6">
               <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-                {OFFER.oto.eyebrow} added
+                {bump && bump2 ? 'Bonuses added' : 'Bonus added'}
               </div>
-              <div className="mt-3 flex items-start justify-between gap-4">
-                <div>
-                  <div className="font-serif text-lg text-white">
-                    {OFFER.oto.name}
+              {bump && (
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-serif text-lg text-white">{OFFER.oto.name}</div>
+                    <div className="mt-1 text-xs text-ink-200">
+                      Build recordings · AI-Flix · Hub · Blueprint
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-ink-200">
-                    1-hour 1:1 call with the founders · Full AI roadmap
+                  <div className="font-serif text-xl text-cyan-400">
+                    {formatPHP(OFFER.oto.priceCentavos)}
                   </div>
                 </div>
-                <div className="font-serif text-xl text-cyan-400">
-                  {formatPHP(OFFER.oto.priceCentavos)}
+              )}
+              {bump2 && (
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-serif text-lg text-white">{OFFER.oto2.name}</div>
+                    <div className="mt-1 text-xs text-ink-200">
+                      1-hour 1:1 call with the founders · Full AI roadmap
+                    </div>
+                  </div>
+                  <div className="font-serif text-xl text-cyan-400">
+                    {formatPHP(OFFER.oto2.priceCentavos)}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

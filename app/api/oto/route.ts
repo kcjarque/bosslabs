@@ -36,8 +36,9 @@ export async function POST(req: Request) {
 
     const invoice = await createInvoice({
       externalId,
-      amount: OFFER.oto.priceCentavos / 100,
-      description: OFFER.oto.name,
+      // OTO upsell = the 1:1 Build Session (oto2, ₱3,997), NOT the Vault.
+      amount: OFFER.oto2.priceCentavos / 100,
+      description: OFFER.oto2.name,
       payerEmail: parent.email,
       successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,
       failureRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=failed`,

@@ -62,12 +62,12 @@ function BumpedConfirmation({ orderId }: { orderId: string }) {
               />
             </svg>
           </div>
-          <div className="eyebrow mt-6 justify-center">{OFFER.oto.eyebrow} added</div>
+          <div className="eyebrow mt-6 justify-center">Bonus added</div>
           <h1 className="h-display mt-4">
             Smart move. <span className="accent-italic">Welcome aboard.</span>
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Your webinar seat plus your {OFFER.oto.name} are locked in.
+            Your webinar seat plus your bonus are locked in.
             We will send the Zoom link, the session scheduling link, and the Free Tools
             Stack to your email within minutes.
           </p>
@@ -116,19 +116,18 @@ function LastChance({ orderId }: { orderId: string }) {
             before your webinar.
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Add the <span className="text-white">{OFFER.oto.name}</span> and walk in with
-            every past build recorded end-to-end, the full tutorial library, and the Hub —
-            the exact assets our operators use to ship{' '}
-            <span className="text-white">3× faster</span>. Only on this page:{' '}
-            <span className="text-white">{OFFER.oto.label}</span>{' '}
-            <span className="text-ink-300 line-through">{OFFER.oto.totalValue}</span>.
+            Get on a <span className="text-white">1:1 call with Kyle &amp; Mikey</span> and walk
+            out with your full AI roadmap, your app vision mapped, and the exact prompts to start
+            building in <span className="text-white">under 24 hours</span>. Only on this page:{' '}
+            <span className="text-white">{OFFER.oto2.label}</span>{' '}
+            <span className="text-ink-300 line-through">{OFFER.oto2.totalValue}</span>.
           </p>
         </div>
 
         {/* Proof gallery — real sessions + the Hub (what's inside the Vault) */}
         <div className="mx-auto mt-10 max-w-4xl">
           <div className="mb-3 text-center text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-            Real sessions + the Hub · this is what&rsquo;s inside
+            Real 1:1 + build sessions with the founders
           </div>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {[
@@ -165,16 +164,16 @@ function LastChance({ orderId }: { orderId: string }) {
         <div className="mx-auto mt-10 max-w-3xl">
           <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-5 shadow-glow sm:p-10">
             <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-              {OFFER.oto.eyebrow}
+              {OFFER.oto2.eyebrow}
             </div>
-            <h2 className="h-sub mt-3">{OFFER.oto.name}</h2>
+            <h2 className="h-sub mt-3">{OFFER.oto2.name}</h2>
             <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
-              {OFFER.oto.promise}
+              {OFFER.oto2.promise}
             </p>
 
             {/* Value stack — each asset + its value, summing to ₱9,997 */}
             <div className="mt-7 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.015]">
-              {OFFER.oto.valueStack.map((row) => (
+              {OFFER.oto2.valueStack.map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-3 px-4 py-3">
                   <span className="flex items-start gap-2.5 font-sans text-[13px] leading-snug text-ink-100 sm:text-[14px]">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[2px] flex-none text-cyan-400">
@@ -192,7 +191,7 @@ function LastChance({ orderId }: { orderId: string }) {
                   Total value
                 </span>
                 <span className="font-serif text-[16px] text-ink-300 line-through sm:text-[18px]">
-                  {OFFER.oto.totalValue}
+                  {OFFER.oto2.totalValue}
                 </span>
               </div>
             </div>
@@ -204,10 +203,10 @@ function LastChance({ orderId }: { orderId: string }) {
                 </div>
                 <div className="mt-2 flex items-baseline gap-3">
                   <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">
-                    {OFFER.oto.label}
+                    {OFFER.oto2.label}
                   </div>
                   <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">
-                    {OFFER.oto.totalValue}
+                    {OFFER.oto2.totalValue}
                   </div>
                 </div>
                 <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">

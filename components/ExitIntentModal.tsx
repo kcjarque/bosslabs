@@ -102,7 +102,7 @@ export function ExitIntentModal({
         onClick={() => setOpen(false)}
         aria-hidden
       />
-      <div className="relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-cyan-500/30 bg-[#06070A] p-5 shadow-glow sm:p-8">
+      <div className="relative z-10 max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-cyan-500/30 bg-[#06070A] p-5 shadow-glow sm:p-8">
         <button
           onClick={() => setOpen(false)}
           aria-label="Close"
@@ -121,7 +121,7 @@ export function ExitIntentModal({
           <p className="mx-auto mt-3 max-w-xl text-sm text-ink-100 sm:text-base">{sub}</p>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
           {BUILDS.map((b) => (
             <div
               key={b.name}

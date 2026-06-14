@@ -325,6 +325,14 @@ export const OFFER = {
       'The exact prompts to start coding',
       'Get your project started in under 24 hours',
     ],
+    // Value-stack breakdown for the OTO page — sums to the crossed ₱7,997.
+    valueStack: [
+      { label: '1-hour 1:1 call with Kyle & Mikey', value: '₱5,000' },
+      { label: 'Your full AI integration roadmap', value: '₱1,500' },
+      { label: 'We build out the vision for your app', value: '₱1,000' },
+      { label: 'Exact prompts + 24-hour start plan', value: '₱497' },
+    ],
+    totalValue: '₱7,997',
   },
 };
 
