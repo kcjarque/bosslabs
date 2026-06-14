@@ -157,6 +157,12 @@ export const STUDENT_BUILDS = [
     img: '/preclarus-app.png',
     url: 'https://preclarus-app.vercel.app/',
   },
+  {
+    name: 'Bescost Ops',
+    tag: 'Signage ops — job orders, production & billing',
+    img: '/bescost-ops.png',
+    url: 'https://bescost-ops.vercel.app/',
+  },
 ];
 
 /* --------------------------------------------------------------------- */
