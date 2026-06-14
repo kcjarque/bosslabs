@@ -226,6 +226,17 @@ export function CrmBoard() {
                             <span className="font-normal text-emerald-600/70">· incl. OTO</span>
                           </div>
                         )}
+                        {c.eventStartsAt && (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            📅 Joined{' '}
+                            {new Date(c.eventStartsAt).toLocaleDateString('en-PH', {
+                              timeZone: 'Asia/Manila',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => removeCard(c.id)}

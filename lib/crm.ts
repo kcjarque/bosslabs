@@ -33,6 +33,7 @@ function rowToCard(r: CrmRow): CrmCard {
     createdAt: r.created_at,
     amountCentavos: null,
     remarks: '',
+    eventStartsAt: null,
   };
 }
 
@@ -56,22 +57,37 @@ export async function listCrmCards(): Promise<CrmCard[]> {
   const rows = (data as CrmRow[]) ?? [];
 
   const signupIds = [...new Set(rows.map((r) => r.signup_id).filter(Boolean))] as string[];
-  const bump = new Map<string, { total: number; remarks: string }>();
+  const bump = new Map<string, { total: number; remarks: string; eventStartsAt: string | null }>();
   if (signupIds.length) {
     const { data: sigs } = await sb
       .from('signups')
-      .select('id, bumped, amount_centavos, metadata')
+      .select('id, bumped, amount_centavos, metadata, event_id')
       .in('id', signupIds);
-    for (const s of (sigs ?? []) as Array<{
+    const sigRows = (sigs ?? []) as Array<{
       id: string;
       bumped: boolean | null;
       amount_centavos: number | null;
       metadata: Record<string, unknown> | null;
-    }>) {
+      event_id: string | null;
+    }>;
+    // Resolve each signup's event → its start date (the webinar they joined).
+    const eventIds = [...new Set(sigRows.map((s) => s.event_id).filter(Boolean))] as string[];
+    const eventStart = new Map<string, string>();
+    if (eventIds.length) {
+      const { data: evs } = await sb.from('events').select('id, starts_at_iso').in('id', eventIds);
+      for (const e of (evs ?? []) as Array<{ id: string; starts_at_iso: string | null }>) {
+        if (e.starts_at_iso) eventStart.set(e.id, e.starts_at_iso);
+      }
+    }
+    for (const s of sigRows) {
       if (!s.bumped) continue; // only order-bump buyers land on this board
       const meta = (s.metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number; remarks?: string };
       const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-      bump.set(s.id, { total: (s.amount_centavos ?? 0) + otoExtra, remarks: meta.remarks ?? '' });
+      bump.set(s.id, {
+        total: (s.amount_centavos ?? 0) + otoExtra,
+        remarks: meta.remarks ?? '',
+        eventStartsAt: s.event_id ? eventStart.get(s.event_id) ?? null : null,
+      });
     }
   }
 
@@ -82,6 +98,7 @@ export async function listCrmCards(): Promise<CrmCard[]> {
       const b = bump.get(r.signup_id!)!;
       card.amountCentavos = b.total;
       card.remarks = b.remarks;
+      card.eventStartsAt = b.eventStartsAt;
       return card;
     });
 }
