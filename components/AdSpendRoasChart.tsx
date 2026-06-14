@@ -34,10 +34,14 @@ export function AdSpendRoasChart({ rows }: { rows: Row[] }) {
   const padTop = 18;
   const padBottom = 30;
   const H = 260;
-  const slotW = Math.min(90, Math.max(36, (760 - padX * 2) / N));
-  const W = Math.round(padX * 2 + slotW * N);
+  const W = 760; // FIXED viewBox width → the chart is the same size for any day
+  // count (sizing it to N made a 1-day view scale up ~14× with w-full).
   const innerH = H - padTop - padBottom;
   const baseY = padTop + innerH;
+  // Distribute days across the fixed width; cap the slot so 1–2 days don't
+  // sprawl, and center the content when it doesn't fill the width.
+  const slotW = Math.min(64, (W - padX * 2) / N);
+  const startX = (W - slotW * N) / 2;
 
   const spend = days.map((d) => d.spendCentavos / 100);
   const rev = days.map((d) => d.revCentavos / 100);
@@ -45,11 +49,11 @@ export function AdSpendRoasChart({ rows }: { rows: Row[] }) {
   const roasVals = days.map((d) => d.roas).filter((r): r is number => r != null);
   const rightMax = Math.max(2, Math.ceil(Math.max(1, ...roasVals)));
 
-  const slotX = (i: number) => padX + slotW * i;
+  const slotX = (i: number) => startX + slotW * i;
   const cx = (i: number) => slotX(i) + slotW / 2;
   const barH = (v: number) => (v / leftMax) * innerH;
   const yRoas = (v: number) => padTop + innerH * (1 - v / rightMax);
-  const barW = Math.min(16, slotW * 0.32);
+  const barW = Math.min(16, slotW * 0.34);
 
   // ROAS line, broken wherever a day has no ROAS.
   const segments: string[] = [];
