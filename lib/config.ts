@@ -278,7 +278,7 @@ export const OFFER = {
     // SKU unchanged so payment/webhook/tracking keep matching — only the
     // displayed offer changed (1:1 session → The Build Vault). Same ₱1,997.
     sku: 'BL_OTO_AUDIT',
-    name: 'The Build Vault',
+    name: 'The AI Secrets Builder Vault',
     priceCentavos: 199700,
     currency: 'PHP',
     label: '₱1,997',
