@@ -571,48 +571,7 @@ export default async function AdminDashboard({
         </div>
 
         {adDailyRows.length > 0 ? (
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-100">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50/60 text-[11px] uppercase tracking-[0.06em] text-slate-500">
-                  <th className="px-3 py-2 text-left font-medium">Date</th>
-                  <th className="px-3 py-2 text-right font-medium">Spend</th>
-                  <th className="px-3 py-2 text-right font-medium">Revenue</th>
-                  <th className="px-3 py-2 text-right font-medium">ROAS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adDailyRows.map((r) => (
-                  <tr key={r.date} className="border-t border-slate-100">
-                    <td className="px-3 py-1.5 text-slate-700">
-                      {new Date(r.date + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
-                        month: 'short',
-                        day: 'numeric',
-                        timeZone: 'Asia/Manila',
-                      })}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
-                      {formatPHP(r.spendCentavos)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-900">
-                      {formatPHP(r.revCentavos)}
-                    </td>
-                    <td
-                      className={`px-3 py-1.5 text-right font-medium tabular-nums ${
-                        r.roas == null
-                          ? 'text-slate-300'
-                          : r.roas >= 1
-                            ? 'text-emerald-600'
-                            : 'text-amber-600'
-                      }`}
-                    >
-                      {r.roas == null ? '—' : `${r.roas.toFixed(2)}×`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <AdSpendRoasChart rows={adDailyRows} />
         ) : (
           <p className="mt-5 text-[13px] text-slate-500">No ad-spend data in this period.</p>
         )}
@@ -1431,6 +1390,179 @@ function VisitsSparkline({
           {Math.round(yMax)}
         </text>
       </svg>
+    </div>
+  );
+}
+
+/**
+ * AdSpendRoasChart — daily Spend vs Revenue as grouped bars (left ₱ axis) with
+ * a ROAS line on a secondary axis and a dashed 1× breakeven reference. Replaces
+ * the old numbers table; exact values are in each day's hover tooltip.
+ */
+function AdSpendRoasChart({
+  rows,
+}: {
+  rows: Array<{ date: string; spendCentavos: number; revCentavos: number; roas: number | null }>;
+}) {
+  // Chronological (oldest → newest, left → right).
+  const days = [...rows].reverse();
+  const N = days.length;
+  const padX = 20;
+  const padTop = 18;
+  const padBottom = 30;
+  const H = 260;
+  // Widen slots to fill ~760px when few days; floor at 36px so many days scroll.
+  const slotW = Math.min(90, Math.max(36, (760 - padX * 2) / N));
+  const W = Math.round(padX * 2 + slotW * N);
+  const innerH = H - padTop - padBottom;
+  const baseY = padTop + innerH;
+
+  const spend = days.map((d) => d.spendCentavos / 100);
+  const rev = days.map((d) => d.revCentavos / 100);
+  const leftMax = Math.max(1, ...spend, ...rev) * 1.12;
+  const roasVals = days.map((d) => d.roas).filter((r): r is number => r != null);
+  const rightMax = Math.max(2, Math.ceil(Math.max(1, ...roasVals)));
+
+  const slotX = (i: number) => padX + slotW * i;
+  const cx = (i: number) => slotX(i) + slotW / 2;
+  const barH = (v: number) => (v / leftMax) * innerH;
+  const yRoas = (v: number) => padTop + innerH * (1 - v / rightMax);
+  const barW = Math.min(16, slotW * 0.32);
+
+  // ROAS line, broken into segments wherever a day has no ROAS.
+  const segments: string[] = [];
+  let cur: string[] = [];
+  days.forEach((d, i) => {
+    if (d.roas == null) {
+      if (cur.length) {
+        segments.push(cur.join(' '));
+        cur = [];
+      }
+      return;
+    }
+    cur.push(`${cur.length ? 'L' : 'M'} ${cx(i).toFixed(1)} ${yRoas(d.roas).toFixed(1)}`);
+  });
+  if (cur.length) segments.push(cur.join(' '));
+
+  const labelEvery = Math.ceil(N / 10);
+  const fmtDate = (iso: string) =>
+    new Date(iso + 'T00:00:00+08:00').toLocaleDateString('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'Asia/Manila',
+    });
+  const pesoK = (php: number) =>
+    php >= 1000 ? `₱${(php / 1000).toFixed(php >= 10000 ? 0 : 1)}k` : `₱${Math.round(php)}`;
+
+  return (
+    <div className="mt-5">
+      <div className="mb-2 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2.5 rounded-sm bg-slate-300" />Spend
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2.5 rounded-sm bg-emerald-500" />Revenue
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-3 bg-cyan-600" />ROAS
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-0.5 w-3"
+            style={{
+              background:
+                'repeating-linear-gradient(to right,#f59e0b 0,#f59e0b 3px,transparent 3px,transparent 6px)',
+            }}
+          />
+          1× breakeven
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-100 bg-slate-50/30 p-2">
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block text-slate-300">
+          {/* left-axis gridlines */}
+          {[0.25, 0.5, 0.75, 1].map((t) => (
+            <line
+              key={t}
+              x1={padX}
+              x2={W - padX}
+              y1={baseY - innerH * t}
+              y2={baseY - innerH * t}
+              stroke="currentColor"
+              strokeWidth="0.5"
+              opacity="0.4"
+              strokeDasharray="2 3"
+            />
+          ))}
+          <line x1={padX} x2={W - padX} y1={baseY} y2={baseY} stroke="#cbd5e1" strokeWidth="1" />
+
+          {/* ROAS = 1 breakeven */}
+          <line
+            x1={padX}
+            x2={W - padX}
+            y1={yRoas(1)}
+            y2={yRoas(1)}
+            stroke="#f59e0b"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+            opacity="0.85"
+          />
+
+          {/* grouped spend / revenue bars */}
+          {days.map((d, i) => {
+            const s = barH(spend[i]);
+            const r = barH(rev[i]);
+            return (
+              <g key={d.date}>
+                <rect x={cx(i) - barW - 1} y={baseY - s} width={barW} height={s} rx="1.5" fill="#cbd5e1" />
+                <rect x={cx(i) + 1} y={baseY - r} width={barW} height={r} rx="1.5" fill="#10b981" />
+              </g>
+            );
+          })}
+
+          {/* ROAS line + dots */}
+          {segments.map((seg, i) => (
+            <path
+              key={i}
+              d={seg}
+              fill="none"
+              stroke="#0891b2"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ))}
+          {days.map((d, i) =>
+            d.roas == null ? null : (
+              <circle key={d.date} cx={cx(i)} cy={yRoas(d.roas)} r="2.2" fill="#0891b2" />
+            ),
+          )}
+
+          {/* hover targets with exact values */}
+          {days.map((d, i) => (
+            <g key={'h' + d.date}>
+              <title>{`${fmtDate(d.date)} · Spend ${formatPHP(d.spendCentavos)} · Revenue ${formatPHP(d.revCentavos)} · ROAS ${d.roas == null ? '—' : d.roas.toFixed(2) + '×'}`}</title>
+              <rect x={slotX(i)} y={padTop} width={slotW} height={innerH} fill="transparent" />
+            </g>
+          ))}
+
+          {/* x-axis date labels */}
+          {days.map((d, i) =>
+            i % labelEvery === 0 || i === N - 1 ? (
+              <text key={'x' + d.date} x={cx(i)} y={H - 10} fontSize="9" fill="#94a3b8" textAnchor="middle">
+                {fmtDate(d.date)}
+              </text>
+            ) : null,
+          )}
+
+          {/* axis max labels */}
+          <text x={padX} y={padTop - 6} fontSize="9" fill="#94a3b8" textAnchor="start">
+            {pesoK(leftMax)}
+          </text>
+          <text x={W - padX} y={padTop - 6} fontSize="9" fill="#0891b2" textAnchor="end">
+            {rightMax}×
+          </text>
+        </svg>
+      </div>
     </div>
   );
 }
