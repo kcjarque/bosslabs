@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getSignups, updateSignup } from '@/lib/db';
+import { getSignups, updateSignup, sessionHasRecording } from '@/lib/db';
 import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
@@ -50,11 +50,15 @@ export async function GET(req: Request) {
       : '₱0';
     const ageMin = Math.round((now - new Date(s.createdAt).getTime()) / 60000);
 
-    // Link straight to this person's session replay (captured at checkout).
+    // Link to this person's session replay — ONLY if a recording actually
+    // exists. A captured blSessionId alone doesn't guarantee a replay, and a
+    // dead "watch replay" link is worse than none, so omit the line otherwise.
     const blSessionId = (s.metadata as { blSessionId?: string } | undefined)?.blSessionId;
-    const replayLine = blSessionId
-      ? `\n🎥 <a href="${(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bosslabs.live').replace(/\/$/, '')}/admin/recordings/session/${encodeURIComponent(blSessionId)}">Watch their session replay →</a>`
-      : '';
+    let replayLine = '';
+    if (blSessionId && (await sessionHasRecording(blSessionId))) {
+      const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bosslabs.live').replace(/\/$/, '');
+      replayLine = `\n🎥 <a href="${base}/admin/recordings/session/${encodeURIComponent(blSessionId)}">Watch their session replay →</a>`;
+    }
 
     // Send FIRST, mark notified only on success. If the send fails (e.g.
     // Telegram outage / the group migrated mid-run), we leave the marker

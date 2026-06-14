@@ -1692,6 +1692,21 @@ export async function getRecordingsStorageBytes(): Promise<number> {
   return rows.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }
 
+/** True if at least one rrweb chunk exists for this session. A captured
+ *  blSessionId alone is NOT enough to promise a replay (the session may have
+ *  no recording — capture off, or it never fired), so alerts gate the
+ *  "watch replay" link on this before showing it. */
+export async function sessionHasRecording(sessionId: string): Promise<boolean> {
+  if (!sessionId || !isSupabaseConfigured()) return false;
+  const { data, error } = await getSupabase()
+    .from('session_recordings')
+    .select('id')
+    .eq('session_id', sessionId)
+    .limit(1);
+  if (error) return false;
+  return (data ?? []).length > 0;
+}
+
 /** Auto-delete idle/abandoned recordings — sessions that span more than
  *  `maxMinutes` of wall-clock AND aren't linked to a paid customer (tabs left
  *  open; pure storage waste). Wraps the purge_idle_recordings SQL function.
