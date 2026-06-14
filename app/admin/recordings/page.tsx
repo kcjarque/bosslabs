@@ -5,16 +5,38 @@ import {
   getRecordings,
   getRecordingsStorageBytes,
   getCustomersBySession,
+  type SessionCustomer,
 } from '@/lib/db';
 import { RecordingsControls } from '@/components/RecordingsControls';
-import {
-  FUNNEL_TABS,
-  isFunnelTab,
-  sessionMatchesTab,
-  type FunnelTab,
-} from '@/lib/recordings-funnel';
 
 export const dynamic = 'force-dynamic';
+
+/* Outcome-based tabs — now that recordings link to the customer, segment by
+ * what actually happened (paid vs not), not just which pages were visited. */
+type ListTab = 'all' | 'purchased' | 'abandoned' | 'orderbump' | 'main';
+const LIST_TABS: { key: ListTab; label: string; hint: string }[] = [
+  { key: 'all', label: 'All sessions', hint: 'Every recorded visit' },
+  { key: 'purchased', label: 'Purchased', hint: 'Linked to a paid customer (wins)' },
+  { key: 'abandoned', label: 'Abandoned', hint: 'Reached checkout but did not pay' },
+  { key: 'orderbump', label: 'Order bump', hint: 'Reached the /oto offer' },
+  { key: 'main', label: '₱999 funnel', hint: 'Homepage + checkout' },
+];
+function isListTab(v: string | undefined): v is ListTab {
+  return LIST_TABS.some((t) => t.key === v);
+}
+function matchTab(pages: string[], cust: SessionCustomer | undefined, tab: ListTab): boolean {
+  if (tab === 'all') return true;
+  const set = new Set(pages);
+  const paid = cust?.status === 'paid' || cust?.status === 'attended';
+  if (tab === 'purchased') return paid;
+  if (tab === 'orderbump') return set.has('/oto');
+  if (tab === 'main') return set.has('/') || set.has('/checkout');
+  // abandoned: a known unpaid customer, or an anonymous session that reached
+  // checkout and never bought. A win is never counted as abandoned.
+  if (paid) return false;
+  if (cust) return cust.status === 'registered';
+  return set.has('/checkout');
+}
 
 function fmtBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -47,7 +69,7 @@ export default async function RecordingsPage({
 }) {
   requireAdmin();
   const sp = await searchParams;
-  const tab: FunnelTab = isFunnelTab(sp.tab) ? sp.tab : 'all';
+  const tab: ListTab = isListTab(sp.tab) ? sp.tab : 'all';
 
   const [settings, recordings, totalBytes, customers] = await Promise.all([
     getSettings(),
@@ -79,14 +101,15 @@ export default async function RecordingsPage({
     .sort((a, b) => b.lastAt - a.lastAt);
 
   // Per-tab counts (computed once, drives the tab badges).
-  const counts: Record<FunnelTab, number> = { all: 0, main: 0, abandoned: 0, orderbump: 0 };
+  const counts: Record<ListTab, number> = { all: 0, purchased: 0, abandoned: 0, orderbump: 0, main: 0 };
   for (const s of allSessions) {
-    for (const t of FUNNEL_TABS) {
-      if (sessionMatchesTab(s.pages, t.key)) counts[t.key] += 1;
+    const cust = customers.get(s.sessionId);
+    for (const t of LIST_TABS) {
+      if (matchTab(s.pages, cust, t.key)) counts[t.key] += 1;
     }
   }
 
-  const sessions = allSessions.filter((s) => sessionMatchesTab(s.pages, tab));
+  const sessions = allSessions.filter((s) => matchTab(s.pages, customers.get(s.sessionId), tab));
 
   return (
     <div className="space-y-6">
@@ -114,7 +137,9 @@ export default async function RecordingsPage({
           <strong>{fmtBytes(totalBytes)}</strong> total storage
         </span>
         <Link
-          href={`/admin/recordings/heatmap?tab=${tab === 'all' ? 'main' : tab}`}
+          href={`/admin/recordings/heatmap?tab=${
+            tab === 'abandoned' ? 'abandoned' : tab === 'orderbump' ? 'orderbump' : 'main'
+          }`}
           className="ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-slate-700"
         >
           View heatmap →
@@ -123,7 +148,7 @@ export default async function RecordingsPage({
 
       {/* Funnel tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200">
-        {FUNNEL_TABS.map((t) => {
+        {LIST_TABS.map((t) => {
           const active = t.key === tab;
           return (
             <Link
