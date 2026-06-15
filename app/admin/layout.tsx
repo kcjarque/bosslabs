@@ -6,7 +6,7 @@ import { getAdminSession } from '@/lib/admin-auth';
 import { Mark } from '@/components/Mark';
 import { AdminMobileMenu } from '@/components/AdminMobileMenu';
 import { LogoutButton } from '@/components/LogoutButton';
-import { NavIcon } from '@/components/admin/NavIcon';
+import { AdminNavLink } from '@/components/admin/AdminNavLink';
 import { CommandPalette } from '@/components/admin/CommandPalette';
 import { CommandTrigger } from '@/components/admin/CommandTrigger';
 import './admin.css';
@@ -99,8 +99,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const paletteItems = navGroups.flatMap((g) =>
     g.items.map((i) => ({ href: i.href, label: i.label, icon: i.icon, group: g.heading })),
   );
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'));
   const home = isStaff ? session.perms[0] || '/admin' : '/admin';
 
   return (
@@ -117,7 +115,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-2">
             <CommandTrigger variant="icon" />
-            <AdminMobileMenu nav={navFlat} pathname={pathname} />
+            <AdminMobileMenu nav={navFlat} />
           </div>
         </div>
       </header>
@@ -142,22 +140,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   {group.heading}
                 </div>
                 <div className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const active = isActive(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        style={{ color: active ? '#0e7490' : '#475569' }}
-                        className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition ${
-                          active ? 'bg-cyan-50 font-medium' : 'hover:bg-slate-100'
-                        }`}
-                      >
-                        <NavIcon name={item.icon} />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
+                  {group.items.map((item) => (
+                    <AdminNavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
+                  ))}
                 </div>
               </div>
             ))}

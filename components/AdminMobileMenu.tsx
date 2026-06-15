@@ -2,16 +2,16 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { NavIcon } from '@/components/admin/NavIcon';
 
 export function AdminMobileMenu({
   nav,
-  pathname = '',
 }: {
   nav: { href: string; label: string; icon?: string }[];
-  pathname?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname() || '';
   const isActive = (href: string) =>
     pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'));
 

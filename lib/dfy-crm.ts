@@ -106,6 +106,29 @@ export async function deleteDfyCard(id: string): Promise<void> {
   if (error) throw new Error(`deleteDfyCard: ${error.message}`);
 }
 
+/**
+ * DFY income — the deal value of cards that reached the final "Onboarding"
+ * stage (a signed/won deal), period-scoped by when the card was last moved
+ * (updated_at ≈ when it closed). Sums amount_centavos; cards with no amount
+ * contribute 0. Used by the dashboard Income section.
+ */
+export async function sumDfyIncomeCentavos(sinceMs?: number, untilMs?: number): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const { data, error } = await getSupabase()
+    .from('dfy_crm_cards')
+    .select('amount_centavos, updated_at')
+    .eq('stage', 'onboarding');
+  if (error) return 0;
+  let total = 0;
+  for (const r of (data ?? []) as { amount_centavos: number | null; updated_at: string }[]) {
+    const t = Date.parse(r.updated_at);
+    if (sinceMs != null && t < sinceMs) continue;
+    if (untilMs != null && t >= untilMs) continue;
+    total += r.amount_centavos || 0;
+  }
+  return total;
+}
+
 /** Existing customers (signups) for the "add from existing customer" search. */
 export type DfyCandidate = { id: string; name: string; email: string; phone: string };
 export async function listDfyCandidates(): Promise<DfyCandidate[]> {
