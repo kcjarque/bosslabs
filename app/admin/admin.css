@@ -196,3 +196,24 @@ body:has(.admin-shell) {
 .admin-shell a {
   color: inherit;
 }
+
+/* Tabular figures for metrics, money, counts — even-width digits, no jitter
+ * (keeps Inter, just the numeric stylistic set). Apply .tnum to numeric values. */
+.admin-shell .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton shimmer for client-component loading states (boards, async panels). */
+.admin-shell .skel {
+  background: linear-gradient(90deg, #EEF2F7 25%, #E2E8F0 37%, #EEF2F7 63%);
+  background-size: 400% 100%;
+  animation: adminskel 1.4s ease infinite;
+  border-radius: 8px;
+}
+@keyframes adminskel {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .skel { animation: none; }
+}

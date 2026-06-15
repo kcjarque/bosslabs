@@ -1061,7 +1061,7 @@ function StatCard({
           : '';
   const body = (
     <div className={`card ${toneClass}`.trim()}>
-      <div className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+      <div className="tnum text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
         {value}
       </div>
       <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
