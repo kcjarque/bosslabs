@@ -320,6 +320,30 @@ export default async function AdminDashboard({
   const sDirectRevenueCentavos = sDirectList.reduce((sum, s) => sum + revOf(s), 0);
   const sRevenueByPaymentCentavos = sDirectRevenueCentavos + sRecoveredRevenueCentavos;
 
+  // Prior-period comparison (same-length window immediately before) → trend
+  // chips. Computed from the already-fetched signups (no extra query); null for
+  // all-time (no meaningful "previous" window).
+  let prevRevenueCentavos = 0;
+  let prevDirectCount = 0;
+  if (dashRange) {
+    const prevStart = dashRange.startMs - (rangeEnd - dashRange.startMs);
+    const prevList = signups.filter((s) => {
+      if (s.status !== 'paid' && s.status !== 'attended') return false;
+      const cs = (s.metadata as { confirmationSent?: string } | undefined)?.confirmationSent;
+      const payMs = new Date(cs ?? s.createdAt).getTime();
+      return payMs >= prevStart && payMs < dashRange.startMs;
+    });
+    prevRevenueCentavos = prevList.reduce((sum, s) => sum + revOf(s), 0);
+    prevDirectCount = prevList.filter((s) => !isRecoveredPaid(s, closerRecoveredIds)).length;
+  }
+  const trendPct = (cur: number, prev: number): number | null => {
+    if (!dashRange) return null;
+    if (prev === 0) return cur > 0 ? 100 : null;
+    return Math.round(((cur - prev) / prev) * 100);
+  };
+  const revenueTrend = trendPct(sRevenueByPaymentCentavos, prevRevenueCentavos);
+  const paidTrend = trendPct(sDirectList.length, prevDirectCount);
+
   // ── Ad spend & ROAS (period-scoped). Spend is keyed by calendar day
   // (Manila); revenue is the cash received in the period. ROAS = front-end
   // revenue ÷ spend — back-end webinar sales are upside on top.
@@ -489,6 +513,7 @@ export default async function AdminDashboard({
         <StatCard
           label="Revenue"
           value={formatPHP(sRevenueByPaymentCentavos)}
+          trend={revenueTrend}
           sub={
             sRecoveredRevenueCentavos > 0
               ? `incl. ${formatPHP(sRecoveredRevenueCentavos)} recovered`
@@ -499,6 +524,7 @@ export default async function AdminDashboard({
         <StatCard
           label="Paid tickets"
           value={sDirectList.length.toString()}
+          trend={paidTrend}
           sub={
             dashRange
               ? `direct · in ${dashRange.label}`
@@ -1044,12 +1070,15 @@ function StatCard({
   sub,
   tone,
   href,
+  trend,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: 'green' | 'amber' | 'orange';
   href?: string;
+  /** % change vs the prior period. Renders a ▲/▼ chip. null = no comparison. */
+  trend?: number | null;
 }) {
   const toneClass =
     tone === 'green'
@@ -1067,6 +1096,16 @@ function StatCard({
       <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
         {label}
       </div>
+      {typeof trend === 'number' && (
+        <div
+          className={`mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+            trend >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+          }`}
+        >
+          {trend >= 0 ? '▲' : '▼'} {Math.abs(trend)}%
+          <span className="font-normal text-slate-400">vs prev</span>
+        </div>
+      )}
       {sub && <div className="mt-2 text-[11px] text-slate-500">{sub}</div>}
       {href && (
         <div className="mt-2 text-[11px] text-cyan-600 underline-offset-4 hover:underline">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CRM_STAGES, CRM_STAGE_META, type CrmStage, type CrmCard } from '@/lib/crm-stages';
 import { toE164Ph } from '@/lib/phone';
+import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
 
 async function api(payload: Record<string, unknown>) {
   const r = await fetch('/api/admin/crm', {
@@ -98,7 +99,7 @@ export function CrmBoard() {
     }
   }
 
-  if (loading) return <div className="card text-sm text-slate-500">Loading board…</div>;
+  if (loading) return <BoardSkeleton />;
 
   const q = query.trim().toLowerCase();
   const visible = q

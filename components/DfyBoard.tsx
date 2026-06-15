@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from '@/lib/dfy-stages';
 import { toE164Ph } from '@/lib/phone';
+import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
 
 const TPL_KEY = 'dfy_sms_template';
 const DEFAULT_TPL = "Hi {{name}}! Following up on your DFY project — do you have a few minutes today? 😊";
@@ -110,7 +111,7 @@ export function DfyBoard() {
     setCards(d.cards ?? []);
   }
 
-  if (loading) return <div className="card text-sm text-slate-500">Loading board…</div>;
+  if (loading) return <BoardSkeleton />;
 
   const q = query.trim().toLowerCase();
   const visible = q
