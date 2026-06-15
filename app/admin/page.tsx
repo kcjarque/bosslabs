@@ -306,11 +306,20 @@ export default async function AdminDashboard({
   //   - direct = everything else (paid in the same session, never abandoned).
   // Paid tickets (direct) + Recovered = every payment, each counted once, so
   // Revenue = direct + recovered with no double count.
-  const revOf = (s: Signup) => {
-    const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
-    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-    return (s.amountCentavos ?? 0) + otoExtra;
-  };
+  // Main payment (₱999 + any SAME-invoice checkout bump), credited to the main
+  // pay date. The POST-payment OTO upsell is added separately, by its OWN pay
+  // date (otoConfirmed), so an OTO paid days after the ticket lands on the day
+  // it was actually paid — not the parent's original purchase day.
+  const revOf = (s: Signup) => s.amountCentavos ?? 0;
+  const otoRevenueInWindow = (sinceMs?: number, untilMs?: number) =>
+    signups.reduce((sum, s) => {
+      const meta = (s.metadata as { otoConfirmed?: string; otoAmount?: number } | undefined) ?? {};
+      if (!meta.otoConfirmed || !meta.otoAmount) return sum;
+      const t = new Date(meta.otoConfirmed).getTime();
+      if (sinceMs != null && t < sinceMs) return sum;
+      if (untilMs != null && t > untilMs) return sum;
+      return sum + meta.otoAmount * 100;
+    }, 0);
   const sPaidByPaymentList = signups.filter((s) => {
     if (s.status !== 'paid' && s.status !== 'attended') return false;
     if (!dashRange) return true; // all time
@@ -322,7 +331,11 @@ export default async function AdminDashboard({
   const sDirectList = sPaidByPaymentList.filter((s) => !isRecoveredPaid(s, closerRecoveredIds));
   const sRecoveredRevenueCentavos = sRecoveredList.reduce((sum, s) => sum + revOf(s), 0);
   const sDirectRevenueCentavos = sDirectList.reduce((sum, s) => sum + revOf(s), 0);
-  const sRevenueByPaymentCentavos = sDirectRevenueCentavos + sRecoveredRevenueCentavos;
+  const sOtoRevenueCentavos = dashRange
+    ? otoRevenueInWindow(dashRange.startMs, rangeEnd)
+    : otoRevenueInWindow();
+  const sRevenueByPaymentCentavos =
+    sDirectRevenueCentavos + sRecoveredRevenueCentavos + sOtoRevenueCentavos;
 
   // Prior-period comparison (same-length window immediately before) → trend
   // chips. Computed from the already-fetched signups (no extra query); null for
@@ -337,7 +350,9 @@ export default async function AdminDashboard({
       const payMs = new Date(cs ?? s.createdAt).getTime();
       return payMs >= prevStart && payMs < dashRange.startMs;
     });
-    prevRevenueCentavos = prevList.reduce((sum, s) => sum + revOf(s), 0);
+    prevRevenueCentavos =
+      prevList.reduce((sum, s) => sum + revOf(s), 0) +
+      otoRevenueInWindow(prevStart, dashRange.startMs - 1);
     prevDirectCount = prevList.filter((s) => !isRecoveredPaid(s, closerRecoveredIds)).length;
   }
   const trendPct = (cur: number, prev: number): number | null => {
@@ -373,14 +388,15 @@ export default async function AdminDashboard({
   const overallRoas = adSpendInPeriodCentavos > 0 ? totalIncomeCentavos / adSpendInPeriodCentavos : null;
   // Revenue per payment-day (Manila), for the daily spend-vs-revenue table.
   const revenueByDayCentavos = new Map<string, number>();
+  const addRev = (day: string, cents: number) =>
+    revenueByDayCentavos.set(day, (revenueByDayCentavos.get(day) ?? 0) + cents);
   for (const s of paid) {
     const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string; confirmationSent?: string } | undefined) ?? {};
-    const payDay = manilaDate(new Date(meta.confirmationSent ?? s.createdAt));
-    const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
-    revenueByDayCentavos.set(
-      payDay,
-      (revenueByDayCentavos.get(payDay) ?? 0) + (s.amountCentavos ?? 0) + otoExtra,
-    );
+    // Main on its pay day; the OTO upsell on ITS own pay day (otoConfirmed).
+    addRev(manilaDate(new Date(meta.confirmationSent ?? s.createdAt)), s.amountCentavos ?? 0);
+    if (meta.otoConfirmed && meta.otoAmount) {
+      addRev(manilaDate(new Date(meta.otoConfirmed)), meta.otoAmount * 100);
+    }
   }
   // Daily rows for the table — period days (or all of them for all-time),
   // newest first, capped so the table stays compact.
