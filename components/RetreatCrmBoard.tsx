@@ -78,6 +78,20 @@ export function RetreatCrmBoard() {
     await api({ action: 'update', id: card.id, patch: { note } });
   }
 
+  // VCR deal/payment actions — reload after each so collected/paid recompute.
+  async function setDeal(card: RetreatCrmCard, centavos: number) {
+    await api({ action: 'deal-amount', id: card.id, centavos });
+    await load();
+  }
+  async function logPayment(card: RetreatCrmCard, centavos: number) {
+    await api({ action: 'log-payment', id: card.id, centavos });
+    await load();
+  }
+  async function markPaidFull(card: RetreatCrmCard) {
+    await api({ action: 'mark-paid-full', id: card.id });
+    await load();
+  }
+
   async function saveTemplate() {
     await api({ action: 'template', template });
     setSavedTpl(true);
@@ -298,6 +312,13 @@ export function RetreatCrmBoard() {
 
                     <CardNote card={c} onSave={(text) => saveNote(c, text)} />
 
+                    <VcrDeal
+                      card={c}
+                      onSetDeal={(v) => setDeal(c, v)}
+                      onLogPayment={(v) => logPayment(c, v)}
+                      onMarkPaid={() => markPaidFull(c)}
+                    />
+
                     {c.phone ? (
                       <a href={smsHref(c.phone, template, c.name)} className="mt-2 block rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-cyan-500">
                         💬 Text
@@ -318,6 +339,120 @@ export function RetreatCrmBoard() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** VCR deal tracker on a card — editable deal amount, collected/remaining, and
+ *  Mark-paid (full) / Partial-payment actions. Payments feed "Webinar income". */
+function VcrDeal({
+  card,
+  onSetDeal,
+  onLogPayment,
+  onMarkPaid,
+}: {
+  card: RetreatCrmCard;
+  onSetDeal: (centavos: number) => void;
+  onLogPayment: (centavos: number) => void;
+  onMarkPaid: () => void;
+}) {
+  const [editDeal, setEditDeal] = useState(false);
+  const [dealDraft, setDealDraft] = useState(String(card.dealAmountCentavos / 100));
+  const [openPay, setOpenPay] = useState(false);
+  const [payAmt, setPayAmt] = useState('');
+
+  const deal = card.dealAmountCentavos;
+  const collected = card.collectedCentavos;
+  const remaining = Math.max(0, deal - collected);
+  const peso = (c: number) => '₱' + (c / 100).toLocaleString();
+
+  return (
+    <div className="mt-2 rounded-md border border-violet-100 bg-violet-50/40 p-2" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">Deal</span>
+        {editDeal ? (
+          <span className="flex items-center gap-1">
+            <input
+              className="input h-6 w-20 text-[11px]"
+              inputMode="decimal"
+              value={dealDraft}
+              onChange={(e) => setDealDraft(e.target.value)}
+            />
+            <button
+              onClick={() => {
+                const v = Math.round(parseFloat(dealDraft || '0') * 100);
+                if (Number.isFinite(v)) onSetDeal(v);
+                setEditDeal(false);
+              }}
+              className="font-semibold text-violet-700"
+            >
+              ✓
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => {
+              setDealDraft(String(deal / 100));
+              setEditDeal(true);
+            }}
+            className="font-semibold text-slate-700 hover:text-violet-700"
+          >
+            {peso(deal)} ✎
+          </button>
+        )}
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">Collected</span>
+        <span className={card.paidInFull ? 'font-semibold text-emerald-700' : 'text-slate-700'}>
+          {peso(collected)}
+          {card.paidInFull ? ' · paid ✓' : remaining > 0 ? ` · ${peso(remaining)} left` : ''}
+        </span>
+      </div>
+
+      {!card.paidInFull && (
+        <div className="mt-1.5 flex gap-1.5">
+          <button
+            onClick={onMarkPaid}
+            className="flex-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-500"
+          >
+            Mark paid
+          </button>
+          <button
+            onClick={() => setOpenPay((v) => !v)}
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+          >
+            Partial
+          </button>
+        </div>
+      )}
+      {openPay && !card.paidInFull && (
+        <div className="mt-1.5 flex gap-1.5">
+          <input
+            className="input h-7 flex-1 text-[11px]"
+            inputMode="decimal"
+            placeholder="₱ received"
+            value={payAmt}
+            onChange={(e) => setPayAmt(e.target.value)}
+          />
+          <button
+            onClick={() => {
+              const v = Math.round(parseFloat(payAmt || '0') * 100);
+              if (v > 0) onLogPayment(v);
+              setPayAmt('');
+              setOpenPay(false);
+            }}
+            className="rounded-md bg-violet-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-violet-500"
+          >
+            Log
+          </button>
+        </div>
+      )}
+      {card.payments.length > 0 && (
+        <div className="mt-1 text-[10px] text-slate-400">
+          {card.payments.length} payment{card.payments.length > 1 ? 's' : ''} · last{' '}
+          {new Date(card.payments[card.payments.length - 1].at).toLocaleDateString()}
+        </div>
+      )}
     </div>
   );
 }

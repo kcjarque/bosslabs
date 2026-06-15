@@ -25,4 +25,12 @@ export type RetreatCrmCard = {
   amountCentavos: number | null;
   method: string | null;
   createdAt: string;
+  /** VCR deal tracking (card columns). dealAmount = the discussed full deal
+   *  (default ₱50,000); collected = cash actually received via the payments
+   *  log; paidInFull once collected >= deal. "Webinar income" sums payments. */
+  dealAmountCentavos: number;
+  collectedCentavos: number;
+  paidInFull: boolean;
+  paidAt: string | null;
+  payments: { amountCentavos: number; at: string; note?: string }[];
 };

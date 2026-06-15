@@ -11,6 +11,7 @@ import {
 } from '@/lib/db';
 import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
+import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
 import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
@@ -205,6 +206,7 @@ export default async function AdminDashboard({
     closerRecoveredIds,
     emailStats,
     adSpendByDay,
+    webinarIncomeCentavos,
   ] = await Promise.all([
     getSignups(),
     getSettings(),
@@ -226,6 +228,9 @@ export default async function AdminDashboard({
     getEmailStats(),
     // Daily Meta ad spend (backfilled + synced 12:01am) for the ROAS metric.
     getAdSpendByDay(),
+    // VCR ("Webinar") income — high-ticket retreat cash from the CRM payments
+    // log, period-scoped. Kept OUT of ROAS/daily (those are ₱999 front-end).
+    sumWebinarIncomeCentavos(dashRange?.startMs, rangeEnd),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -539,6 +544,39 @@ export default async function AdminDashboard({
           sub={`${last7dPaid} paid · ${last7dReg} stuck`}
         />
       </div>
+
+      {/* INCOME — front-end (₱999) + VCR webinar income, rolled into a total.
+          VCR is deliberately kept OUT of ROAS + daily sales below (those stay
+          ₱999-front-end only) so ad performance isn't inflated by backend closes. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">Income</h2>
+          <span className="text-[11px] text-slate-400">{periodLabel} · total = front-end + webinar</span>
+        </div>
+        <p className="mt-1 text-[12px] text-slate-500">
+          Front-end = ₱999 webinar + bumps/OTO. Webinar income = VCR high-ticket cash logged in the
+          retreat CRM. ROAS + daily sales below stay front-end-only.
+        </p>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+          <StatCard
+            label="Total income"
+            value={formatPHP(sRevenueByPaymentCentavos + webinarIncomeCentavos)}
+            sub={`${periodLabel} · front-end + webinar`}
+            tone="green"
+          />
+          <StatCard
+            label="Front-end (₱999)"
+            value={formatPHP(sRevenueByPaymentCentavos)}
+            sub="webinar tickets + bumps/OTO"
+          />
+          <StatCard
+            label="Webinar income (VCR)"
+            value={formatPHP(webinarIncomeCentavos)}
+            sub="high-ticket retreat cash"
+            tone={webinarIncomeCentavos > 0 ? 'green' : undefined}
+          />
+        </div>
+      </section>
 
       {/* AD SPEND & ROAS — Meta spend vs actual paid revenue, period-scoped */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

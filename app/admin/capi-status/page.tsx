@@ -23,7 +23,7 @@ export const maxDuration = 30;
 export default async function CapiStatusPage({
   searchParams,
 }: {
-  searchParams: { refireId?: string; refireStatus?: string };
+  searchParams: { refireId?: string; refireStatus?: string; check?: string };
 }) {
   requireAdmin();
 
@@ -42,8 +42,12 @@ export default async function CapiStatusPage({
   // external_id derived from "capi-health@bosslabs.ai" so the same
   // ping always hashes to the same shadow user. Doesn't pollute real
   // attribution because there's no fbp/fbc/IP attached.
+  // The live Meta ping is OPT-IN (via ?check=1) — it's a blocking external HTTP
+  // call (why this route carries maxDuration=30). Keeping it off page-load means
+  // the page opens instantly; the "Run live ping" button triggers it.
   let liveCheck: { ok: boolean; detail: string } | null = null;
-  if (isConfigured) {
+  const ranLiveCheck = searchParams.check === '1';
+  if (isConfigured && ranLiveCheck) {
     const r = await sendCapiEvent({
       eventName: 'ViewContent',
       eventId: `capi_health_${Date.now()}`,
@@ -109,6 +113,18 @@ export default async function CapiStatusPage({
           </li>
         </ul>
       </section>
+
+      {/* Run live ping (opt-in — kept off page-load so this page is instant) */}
+      {isConfigured && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/admin/capi-status?check=1" className="btn btn-secondary text-xs">
+            {liveCheck ? '↻ Re-run live ping' : '▶ Run live ping to Meta'}
+          </Link>
+          <span className="text-[11px] text-slate-400">
+            Sends one ViewContent test event — off page-load so this page opens instantly.
+          </span>
+        </div>
+      )}
 
       {/* Live ping */}
       {liveCheck && (

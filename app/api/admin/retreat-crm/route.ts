@@ -8,6 +8,9 @@ import {
   deleteRetreatCrmCard,
   getRetreatCrmTemplate,
   saveRetreatCrmTemplate,
+  setRetreatDealAmount,
+  logRetreatPayment,
+  markRetreatPaidInFull,
 } from '@/lib/retreat-crm';
 
 export const runtime = 'nodejs';
@@ -41,6 +44,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       case 'template':
         await saveRetreatCrmTemplate(String(body.template ?? ''));
+        return NextResponse.json({ ok: true });
+      case 'deal-amount':
+        await setRetreatDealAmount(String(body.id), Number(body.centavos) || 0);
+        return NextResponse.json({ ok: true });
+      case 'log-payment':
+        await logRetreatPayment(String(body.id), Number(body.centavos) || 0, body.note ? String(body.note) : undefined);
+        return NextResponse.json({ ok: true });
+      case 'mark-paid-full':
+        await markRetreatPaidInFull(String(body.id));
         return NextResponse.json({ ok: true });
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });

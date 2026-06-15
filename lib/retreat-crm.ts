@@ -17,6 +17,8 @@ export {
   type RetreatCrmCard,
 } from './retreat-crm-stages';
 
+type VcrPayment = { amountCentavos: number; at: string; note?: string };
+
 type CardRow = {
   id: string;
   reservation_id: string | null;
@@ -27,7 +29,12 @@ type CardRow = {
   position: number;
   note: string;
   created_at: string;
+  deal_amount_centavos: number | null;
+  payments: VcrPayment[] | null;
+  paid_at: string | null;
 };
+
+const DEFAULT_VCR_DEAL_CENTAVOS = 5_000_000; // ₱50,000
 
 type ResRow = {
   id: string;
@@ -47,6 +54,9 @@ function isResPaid(status: string | undefined): boolean {
 
 function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
   const paid = isResPaid(res?.status);
+  const payments = Array.isArray(r.payments) ? r.payments : [];
+  const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
+  const deal = r.deal_amount_centavos ?? DEFAULT_VCR_DEAL_CENTAVOS;
   return {
     id: r.id,
     reservationId: r.reservation_id ?? null,
@@ -62,6 +72,11 @@ function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
     amountCentavos: res?.amount_due_centavos ?? null,
     method: res?.payment_method ?? null,
     createdAt: r.created_at,
+    dealAmountCentavos: deal,
+    collectedCentavos: collected,
+    paidInFull: deal > 0 && collected >= deal,
+    paidAt: r.paid_at ?? null,
+    payments,
   };
 }
 
@@ -167,6 +182,89 @@ export async function updateRetreatCrmCard(
 
 export async function deleteRetreatCrmCard(id: string): Promise<void> {
   await getSupabase().from('retreat_crm_cards').delete().eq('id', id);
+}
+
+/** Set the discussed deal amount (centavos, default ₱50k) on a VCR card. */
+export async function setRetreatDealAmount(id: string, centavos: number): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('retreat_crm_cards')
+    .update({ deal_amount_centavos: Math.max(0, Math.round(centavos)) })
+    .eq('id', id);
+  if (error) throw new Error(`setRetreatDealAmount: ${error.message}`);
+}
+
+/**
+ * Log a (partial or full) VCR cash payment on a card. Appends to the payments
+ * log; once collected reaches the deal amount it stamps paid_at and advances
+ * the card to "paid". This log is the single source of truth for VCR income.
+ */
+export async function logRetreatPayment(id: string, centavos: number, note?: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const amount = Math.max(0, Math.round(centavos));
+  if (amount <= 0) return;
+  const sb = getSupabase();
+  const { data, error: readErr } = await sb
+    .from('retreat_crm_cards')
+    .select('deal_amount_centavos, payments, paid_at, stage')
+    .eq('id', id)
+    .maybeSingle();
+  if (readErr) throw new Error(`logRetreatPayment read: ${readErr.message}`);
+  const payments = (Array.isArray(data?.payments) ? data!.payments : []) as VcrPayment[];
+  payments.push({ amountCentavos: amount, at: new Date().toISOString(), note: note?.trim() || undefined });
+  const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
+  const deal = (data?.deal_amount_centavos as number | null) ?? DEFAULT_VCR_DEAL_CENTAVOS;
+  const patch: Record<string, unknown> = { payments };
+  if (deal > 0 && collected >= deal) {
+    patch.paid_at = (data?.paid_at as string | null) ?? new Date().toISOString();
+    if (data?.stage === 'interested') patch.stage = 'paid';
+  }
+  const { error } = await sb.from('retreat_crm_cards').update(patch).eq('id', id);
+  if (error) throw new Error(`logRetreatPayment: ${error.message}`);
+}
+
+/** Mark a VCR card paid in full — logs a payment for the remaining balance. */
+export async function markRetreatPaidInFull(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const { data } = await sb
+    .from('retreat_crm_cards')
+    .select('deal_amount_centavos, payments')
+    .eq('id', id)
+    .maybeSingle();
+  const payments = (Array.isArray(data?.payments) ? data!.payments : []) as VcrPayment[];
+  const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
+  const deal = (data?.deal_amount_centavos as number | null) ?? DEFAULT_VCR_DEAL_CENTAVOS;
+  const remaining = Math.max(0, deal - collected);
+  if (remaining <= 0) {
+    await sb
+      .from('retreat_crm_cards')
+      .update({ paid_at: new Date().toISOString(), stage: 'paid' })
+      .eq('id', id);
+    return;
+  }
+  await logRetreatPayment(id, remaining, 'Marked paid in full');
+}
+
+/**
+ * Total VCR ("Webinar") income from the card payments log, optionally scoped to
+ * a [sinceMs, untilMs) window by each payment's timestamp. Used by the dashboard
+ * Income section — kept separate from the ₱999 front-end ROAS/daily metrics.
+ */
+export async function sumWebinarIncomeCentavos(sinceMs?: number, untilMs?: number): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const { data, error } = await getSupabase().from('retreat_crm_cards').select('payments');
+  if (error) return 0;
+  let total = 0;
+  for (const row of (data ?? []) as { payments: VcrPayment[] | null }[]) {
+    for (const p of row.payments ?? []) {
+      const t = Date.parse(p.at);
+      if (sinceMs != null && t < sinceMs) continue;
+      if (untilMs != null && t >= untilMs) continue;
+      total += p.amountCentavos || 0;
+    }
+  }
+  return total;
 }
 
 /** SMS template for the retreat board (crm_config row id=2; order-bump uses id=1). */
