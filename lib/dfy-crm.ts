@@ -5,6 +5,7 @@
  * the board's sms: link.
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { getSignups } from './db';
 import { DFY_STAGES, type DfyStage, type DfyCard } from './dfy-stages';
 
 export { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from './dfy-stages';
@@ -103,4 +104,16 @@ export async function deleteDfyCard(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('dfy_crm_cards').delete().eq('id', id);
   if (error) throw new Error(`deleteDfyCard: ${error.message}`);
+}
+
+/** Existing customers (signups) for the "add from existing customer" search. */
+export type DfyCandidate = { id: string; name: string; email: string; phone: string };
+export async function listDfyCandidates(): Promise<DfyCandidate[]> {
+  const signups = await getSignups();
+  return signups.map((s) => ({
+    id: s.id,
+    name: `${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || s.email,
+    email: s.email ?? '',
+    phone: s.phone ?? '',
+  }));
 }

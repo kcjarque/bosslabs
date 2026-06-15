@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
-import { listDfyCards, addDfyCard, updateDfyCard, deleteDfyCard } from '@/lib/dfy-crm';
+import { listDfyCards, addDfyCard, updateDfyCard, deleteDfyCard, listDfyCandidates } from '@/lib/dfy-crm';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const cards = await listDfyCards();
-  return NextResponse.json({ cards });
+  const [cards, customers] = await Promise.all([listDfyCards(), listDfyCandidates()]);
+  return NextResponse.json({ cards, customers });
 }
 
 export async function POST(req: Request) {

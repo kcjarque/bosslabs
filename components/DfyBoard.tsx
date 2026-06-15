@@ -22,8 +22,11 @@ function smsHref(phone: string, template: string, name: string): string {
   return `sms:${toE164Ph(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
+type Candidate = { id: string; name: string; email: string; phone: string };
+
 export function DfyBoard() {
   const [cards, setCards] = useState<DfyCard[]>([]);
+  const [customers, setCustomers] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<DfyStage | null>(null);
@@ -31,6 +34,7 @@ export function DfyBoard() {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [query, setQuery] = useState('');
+  const [pickQuery, setPickQuery] = useState('');
   const [template, setTemplate] = useState(DEFAULT_TPL);
   const [savedTpl, setSavedTpl] = useState(false);
 
@@ -45,9 +49,19 @@ export function DfyBoard() {
       const r = await fetch('/api/admin/dfy-crm');
       const d = await r.json();
       setCards(d.cards ?? []);
+      setCustomers(d.customers ?? []);
       setLoading(false);
     })();
   }, []);
+
+  async function promote(c: Candidate) {
+    const res = await api({
+      action: 'add',
+      card: { name: c.name.trim(), email: c.email.trim(), phone: c.phone.trim() },
+    });
+    if (res.card) setCards((cs) => [...cs, res.card]);
+    setPickQuery('');
+  }
 
   function saveTemplate() {
     try {
@@ -103,13 +117,31 @@ export function DfyBoard() {
     ? cards.filter((c) => c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q))
     : cards;
 
+  // Dedup so a customer can't be added twice (match on email or normalized phone).
+  const onBoardEmails = new Set(cards.map((c) => c.email.trim().toLowerCase()).filter(Boolean));
+  const onBoardPhones = new Set(cards.map((c) => (c.phone ? toE164Ph(c.phone) : '')).filter(Boolean));
+  const isOnBoard = (c: Candidate) =>
+    (!!c.email && onBoardEmails.has(c.email.trim().toLowerCase())) ||
+    (!!c.phone && onBoardPhones.has(toE164Ph(c.phone)));
+  const pq = pickQuery.trim().toLowerCase();
+  const matches = pq
+    ? customers
+        .filter(
+          (c) =>
+            c.name.toLowerCase().includes(pq) ||
+            c.email.toLowerCase().includes(pq) ||
+            c.phone.toLowerCase().includes(pq),
+        )
+        .slice(0, 12)
+    : [];
+
   return (
     <div className="space-y-4">
       {/* Add person + SMS template */}
       <div className="card space-y-3">
         <form onSubmit={addCard} className="flex flex-wrap items-end gap-2">
           <div className="flex-1">
-            <label className="label">Add prospect</label>
+            <label className="label">Add a new prospect</label>
             <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <input
@@ -129,6 +161,66 @@ export function DfyBoard() {
             Add card
           </button>
         </form>
+
+        {/* Or pull in an existing customer (from signups) */}
+        <div className="border-t border-slate-100 pt-3">
+          <label className="label">Or add an existing customer</label>
+          <p className="mb-1.5 text-[11px] text-slate-500">
+            Search your customers and add them straight to <strong>Discovery Call</strong>.
+          </p>
+          <div className="relative">
+            <input
+              className="input"
+              placeholder="Search customers by name, email, or number…"
+              value={pickQuery}
+              onChange={(e) => setPickQuery(e.target.value)}
+            />
+            {pickQuery && (
+              <button
+                onClick={() => setPickQuery('')}
+                aria-label="Clear"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                ×
+              </button>
+            )}
+            {pq && (
+              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {matches.length === 0 ? (
+                  <div className="px-3 py-2.5 text-xs text-slate-400">
+                    No matching customers. They&rsquo;ll appear once they exist in Customers.
+                  </div>
+                ) : (
+                  matches.map((m) => {
+                    const already = isOnBoard(m);
+                    return (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-slate-50"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm text-slate-800">{m.name}</div>
+                          <div className="truncate text-[11px] text-slate-400">
+                            {m.email}
+                            {m.phone ? ` · ${toE164Ph(m.phone)}` : ''}
+                          </div>
+                        </div>
+                        {already ? (
+                          <span className="whitespace-nowrap text-[11px] text-slate-400">On board ✓</span>
+                        ) : (
+                          <button onClick={() => promote(m)} className="btn btn-secondary whitespace-nowrap text-xs">
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="border-t border-slate-100 pt-3">
           <label className="label">Text template</label>
           <p className="mb-1.5 text-[11px] text-slate-500">
