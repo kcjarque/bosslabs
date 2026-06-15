@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from '@/lib/dfy-stages';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { PipelineFunnel } from '@/components/admin/PipelineFunnel';
 
 const DEFAULT_TPL = "Hi {{name}}! Following up on your DFY project — do you have a few minutes today? 😊";
 
@@ -131,10 +132,23 @@ export function DfyBoard() {
         .slice(0, 12)
     : [];
 
+  const funnelRows = DFY_STAGES.map((s) => {
+    const inStage = cards.filter((c) => c.stage === s);
+    return {
+      label: DFY_STAGE_META[s].label,
+      bar: DFY_STAGE_META[s].bar,
+      count: inStage.length,
+      dealCentavos: inStage.reduce((sum, c) => sum + (c.amountCentavos || 0), 0),
+    };
+  });
+  const pipelineTotalCentavos = cards.reduce((sum, c) => sum + (c.amountCentavos || 0), 0);
+
   return (
     <div className="space-y-4">
-      {/* Add a new prospect or pull in an existing customer */}
+      {/* Add a prospect / existing customer (left) + pipeline funnel (right) */}
       <div className="card space-y-3">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
         <form onSubmit={addCard} className="flex flex-wrap items-end gap-2">
           <div className="flex-1">
             <label className="label">Add a new prospect</label>
@@ -216,7 +230,11 @@ export function DfyBoard() {
             )}
           </div>
         </div>
-
+          </div>
+          <div className="lg:border-l lg:border-slate-100 lg:pl-5">
+            <PipelineFunnel rows={funnelRows} totalCentavos={pipelineTotalCentavos} />
+          </div>
+        </div>
       </div>
 
       {/* Search */}

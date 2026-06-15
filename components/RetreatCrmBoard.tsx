@@ -9,6 +9,7 @@ import {
 } from '@/lib/retreat-crm-stages';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { PipelineFunnel } from '@/components/admin/PipelineFunnel';
 
 async function api(payload: Record<string, unknown>) {
   const r = await fetch('/api/admin/retreat-crm', {
@@ -150,24 +151,38 @@ export function RetreatCrmBoard() {
         .slice(0, 12)
     : [];
 
+  const funnelRows = RETREAT_CRM_STAGES.map((s) => {
+    const inStage = cards.filter((c) => c.stage === s);
+    return {
+      label: RETREAT_CRM_STAGE_META[s].label,
+      bar: RETREAT_CRM_STAGE_META[s].bar,
+      count: inStage.length,
+      dealCentavos: inStage.reduce((sum, c) => sum + (c.dealAmountCentavos || 0), 0),
+    };
+  });
+  const pipelineTotalCentavos = cards.reduce((sum, c) => sum + (c.dealAmountCentavos || 0), 0);
+
   return (
     <div className="space-y-4">
       <div className="card space-y-3">
-        <div>
-          <label className="label">Message template</label>
-          <p className="mb-1.5 text-[11px] text-slate-500">
-            Tapping <strong>Text</strong> on a card opens your phone&rsquo;s Messages app with this,
-            and <code className="rounded bg-slate-100 px-1">{'{{name}}'}</code> swapped for their first name.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <label className="label">Message template</label>
+            <p className="mb-1.5 text-[11px] text-slate-500">
+              Tapping <strong>Text</strong> on a card opens Messages with this;{' '}
+              <code className="rounded bg-slate-100 px-1">{'{{name}}'}</code> swaps for their first name.
+            </p>
             <textarea
-              className="input min-h-[60px] flex-1 text-sm"
+              className="input min-h-[88px] w-full text-sm"
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
             />
-            <button onClick={saveTemplate} className="btn btn-primary self-start text-xs">
+            <button onClick={saveTemplate} className="btn btn-primary mt-2 text-xs">
               {savedTpl ? 'Saved ✓' : 'Save template'}
             </button>
+          </div>
+          <div className="lg:border-l lg:border-slate-100 lg:pl-5">
+            <PipelineFunnel rows={funnelRows} totalCentavos={pipelineTotalCentavos} />
           </div>
         </div>
         <div className="border-t border-slate-100 pt-3">
