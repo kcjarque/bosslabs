@@ -595,7 +595,7 @@ export default async function AdminDashboard({
           DFY = cash collected on Done-For-You deals. Overall ROAS = total income ÷ ad spend (incl.
           back-end). The Ad spend &amp; ROAS card below stays front-end-only.
         </p>
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
           <StatCard
             label="Total revenue"
             value={formatPHP(totalIncomeCentavos)}
@@ -618,13 +618,6 @@ export default async function AdminDashboard({
             value={formatPHP(dfyIncomeCentavos)}
             sub="cash collected"
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
-          <StatCard
-            label="Ad spend"
-            value={formatPHP(adSpendInPeriodCentavos)}
-            sub={`${periodLabel} · Meta`}
           />
           <StatCard
             label="Overall ROAS"
@@ -1121,7 +1114,7 @@ function StatCard({
           : '';
   const body = (
     <div className={`card ${toneClass}`.trim()}>
-      <div className="tnum text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+      <div className="tnum text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
         {value}
       </div>
       <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
