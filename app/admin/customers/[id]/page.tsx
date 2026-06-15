@@ -447,6 +447,7 @@ export default async function CustomerProfilePage({
           <CustomerRemarks
             signupId={customer.id}
             initial={typeof meta.remarks === 'string' ? meta.remarks : ''}
+            updatedAt={typeof meta.remarksUpdatedAt === 'string' ? meta.remarksUpdatedAt : null}
           />
         </section>
 

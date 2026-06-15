@@ -10,13 +10,16 @@ import { setRemarksAction } from '@/app/admin/customers/actions';
 export function CustomerRemarks({
   signupId,
   initial,
+  updatedAt,
 }: {
   signupId: string;
   initial: string;
+  updatedAt?: string | null;
 }) {
   const [value, setValue] = useState(initial);
   const [saved, setSaved] = useState<string>(initial);
   const [state, setState] = useState<'idle' | 'saving' | 'done'>('idle');
+  const [stamp, setStamp] = useState<string | null>(updatedAt ?? null);
 
   const dirty = value !== saved;
 
@@ -25,6 +28,7 @@ export function CustomerRemarks({
     await setRemarksAction(signupId, value.trim());
     setSaved(value.trim());
     setValue(value.trim());
+    setStamp(value.trim() ? new Date().toISOString() : null);
     setState('done');
     setTimeout(() => setState('idle'), 1600);
   }
@@ -51,6 +55,17 @@ export function CustomerRemarks({
           {state === 'saving' ? 'Saving…' : state === 'done' ? 'Saved ✓' : 'Save'}
         </button>
         {dirty && state === 'idle' && <span className="text-[10px] text-amber-600">Unsaved</span>}
+        {!dirty && stamp && (
+          <span className="text-[10px] text-slate-400">
+            Last updated{' '}
+            {new Date(stamp).toLocaleString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </span>
+        )}
       </div>
     </div>
   );

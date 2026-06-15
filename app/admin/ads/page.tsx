@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { RefreshButton } from './RefreshButton';
 import {
-  getAdsReport,
+  getAdsReportCached,
   ADS_RANGES,
   type AdsRangeKey,
   type AdEntity,
@@ -56,7 +56,7 @@ export default async function AdsPage({
   requireAdmin();
   const rangeKey: AdsRangeKey = isRangeKey(searchParams?.range) ? searchParams.range : 'all';
   const activeOnly = searchParams?.active === '1';
-  const report = await getAdsReport(rangeKey);
+  const report = await getAdsReportCached(rangeKey);
 
   // Active-only filters the table rows (the summary stays campaign-level).
   const adsets = report.configured

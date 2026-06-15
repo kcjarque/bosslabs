@@ -33,6 +33,7 @@ function rowToCard(r: CrmRow): CrmCard {
     createdAt: r.created_at,
     amountCentavos: null,
     remarks: '',
+    remarksUpdatedAt: null,
     eventStartsAt: null,
   };
 }
@@ -57,7 +58,10 @@ export async function listCrmCards(): Promise<CrmCard[]> {
   const rows = (data as CrmRow[]) ?? [];
 
   const signupIds = [...new Set(rows.map((r) => r.signup_id).filter(Boolean))] as string[];
-  const bump = new Map<string, { total: number; remarks: string; eventStartsAt: string | null }>();
+  const bump = new Map<
+    string,
+    { total: number; remarks: string; remarksUpdatedAt: string | null; eventStartsAt: string | null }
+  >();
   if (signupIds.length) {
     const { data: sigs } = await sb
       .from('signups')
@@ -81,11 +85,17 @@ export async function listCrmCards(): Promise<CrmCard[]> {
     }
     for (const s of sigRows) {
       if (!s.bumped) continue; // only order-bump buyers land on this board
-      const meta = (s.metadata ?? {}) as { otoConfirmed?: string; otoAmount?: number; remarks?: string };
+      const meta = (s.metadata ?? {}) as {
+        otoConfirmed?: string;
+        otoAmount?: number;
+        remarks?: string;
+        remarksUpdatedAt?: string;
+      };
       const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
       bump.set(s.id, {
         total: (s.amount_centavos ?? 0) + otoExtra,
         remarks: meta.remarks ?? '',
+        remarksUpdatedAt: meta.remarksUpdatedAt ?? null,
         eventStartsAt: s.event_id ? eventStart.get(s.event_id) ?? null : null,
       });
     }
@@ -98,6 +108,7 @@ export async function listCrmCards(): Promise<CrmCard[]> {
       const b = bump.get(r.signup_id!)!;
       card.amountCentavos = b.total;
       card.remarks = b.remarks;
+      card.remarksUpdatedAt = b.remarksUpdatedAt;
       card.eventStartsAt = b.eventStartsAt;
       return card;
     });

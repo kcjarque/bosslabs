@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
 import { syncAdSpendDaily } from '@/lib/meta-ads';
 
@@ -14,6 +14,7 @@ import { syncAdSpendDaily } from '@/lib/meta-ads';
 export async function refreshAdsData(): Promise<{ ok: boolean; synced: number; error?: string }> {
   requireAdmin();
   const result = await syncAdSpendDaily(7);
+  revalidateTag('ads-report'); // force a fresh live Graph pull on the Ads page
   revalidatePath('/admin/ads');
   revalidatePath('/admin');
   return { ok: !result.error, synced: result.synced.length, error: result.error };

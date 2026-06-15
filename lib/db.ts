@@ -808,7 +808,16 @@ export async function setSignupRemarks(signupId: string, remarks: string): Promi
   const meta = ((data?.metadata as Record<string, unknown> | null) ?? {});
   const { error } = await sb
     .from('signups')
-    .update({ metadata: { ...meta, remarks } })
+    // Stamp when the remark was last edited so the CRM board + customer
+    // profile can show a "last updated" line. Cleared to no stamp when the
+    // remark is emptied, so a blank remark doesn't read as "updated just now".
+    .update({
+      metadata: {
+        ...meta,
+        remarks,
+        remarksUpdatedAt: remarks.trim() ? new Date().toISOString() : null,
+      },
+    })
     .eq('id', signupId);
   if (error) throw new Error(`setSignupRemarks: ${error.message}`);
 }

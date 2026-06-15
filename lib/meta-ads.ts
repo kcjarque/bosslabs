@@ -12,7 +12,21 @@
  * shows a connect-token prompt instead of erroring.
  */
 
+import { unstable_cache } from 'next/cache';
 import { upsertAdSpendDay } from './db';
+
+/**
+ * Cached view of getAdsReport for the /admin/ads page. The raw report fires 3
+ * live Graph API calls (1–3s each); without caching, every nav to the page paid
+ * that cost. Cached 120s per range and tagged 'ads-report' so the page's Refresh
+ * button (which calls revalidateTag) still forces a fresh pull on demand.
+ */
+export function getAdsReportCached(rangeKey: AdsRangeKey = 'all'): Promise<AdsReport> {
+  return unstable_cache(() => getAdsReport(rangeKey), ['ads-report', rangeKey], {
+    revalidate: 120,
+    tags: ['ads-report'],
+  })();
+}
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
 const CAMPAIGN_ID = process.env.META_ADS_CAMPAIGN_ID || '120247301997590236';

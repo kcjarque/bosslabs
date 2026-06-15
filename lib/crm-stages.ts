@@ -28,6 +28,9 @@ export type CrmCard = {
   /** Free-text remark — shared with the customer profile (stored on the
    *  signup's metadata.remarks). */
   remarks: string;
+  /** ISO timestamp the remark was last edited (signup metadata.remarksUpdatedAt).
+   *  Null when there's no remark — drives the "updated" line on the card. */
+  remarksUpdatedAt: string | null;
   /** ISO start of the webinar event this customer joined (from their signup's
    *  event). Null when the signup isn't tied to a known event. */
   eventStartsAt: string | null;

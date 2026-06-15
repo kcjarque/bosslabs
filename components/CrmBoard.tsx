@@ -68,7 +68,13 @@ export function CrmBoard() {
   /** Save a remark — writes to the linked signup so it also lands on the
    *  customer profile. Optimistic local update. */
   async function saveRemark(card: CrmCard, remarks: string) {
-    setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, remarks } : c)));
+    setCards((cs) =>
+      cs.map((c) =>
+        c.id === card.id
+          ? { ...c, remarks, remarksUpdatedAt: remarks.trim() ? new Date().toISOString() : null }
+          : c,
+      ),
+    );
     if (card.signupId) await api({ action: 'remark', signupId: card.signupId, remarks });
   }
 
@@ -338,10 +344,31 @@ function CardRemark({ card, onSave }: { card: CrmCard; onSave: (text: string) =>
       className="mt-2 block w-full rounded-md border border-dashed border-slate-200 px-2 py-1 text-left text-[11px] transition hover:border-amber-300 hover:bg-amber-50/40"
     >
       {card.remarks ? (
-        <span className="text-slate-600">📝 {card.remarks}</span>
+        <>
+          <span className="text-slate-600">📝 {card.remarks}</span>
+          {card.remarksUpdatedAt && (
+            <span className="mt-0.5 block text-[10px] text-slate-400">
+              Updated {fmtRemarkTime(card.remarksUpdatedAt)}
+            </span>
+          )}
+        </>
       ) : (
         <span className="text-slate-400">📝 Add remark…</span>
       )}
     </button>
   );
+}
+
+/** "Jun 15, 2:30 PM" — browser-local (Manila) date+time for the remark stamp. */
+function fmtRemarkTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
 }
