@@ -106,8 +106,12 @@ export function HeatmapCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !ready || height === 0) return;
-    const w = recordedWidth;
-    const h = height;
+    // Render the heat at a capped resolution (≤640px wide) and CSS-upscale to
+    // fill — the blobs are low-frequency so it's visually identical, but the
+    // per-pixel colorize loop drops from millions of pixels to a fraction.
+    const RES = Math.min(1, 640 / Math.max(1, recordedWidth));
+    const w = Math.max(1, Math.round(recordedWidth * RES));
+    const h = Math.max(1, Math.round(height * RES));
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
@@ -118,17 +122,19 @@ export function HeatmapCanvas({
     if (points.length === 0) return;
 
     // Pass 1 — additive grayscale intensity via radial gradients.
-    const radius = mode === 'clicks' ? 28 : 18;
+    const radius = (mode === 'clicks' ? 28 : 18) * RES;
     const alpha = mode === 'clicks' ? 0.5 : 0.18;
     ctx.globalCompositeOperation = 'lighter';
     for (const p of points) {
-      if (p.y > h) continue;
-      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
+      if (p.y > height) continue; // bounds check in recorded coords
+      const x = p.x * RES;
+      const y = p.y * RES;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
       g.addColorStop(0, `rgba(0,0,0,${alpha})`);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
