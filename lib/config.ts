@@ -276,16 +276,16 @@ export const OFFER = {
   },
   oto: {
     // SKU unchanged so payment/webhook/tracking keep matching — only the
-    // displayed offer changed (1:1 session → The Build Vault). Same ₱1,997.
+    // displayed offer + price changed (now ₱999, down from ₱1,997).
     sku: 'BL_OTO_AUDIT',
     name: 'The AI Secrets Builder Vault',
-    priceCentavos: 199700,
+    priceCentavos: 99900,
     currency: 'PHP',
-    label: '₱1,997',
+    label: '₱999',
     crossed: '₱9,997',
     eyebrow: 'Bonus',
-    discountLabel: '80% off',
-    savings: 'Save ₱8,000',
+    discountLabel: '90% off',
+    savings: 'Save ₱8,998',
     footerNote: '⚡ Get instant access upon payment',
     promise:
       'Everything we use to ship apps fast: every past live build recorded end-to-end, our growing step-by-step tutorial library, the prompts + skills + starter-repo hub, and the exact vision-to-app blueprint. Instant access — this page only.',
