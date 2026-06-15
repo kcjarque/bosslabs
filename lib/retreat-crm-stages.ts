@@ -1,6 +1,6 @@
 /** VibeCode Retreat CRM stages + card shape — dependency-free so the client
  *  board imports them without pulling in the Supabase client. */
-export const RETREAT_CRM_STAGES = ['interested', 'paid', 'confirmed', 'attending', 'attended'] as const;
+export const RETREAT_CRM_STAGES = ['interested', 'confirmed', 'paid', 'attending', 'attended'] as const;
 export type RetreatCrmStage = (typeof RETREAT_CRM_STAGES)[number];
 
 export const RETREAT_CRM_STAGE_META: Record<RetreatCrmStage, { label: string; tint: string; bar: string }> = {
