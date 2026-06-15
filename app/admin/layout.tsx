@@ -23,7 +23,6 @@ const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[
     heading: 'Overview',
     items: [
       { href: '/admin', label: 'Dashboard' },
-      { href: '/admin/ads', label: 'Ads' },
     ],
   },
   {
@@ -37,6 +36,7 @@ const NAV_GROUPS: { heading: string; items: { href: string; label: string }[] }[
   {
     heading: 'Marketing',
     items: [
+      { href: '/admin/ads', label: 'Ads' },
       { href: '/admin/funnels', label: 'Funnels' },
       { href: '/admin/sequences', label: 'Sequences' },
       { href: '/admin/templates', label: 'Templates' },

@@ -14,6 +14,7 @@ import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
+import { RefreshButton } from './ads/RefreshButton';
 import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
 
 export const dynamic = 'force-dynamic';
@@ -541,11 +542,14 @@ export default async function AdminDashboard({
 
       {/* AD SPEND & ROAS — Meta spend vs actual paid revenue, period-scoped */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Ad spend &amp; ROAS</h2>
-          <span className="text-[11px] text-slate-400">
-            BOSSLABS AI | SALES · {periodLabel} · Meta, synced 12:01am
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[11px] text-slate-400">
+              BOSSLABS AI | SALES · {periodLabel} · Meta, synced 12:01am
+            </span>
+            <RefreshButton />
+          </div>
         </div>
         <p className="mt-1 text-[12px] text-slate-500">
           Spend vs cash received in the period. ROAS = revenue ÷ spend on the ₱999
