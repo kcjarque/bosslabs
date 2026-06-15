@@ -28,10 +28,11 @@ export default async function AffiliatesPage() {
   requireAdmin();
   const base = PUBLIC_SITE_URL;
   const affiliates = await listAffiliates();
-  const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a)));
+  // Fetch commissions + program once, in parallel — then compute every
+  // affiliate's stats from that single commissions list (no per-affiliate query).
+  const [commissions, program] = await Promise.all([listCommissions(), getAffiliateProgram()]);
+  const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a, commissions)));
   const byId = new Map(affiliates.map((a) => [a.id, a]));
-  const commissions = await listCommissions();
-  const program = await getAffiliateProgram();
 
   const totalPending = commissions
     .filter((c) => c.status === 'pending')

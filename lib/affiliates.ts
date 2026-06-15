@@ -439,7 +439,12 @@ export type AffiliateStats = {
 };
 
 /** Aggregate stats for one affiliate (for the admin + affiliate dashboard). */
-export async function getAffiliateStats(aff: Affiliate): Promise<AffiliateStats> {
+export async function getAffiliateStats(
+  aff: Affiliate,
+  /** Pass the full commissions list (fetched once) to avoid an N+1 query when
+   *  computing stats for every affiliate on the admin page. */
+  preloadedCommissions?: Commission[],
+): Promise<AffiliateStats> {
   if (!isSupabaseConfigured()) {
     return {
       clicks: 0,
@@ -456,7 +461,9 @@ export async function getAffiliateStats(aff: Affiliate): Promise<AffiliateStats>
       .from('signups')
       .select('id', { count: 'exact', head: true })
       .eq('metadata->>affiliateCode', aff.code),
-    listCommissions(aff.id),
+    preloadedCommissions
+      ? Promise.resolve(preloadedCommissions.filter((c) => c.affiliateId === aff.id))
+      : listCommissions(aff.id),
   ]);
   const pending = comms.filter((c) => c.status === 'pending').reduce((s, c) => s + c.commissionCentavos, 0);
   const paid = comms.filter((c) => c.status === 'paid').reduce((s, c) => s + c.commissionCentavos, 0);
