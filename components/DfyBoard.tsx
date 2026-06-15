@@ -5,7 +5,6 @@ import { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from '@/lib/d
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
 
-const TPL_KEY = 'dfy_sms_template';
 const DEFAULT_TPL = "Hi {{name}}! Following up on your DFY project — do you have a few minutes today? 😊";
 
 async function api(payload: Record<string, unknown>) {
@@ -36,16 +35,8 @@ export function DfyBoard() {
   const [amount, setAmount] = useState('');
   const [query, setQuery] = useState('');
   const [pickQuery, setPickQuery] = useState('');
-  const [template, setTemplate] = useState(DEFAULT_TPL);
-  const [savedTpl, setSavedTpl] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(TPL_KEY);
-      if (saved) setTemplate(saved);
-    } catch {
-      /* ignore */
-    }
     (async () => {
       const r = await fetch('/api/admin/dfy-crm');
       const d = await r.json();
@@ -62,16 +53,6 @@ export function DfyBoard() {
     });
     if (res.card) setCards((cs) => [...cs, res.card]);
     setPickQuery('');
-  }
-
-  function saveTemplate() {
-    try {
-      window.localStorage.setItem(TPL_KEY, template);
-    } catch {
-      /* ignore */
-    }
-    setSavedTpl(true);
-    setTimeout(() => setSavedTpl(false), 1600);
   }
 
   async function addCard(e: React.FormEvent) {
@@ -152,7 +133,7 @@ export function DfyBoard() {
 
   return (
     <div className="space-y-4">
-      {/* Add person + SMS template */}
+      {/* Add a new prospect or pull in an existing customer */}
       <div className="card space-y-3">
         <form onSubmit={addCard} className="flex flex-wrap items-end gap-2">
           <div className="flex-1">
@@ -236,24 +217,6 @@ export function DfyBoard() {
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-3">
-          <label className="label">Text template</label>
-          <p className="mb-1.5 text-[11px] text-slate-500">
-            Tapping <strong>Text</strong> opens Messages with this;{' '}
-            <code className="rounded bg-slate-100 px-1">{'{{name}}'}</code> becomes their first name. Saved to this
-            browser.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <textarea
-              className="input min-h-[52px] flex-1 text-sm"
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-            />
-            <button onClick={saveTemplate} className="btn btn-primary self-start text-xs">
-              {savedTpl ? 'Saved ✓' : 'Save template'}
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Search */}
@@ -350,7 +313,7 @@ export function DfyBoard() {
                     />
                     {c.phone ? (
                       <a
-                        href={smsHref(c.phone, template, c.name)}
+                        href={smsHref(c.phone, DEFAULT_TPL, c.name)}
                         className="mt-2 block rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-cyan-500"
                       >
                         💬 Text
