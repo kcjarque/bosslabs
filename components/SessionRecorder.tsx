@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { isFramedView } from '@/lib/is-framed';
 
 /**
  * Self-hosted session replay (rrweb) capture — load-safe by construction.
@@ -67,6 +68,9 @@ export function SessionRecorder() {
   const bufferRef = useRef<unknown[]>([]);
 
   useEffect(() => {
+    // The admin heatmap loads this page inside an iframe as a backdrop — never
+    // record that synthetic load (it would create a phantom session).
+    if (isFramedView()) return;
     if (!pathname || !RECORDED_PAGES.includes(pathname)) return;
 
     let cancelled = false;

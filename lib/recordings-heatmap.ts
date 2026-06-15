@@ -5,9 +5,10 @@ import { getChunksForPage } from '@/lib/db';
  *
  * Walks the stored rrweb event stream for one recorded page across ALL
  * sessions and extracts where people clicked / moved — turned into page-
- * absolute coordinates by tracking scroll as we go. Returns the points plus a
- * representative snapshot to render as the backdrop. Pure data work: nothing
- * here ships to the funnel.
+ * absolute coordinates by tracking scroll as we go. The backdrop is rendered
+ * client-side by loading the live page in a sandboxed iframe, so this only
+ * returns the points + page dimensions. Pure data work: nothing ships to the
+ * funnel.
  *
  * rrweb wire format (v2):
  *   Meta(4)          → { data: { width, height } }
@@ -24,7 +25,6 @@ export type SurfaceHeatmap = {
   page: string;
   recordedWidth: number;
   recordedHeight: number;
-  backdrop: unknown[] | null;
   clicks: HeatPoint[];
   moves: HeatPoint[];
   sessionCount: number;
@@ -67,12 +67,6 @@ export async function aggregateSurfaceHeatmap(page: string): Promise<SurfaceHeat
   const sessions = new Set<string>();
   let recordedWidth = 0;
   let recordedHeight = 0;
-  // The backdrop only needs the Meta + FullSnapshot to render the page's first
-  // frame — so we keep just those two events (not the whole session chunk). The
-  // client replay is then tiny + fast + reliable instead of replaying thousands
-  // of incremental events just to paint a static frame.
-  let backdropMeta: RrEvent | null = null;
-  let backdropSnapshot: RrEvent | null = null;
   let moveCounter = 0;
 
   for (const chunk of chunks) {
@@ -83,18 +77,14 @@ export async function aggregateSurfaceHeatmap(page: string): Promise<SurfaceHeat
     // chunk; seed from the FullSnapshot's initialOffset if present.
     let scrollY = 0;
     let scrollX = 0;
-    let chunkMeta: RrEvent | null = null;
-    let chunkSnapshot: RrEvent | null = null;
 
     for (const ev of events) {
       if (ev.type === META && ev.data) {
         if (ev.data.width && ev.data.width > recordedWidth) recordedWidth = ev.data.width;
         if (ev.data.height && ev.data.height > recordedHeight) recordedHeight = ev.data.height;
-        if (!chunkMeta) chunkMeta = ev;
       } else if (ev.type === FULL_SNAPSHOT) {
         scrollY = ev.data?.initialOffset?.top ?? 0;
         scrollX = ev.data?.initialOffset?.left ?? 0;
-        if (!chunkSnapshot) chunkSnapshot = ev;
       } else if (ev.type === INCREMENTAL && ev.data) {
         const { source } = ev.data;
         if (source === SRC_SCROLL) {
@@ -113,23 +103,12 @@ export async function aggregateSurfaceHeatmap(page: string): Promise<SurfaceHeat
         }
       }
     }
-
-    // First chunk that has both a Meta + FullSnapshot supplies the backdrop —
-    // just those two events render the page; later chunks/incrementals aren't
-    // needed for a static first-frame backdrop.
-    if (!backdropSnapshot && chunkMeta && chunkSnapshot) {
-      backdropMeta = chunkMeta;
-      backdropSnapshot = chunkSnapshot;
-    }
   }
-
-  const backdrop = backdropMeta && backdropSnapshot ? [backdropMeta, backdropSnapshot] : null;
 
   return {
     page,
     recordedWidth: recordedWidth || 1280,
     recordedHeight: recordedHeight || 800,
-    backdrop,
     clicks,
     moves,
     sessionCount: sessions.size,

@@ -94,7 +94,7 @@ export default async function HeatmapPage({
                 </div>
               ) : (
                 <HeatmapCanvas
-                  backdrop={s.backdrop}
+                  page={s.page}
                   recordedWidth={s.recordedWidth}
                   clicks={s.clicks}
                   moves={s.moves}
@@ -106,9 +106,10 @@ export default async function HeatmapPage({
       )}
 
       <p className="text-[11px] leading-relaxed text-slate-400">
-        Coordinates are page-absolute (scroll folded in). The backdrop is a representative captured
-        snapshot of the page; click/move density is aggregated across every recorded visit. Input
-        values stay masked — heatmaps use position only, never what was typed.
+        Coordinates are page-absolute (scroll folded in). The backdrop is the live page rendered in a
+        sandboxed, script-free frame (it loads nothing into your funnel); click/move density is
+        aggregated across every recorded visit. Input values stay masked — heatmaps use position
+        only, never what was typed.
       </p>
     </div>
   );

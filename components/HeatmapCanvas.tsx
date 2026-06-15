@@ -4,110 +4,100 @@ import { useEffect, useRef, useState } from 'react';
 import type { HeatPoint } from '@/lib/recordings-heatmap';
 
 /**
- * Consolidated heatmap surface (admin-only). Renders a representative rrweb
- * snapshot as a static backdrop (bare rrweb Replayer, paused at frame 0), then
- * overlays a canvas density map of every click / move aggregated across all
- * sessions. rrweb is dynamically imported, so this never touches the funnel.
+ * Consolidated heatmap surface (admin-only). Renders the REAL funnel page in a
+ * sandboxed iframe as a static backdrop, then overlays a canvas density map of
+ * every click / move aggregated across all sessions.
+ *
+ * Why a live iframe instead of replaying rrweb: rrweb's bare Replayer painted a
+ * blank/short frame (heat squished into a thin bar) and pulled in a heavy import
+ * just to draw one static frame — slow + useless. The iframe loads the actual
+ * page's server-rendered HTML + CSS, so the backdrop is always the real page and
+ * renders instantly. `sandbox="allow-same-origin"` (no allow-scripts) means the
+ * framed page runs ZERO JavaScript — no tracking, no pixel, no recording — while
+ * still being same-origin so we can measure its full scroll height.
  *
  * Coordinate model: points are page-absolute (scroll already folded in by the
- * server). We render the backdrop at its recorded width and CSS-scale the whole
- * wrapper to fit the admin column, so the canvas can draw in raw recorded
- * coordinates and inherit the same scale — no per-point math.
+ * server). The iframe renders at the recorded width; we CSS-scale the whole
+ * stage to fit the admin column, so the canvas draws in raw recorded
+ * coordinates and inherits the same scale — no per-point math.
  */
 
 type Mode = 'clicks' | 'moves';
 
-const MAX_CANVAS_HEIGHT = 6000; // guard against pathological page heights
+const MAX_CANVAS_HEIGHT = 8000; // guard against pathological page heights
 
 export function HeatmapCanvas({
-  backdrop,
+  page,
   recordedWidth,
   clicks,
   moves,
 }: {
-  backdrop: unknown[] | null;
+  page: string;
   recordedWidth: number;
   clicks: HeatPoint[];
   moves: HeatPoint[];
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const replayMountRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mode, setMode] = useState<Mode>('clicks');
   const [height, setHeight] = useState(0);
   const [scale, setScale] = useState(1);
   const [ready, setReady] = useState(false);
 
-  // 1) Render the static backdrop + measure full page height.
+  // Height derived from the heat points — used until the iframe reports its real
+  // scroll height (and as a fallback if same-origin measurement is blocked).
+  const pointHeight = (() => {
+    const maxY = [...clicks, ...moves].reduce((m, p) => Math.max(m, p.y), 0);
+    return Math.min(MAX_CANVAS_HEIGHT, Math.max(800, maxY + 200));
+  })();
+
+  // Fit the stage to the admin column width whenever it (or the recorded width)
+  // changes.
   useEffect(() => {
-    let destroyed = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let replayer: any = null;
-
-    (async () => {
-      // Fallback height from the points if there's no backdrop to measure.
-      const pts = [...clicks, ...moves];
-      const maxY = pts.reduce((m, p) => Math.max(m, p.y), 0);
-      let fullHeight = Math.min(MAX_CANVAS_HEIGHT, Math.max(800, maxY + 200));
-
-      const mount = replayMountRef.current;
-      if (backdrop && Array.isArray(backdrop) && backdrop.length >= 2 && mount) {
-        try {
-          const mod = await import('rrweb');
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const Replayer = (mod as any).Replayer;
-          replayer = new Replayer(backdrop, {
-            root: mount,
-            speed: 1,
-            skipInactive: false,
-            mouseTail: false,
-            showWarning: false,
-            showDebug: false,
-            UNSAFE_replayCanvas: false,
-          });
-          replayer.pause(0);
-          const iframe: HTMLIFrameElement | undefined = replayer.iframe;
-          if (iframe) {
-            iframe.style.pointerEvents = 'none';
-            const doc = iframe.contentDocument;
-            const measured = doc
-              ? Math.max(doc.body?.scrollHeight ?? 0, doc.documentElement?.scrollHeight ?? 0)
-              : 0;
-            if (measured > 0) fullHeight = Math.min(MAX_CANVAS_HEIGHT, measured);
-            iframe.style.height = `${fullHeight}px`;
-            iframe.style.border = '0';
-          }
-        } catch {
-          /* fall through to blank backdrop */
-        }
-      }
-
-      if (destroyed) return;
+    function fit() {
       const outer = outerRef.current;
       const fitWidth = outer ? outer.clientWidth : recordedWidth;
-      setScale(Math.min(1, fitWidth / recordedWidth));
-      setHeight(fullHeight);
-      setReady(true);
-    })();
+      setScale(Math.min(1, fitWidth / Math.max(1, recordedWidth)));
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [recordedWidth]);
 
-    return () => {
-      destroyed = true;
-      try {
-        replayer?.destroy?.();
-      } catch {
-        /* ignore */
+  // Measure the iframe's real page height once it loads (same-origin read). The
+  // page runs no scripts, so layout is stable by load — but we re-measure after
+  // a short delay to catch late web-font / image reflow.
+  function measure() {
+    const iframe = iframeRef.current;
+    let measured = 0;
+    try {
+      const doc = iframe?.contentDocument;
+      if (doc) {
+        measured = Math.max(
+          doc.body?.scrollHeight ?? 0,
+          doc.documentElement?.scrollHeight ?? 0,
+        );
       }
-      if (replayMountRef.current) replayMountRef.current.innerHTML = '';
-    };
-  }, [backdrop, recordedWidth, clicks, moves]);
+    } catch {
+      /* cross-origin (shouldn't happen) — fall back to point height */
+    }
+    const h = Math.min(MAX_CANVAS_HEIGHT, measured > 0 ? measured : pointHeight);
+    setHeight(h);
+    setReady(true);
+  }
 
-  // 2) Paint the heatmap whenever the data, mode, or measured size changes.
+  function onIframeLoad() {
+    measure();
+    window.setTimeout(measure, 600);
+  }
+
+  // Paint the heatmap whenever the data, mode, or measured size changes.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !ready || height === 0) return;
     // Render the heat at a capped resolution (≤640px wide) and CSS-upscale to
-    // fill — the blobs are low-frequency so it's visually identical, but the
+    // fill — blobs are low-frequency so it's visually identical, but the
     // per-pixel colorize loop drops from millions of pixels to a fraction.
     const RES = Math.min(1, 640 / Math.max(1, recordedWidth));
     const w = Math.max(1, Math.round(recordedWidth * RES));
@@ -155,7 +145,7 @@ export function HeatmapCanvas({
     ctx.putImageData(img, 0, 0);
   }, [ready, height, mode, clicks, moves, recordedWidth]);
 
-  const scaledHeight = height * scale;
+  const scaledHeight = (height || pointHeight) * scale;
 
   return (
     <div>
@@ -188,15 +178,14 @@ export function HeatmapCanvas({
       <div
         ref={outerRef}
         className="relative overflow-hidden rounded-lg border border-slate-200 bg-white"
-        style={{ height: ready ? scaledHeight : 480 }}
+        style={{ height: scaledHeight || 480 }}
       >
         {!ready && (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
-            Rendering heatmap…
+          <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-slate-400">
+            Loading page backdrop…
           </div>
         )}
         <div
-          ref={stageRef}
           style={{
             width: recordedWidth,
             transform: `scale(${scale})`,
@@ -204,13 +193,29 @@ export function HeatmapCanvas({
             position: 'relative',
           }}
         >
-          {/* static page backdrop */}
-          <div ref={replayMountRef} className="heatmap-backdrop" />
+          {/* real page backdrop — scripts disabled, so it fires no tracking */}
+          <iframe
+            ref={iframeRef}
+            src={page}
+            onLoad={onIframeLoad}
+            title={`Backdrop for ${page}`}
+            sandbox="allow-same-origin"
+            scrolling="no"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{
+              width: recordedWidth,
+              height: height || pointHeight,
+              border: 0,
+              display: 'block',
+              pointerEvents: 'none',
+            }}
+          />
           {/* density overlay */}
           <canvas
             ref={canvasRef}
             className="pointer-events-none absolute left-0 top-0"
-            style={{ width: recordedWidth, height }}
+            style={{ width: recordedWidth, height: height || pointHeight }}
           />
         </div>
       </div>

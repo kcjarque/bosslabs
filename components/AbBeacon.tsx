@@ -7,11 +7,13 @@
  * (unique sessions on "/__ab/home-b" = visitors who SAW the variant).
  */
 import { useEffect } from 'react';
+import { isFramedView } from '@/lib/is-framed';
 
 const SESSION_KEY = 'bl_session_id';
 
 export function AbBeacon({ path }: { path: string }) {
   useEffect(() => {
+    if (isFramedView()) return; // skip the admin heatmap's iframe backdrop load
     let sessionId = '';
     try {
       sessionId = window.localStorage.getItem(SESSION_KEY) || '';

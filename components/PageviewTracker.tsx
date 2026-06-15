@@ -14,6 +14,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { isFramedView } from '@/lib/is-framed';
 
 const SESSION_KEY = 'bl_session_id';
 
@@ -39,6 +40,9 @@ export function PageviewTracker() {
 
   useEffect(() => {
     if (!pathname) return;
+    // The admin heatmap loads funnel pages in an iframe as a backdrop — don't
+    // count those synthetic loads as real pageviews.
+    if (isFramedView()) return;
     // Skip admin paths — they shouldn't pollute the public funnel data
     // (the admin reloads /admin many times per session while QA'ing).
     if (pathname.startsWith('/admin')) return;
