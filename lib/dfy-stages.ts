@@ -25,8 +25,14 @@ export type DfyCard = {
   note: string;
   stage: DfyStage;
   position: number;
-  /** Optional deal value (centavos). */
+  /** The contract price (centavos). Null until set. */
   amountCentavos: number | null;
+  /** Cash collected so far via the payments log (sum). */
+  collectedCentavos: number;
+  /** Fully collected (contract price set and collected >= it). */
+  paidInFull: boolean;
+  paidAt: string | null;
+  payments: { amountCentavos: number; at: string; note?: string }[];
   createdAt: string;
   updatedAt: string;
 };

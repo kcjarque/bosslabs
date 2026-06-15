@@ -111,6 +111,20 @@ export function DfyBoard() {
     setCards(d.cards ?? []);
   }
 
+  // Deal/payment actions — reload after each so collected/paid recompute.
+  async function setPrice(card: DfyCard, centavos: number) {
+    await api({ action: 'deal-amount', id: card.id, centavos });
+    await refresh();
+  }
+  async function logPayment(card: DfyCard, centavos: number) {
+    await api({ action: 'log-payment', id: card.id, centavos });
+    await refresh();
+  }
+  async function markPaidFull(card: DfyCard) {
+    await api({ action: 'mark-paid-full', id: card.id });
+    await refresh();
+  }
+
   if (loading) return <BoardSkeleton />;
 
   const q = query.trim().toLowerCase();
@@ -318,11 +332,6 @@ export function DfyBoard() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">{c.name}</div>
                         {c.phone && <div className="text-[11px] text-slate-400">{toE164Ph(c.phone)}</div>}
-                        {c.amountCentavos != null && (
-                          <div className="mt-1 inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                            ₱{(c.amountCentavos / 100).toLocaleString()}
-                          </div>
-                        )}
                       </div>
                       <button
                         onClick={() => removeCard(c.id)}
@@ -333,6 +342,12 @@ export function DfyBoard() {
                       </button>
                     </div>
                     <CardNote card={c} onSave={(text) => saveNote(c, text)} />
+                    <DfyDeal
+                      card={c}
+                      onSetPrice={(v) => setPrice(c, v)}
+                      onLogPayment={(v) => logPayment(c, v)}
+                      onMarkPaid={() => markPaidFull(c)}
+                    />
                     {c.phone ? (
                       <a
                         href={smsHref(c.phone, template, c.name)}
@@ -366,6 +381,137 @@ export function DfyBoard() {
 }
 
 /** Inline note editor on a card (stored on the card itself). */
+/** Contract-price + payment tracker on a DFY card. Set a contract price, then
+ *  Mark paid (full) / Partial. Payments feed "DFY income" on the dashboard. */
+function DfyDeal({
+  card,
+  onSetPrice,
+  onLogPayment,
+  onMarkPaid,
+}: {
+  card: DfyCard;
+  onSetPrice: (centavos: number) => void;
+  onLogPayment: (centavos: number) => void;
+  onMarkPaid: () => void;
+}) {
+  const [editPrice, setEditPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState(card.amountCentavos ? String(card.amountCentavos / 100) : '');
+  const [openPay, setOpenPay] = useState(false);
+  const [payAmt, setPayAmt] = useState('');
+
+  const deal = card.amountCentavos ?? 0;
+  const collected = card.collectedCentavos;
+  const remaining = Math.max(0, deal - collected);
+  const peso = (c: number) => '₱' + (c / 100).toLocaleString();
+
+  if (deal <= 0 && !editPrice) {
+    return (
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => {
+          setPriceDraft('');
+          setEditPrice(true);
+        }}
+        className="mt-2 block w-full rounded-md border border-dashed border-violet-200 px-2 py-1.5 text-center text-[11px] text-violet-600 transition hover:bg-violet-50/50"
+      >
+        + Set contract price
+      </button>
+    );
+  }
+  if (editPrice) {
+    return (
+      <div className="mt-2 flex gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+        <input
+          className="input h-8 flex-1 text-[12px]"
+          inputMode="decimal"
+          autoFocus
+          placeholder="Contract ₱"
+          value={priceDraft}
+          onChange={(e) => setPriceDraft(e.target.value)}
+        />
+        <button
+          onClick={() => {
+            const v = Math.round(parseFloat(priceDraft || '0') * 100);
+            if (v > 0) onSetPrice(v);
+            setEditPrice(false);
+          }}
+          className="rounded-md bg-violet-600 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-violet-500"
+        >
+          Save
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-violet-100 bg-violet-50/40 p-2" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">Contract</span>
+        <button
+          onClick={() => {
+            setPriceDraft(String(deal / 100));
+            setEditPrice(true);
+          }}
+          className="font-semibold text-slate-700 hover:text-violet-700"
+        >
+          {peso(deal)} ✎
+        </button>
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">Collected</span>
+        <span className={card.paidInFull ? 'font-semibold text-emerald-700' : 'text-slate-700'}>
+          {peso(collected)}
+          {card.paidInFull ? ' · paid ✓' : remaining > 0 ? ` · ${peso(remaining)} left` : ''}
+        </span>
+      </div>
+      {!card.paidInFull && (
+        <div className="mt-1.5 flex gap-1.5">
+          <button
+            onClick={onMarkPaid}
+            className="flex-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-500"
+          >
+            Mark paid
+          </button>
+          <button
+            onClick={() => setOpenPay((v) => !v)}
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+          >
+            Partial
+          </button>
+        </div>
+      )}
+      {openPay && !card.paidInFull && (
+        <div className="mt-1.5 flex gap-1.5">
+          <input
+            className="input h-7 flex-1 text-[11px]"
+            inputMode="decimal"
+            placeholder="₱ received"
+            value={payAmt}
+            onChange={(e) => setPayAmt(e.target.value)}
+          />
+          <button
+            onClick={() => {
+              const v = Math.round(parseFloat(payAmt || '0') * 100);
+              if (v > 0) onLogPayment(v);
+              setPayAmt('');
+              setOpenPay(false);
+            }}
+            className="rounded-md bg-violet-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-violet-500"
+          >
+            Log
+          </button>
+        </div>
+      )}
+      {card.payments.length > 0 && (
+        <div className="mt-1 text-[10px] text-slate-400">
+          {card.payments.length} payment{card.payments.length > 1 ? 's' : ''} · last{' '}
+          {new Date(card.payments[card.payments.length - 1].at).toLocaleDateString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CardNote({ card, onSave }: { card: DfyCard; onSave: (text: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(card.note);

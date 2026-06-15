@@ -367,6 +367,10 @@ export default async function AdminDashboard({
   const adCostPerSaleCentavos =
     adPaidCount > 0 ? Math.round(adSpendInPeriodCentavos / adPaidCount) : 0;
   const adNetCentavos = sRevenueByPaymentCentavos - adSpendInPeriodCentavos;
+  // Total revenue (all streams) + the blended/overall ROAS — front-end + VCR +
+  // DFY ÷ ad spend. Distinct from the front-end-only ROAS in the Ad spend card.
+  const totalIncomeCentavos = sRevenueByPaymentCentavos + webinarIncomeCentavos + dfyIncomeCentavos;
+  const overallRoas = adSpendInPeriodCentavos > 0 ? totalIncomeCentavos / adSpendInPeriodCentavos : null;
   // Revenue per payment-day (Manila), for the daily spend-vs-revenue table.
   const revenueByDayCentavos = new Map<string, number>();
   for (const s of paid) {
@@ -588,12 +592,13 @@ export default async function AdminDashboard({
         </div>
         <p className="mt-1 text-[12px] text-slate-500">
           Front-end = ₱999 webinar + bumps/OTO. Webinar income = VCR high-ticket cash (retreat CRM).
-          DFY = won Done-For-You deals (Onboarding stage). ROAS + daily sales below stay front-end-only.
+          DFY = cash collected on Done-For-You deals. Overall ROAS = total income ÷ ad spend (incl.
+          back-end). The Ad spend &amp; ROAS card below stays front-end-only.
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
           <StatCard
-            label="Total income"
-            value={formatPHP(sRevenueByPaymentCentavos + webinarIncomeCentavos + dfyIncomeCentavos)}
+            label="Total revenue"
+            value={formatPHP(totalIncomeCentavos)}
             sub={`${periodLabel} · front-end + back-end`}
             tone="green"
           />
@@ -611,8 +616,21 @@ export default async function AdminDashboard({
           <StatCard
             label="DFY income"
             value={formatPHP(dfyIncomeCentavos)}
-            sub="won deals · onboarding"
+            sub="cash collected"
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
+          <StatCard
+            label="Ad spend"
+            value={formatPHP(adSpendInPeriodCentavos)}
+            sub={`${periodLabel} · Meta`}
+          />
+          <StatCard
+            label="Overall ROAS"
+            value={overallRoas == null ? '—' : `${overallRoas.toFixed(2)}×`}
+            sub="total revenue ÷ ad spend"
+            tone={overallRoas == null ? undefined : overallRoas >= 1 ? 'green' : 'amber'}
           />
         </div>
       </section>

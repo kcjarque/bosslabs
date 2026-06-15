@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
-import { listDfyCards, addDfyCard, updateDfyCard, deleteDfyCard, listDfyCandidates } from '@/lib/dfy-crm';
+import {
+  listDfyCards,
+  addDfyCard,
+  updateDfyCard,
+  deleteDfyCard,
+  listDfyCandidates,
+  setDfyDealAmount,
+  logDfyPayment,
+  markDfyPaidInFull,
+} from '@/lib/dfy-crm';
 
 export const runtime = 'nodejs';
 
@@ -27,6 +36,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       case 'delete':
         await deleteDfyCard(String(body.id));
+        return NextResponse.json({ ok: true });
+      case 'deal-amount':
+        await setDfyDealAmount(String(body.id), Number(body.centavos) || 0);
+        return NextResponse.json({ ok: true });
+      case 'log-payment':
+        await logDfyPayment(String(body.id), Number(body.centavos) || 0, body.note ? String(body.note) : undefined);
+        return NextResponse.json({ ok: true });
+      case 'mark-paid-full':
+        await markDfyPaidInFull(String(body.id));
         return NextResponse.json({ ok: true });
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });
