@@ -69,9 +69,15 @@ export function RetreatCrmBoard() {
     void api({ action: 'update', id, patch: { stage } });
   }
 
-  async function removeCard(id: string) {
-    setCards((cs) => cs.filter((c) => c.id !== id));
-    void api({ action: 'delete', id });
+  async function removeCard(card: RetreatCrmCard) {
+    const ok = window.confirm(
+      `Remove ${card.name || 'this person'} from the Retreat CRM?\n\n` +
+        `This deletes their card and untags them from this retreat event. ` +
+        `Their customer profile is kept.`,
+    );
+    if (!ok) return;
+    setCards((cs) => cs.filter((c) => c.id !== card.id));
+    void api({ action: 'delete', id: card.id });
   }
 
   async function saveNote(card: RetreatCrmCard, note: string) {
@@ -308,7 +314,7 @@ export function RetreatCrmBoard() {
                           )}
                         </div>
                       </div>
-                      <button onClick={() => removeCard(c.id)} aria-label="Remove" className="text-slate-300 transition hover:text-rose-500">×</button>
+                      <button onClick={() => removeCard(c)} aria-label="Remove" className="text-slate-300 transition hover:text-rose-500">×</button>
                     </div>
 
                     <CardNote card={c} onSave={(text) => saveNote(c, text)} />

@@ -181,7 +181,19 @@ export async function updateRetreatCrmCard(
 }
 
 export async function deleteRetreatCrmCard(id: string): Promise<void> {
-  await getSupabase().from('retreat_crm_cards').delete().eq('id', id);
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  // Untag the person from this retreat event. If the card is reservation-linked,
+  // delete the reservation (cascades the card via FK) — otherwise the board
+  // would auto-recreate the card from the still-present reservation on next
+  // load. The customer's signup profile is a separate table, left untouched.
+  const { data } = await sb.from('retreat_crm_cards').select('reservation_id').eq('id', id).maybeSingle();
+  const resId = (data?.reservation_id as string | null) ?? null;
+  if (resId) {
+    await sb.from('retreat_reservations').delete().eq('id', resId);
+  } else {
+    await sb.from('retreat_crm_cards').delete().eq('id', id);
+  }
 }
 
 /** Set the discussed deal amount (centavos, default ₱50k) on a VCR card. */
