@@ -8,8 +8,15 @@ import {
 import { planAmountCentavos, planLabel } from '@/lib/retreat';
 import { formatPHP } from '@/lib/config';
 import { sendTelegram, esc } from '@/lib/telegram';
+import { sendEmail } from '@/lib/email';
+import { sendSms } from '@/lib/sms';
 
 export const runtime = 'nodejs';
+
+/** GSM-7-safe peso string (no ₱) so confirmation SMS stays one segment. */
+function phpPlain(centavos: number): string {
+  return `PHP ${(centavos / 100).toLocaleString('en-PH')}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -75,6 +82,13 @@ export async function POST(req: Request) {
       heardFrom ? `📣 Heard via: ${esc(heardFrom)}` : '',
     ].filter(Boolean);
     await sendTelegram(lines.join('\n'));
+
+    // Reservation-received confirmation to the customer (email + SMS). Wrapped
+    // so a delivery failure never blocks the reservation / payment redirect.
+    const firstName = name.split(/\s+/)[0] || name;
+    const vars = { firstName, amount: phpPlain(amountDueCentavos) };
+    await sendEmail({ to: email, templateId: 'retreat_reserved', vars }).catch(() => null);
+    if (phone) await sendSms({ to: phone, templateId: 'retreat_reserved', vars }).catch(() => null);
 
     return NextResponse.json({ id: r.id });
   } catch (err) {

@@ -5,6 +5,8 @@ import {
 } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
 import { sendTelegramPhoto, esc } from '@/lib/telegram';
+import { sendEmail } from '@/lib/email';
+import { sendSms } from '@/lib/sms';
 
 export const runtime = 'nodejs';
 
@@ -46,6 +48,15 @@ export async function POST(req: Request) {
 
     await sendTelegramPhoto(bytes, filename, caption);
     await markRetreatReservationProof(id);
+
+    // Payment confirmation to the customer — they've paid + uploaded proof.
+    const firstName = r.name.split(/\s+/)[0] || r.name;
+    const vars = {
+      firstName,
+      amount: `PHP ${((r.amountDueCentavos ?? 0) / 100).toLocaleString('en-PH')}`,
+    };
+    await sendEmail({ to: r.email, templateId: 'retreat_confirmation', vars }).catch(() => null);
+    if (r.phone) await sendSms({ to: r.phone, templateId: 'retreat_confirmation', vars }).catch(() => null);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

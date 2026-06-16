@@ -387,6 +387,19 @@ async function handleRetreatPaid(event: XenditEvent) {
   });
 
   const amountPhp = event.amount ?? (r.amountDueCentavos ?? 0) / 100;
+
+  // Payment confirmation to the customer (email + SMS) — the retreat flow
+  // previously sent nothing to the buyer, only Telegram to the team.
+  const retreatFirstName = r.name.split(/\s+/)[0] || r.name;
+  const retreatVars = {
+    firstName: retreatFirstName,
+    amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
+  };
+  await sendEmail({ to: r.email, templateId: 'retreat_confirmation', vars: retreatVars }).catch(() => null);
+  if (r.phone) {
+    await sendSms({ to: r.phone, templateId: 'retreat_confirmation', vars: retreatVars }).catch(() => null);
+  }
+
   // AWAITED — void promises can be killed when the serverless fn returns.
   await sendTelegram(
     `🏕️ <b>VibeCode Retreat — card payment confirmed!</b>\n\n` +
