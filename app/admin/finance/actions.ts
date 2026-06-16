@@ -44,7 +44,8 @@ function refresh() {
 
 export async function addExpenseAction(fd: FormData) {
   requireAdmin();
-  const isAbono = str(fd, 'isAbono') === '1';
+  // Picking a "Paid by" person means someone fronted it → it's a payable.
+  const paidBy = nullable(fd, 'paidBy');
   await addExpense({
     description: str(fd, 'description'),
     amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
@@ -52,8 +53,8 @@ export async function addExpenseAction(fd: FormData) {
     spentOn: str(fd, 'spentOn') || manilaToday(),
     projectId: nullable(fd, 'projectId'),
     projectItemId: nullable(fd, 'projectItemId'),
-    isAbono,
-    paidBy: nullable(fd, 'paidBy'),
+    isAbono: Boolean(paidBy),
+    paidBy,
   });
   refresh();
 }
@@ -215,14 +216,15 @@ export async function addProjectExpenseAction(fd: FormData) {
 export async function addRecurringAction(fd: FormData) {
   requireAdmin();
   const cadence: Cadence = str(fd, 'cadence') === 'weekly' ? 'weekly' : 'monthly';
+  const paidBy = nullable(fd, 'paidBy');
   await addRecurring({
     name: str(fd, 'name'),
     amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
     categoryId: nullable(fd, 'categoryId'),
     cadence,
     creditDay: Number(str(fd, 'creditDay')) || (cadence === 'weekly' ? 1 : 1),
-    isAbono: str(fd, 'isAbono') === '1',
-    paidBy: nullable(fd, 'paidBy'),
+    isAbono: Boolean(paidBy),
+    paidBy,
   });
   refresh();
 }

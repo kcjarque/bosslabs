@@ -17,8 +17,8 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 export type Cadence = 'monthly' | 'weekly';
 export type ExpenseSource = 'single' | 'project' | 'recurring';
 
-/** People who can front (abono) an expense — the Accounts Payable is owed to one of these. */
-export const PAYERS = ['Kyle', 'Mikee'] as const;
+/** People who can front an expense — the Accounts Payable is owed to one of these. */
+export const PAYERS = ['Kyle', 'Mikey'] as const;
 
 export type Category = { id: string; name: string };
 
@@ -81,7 +81,7 @@ export type PayableItem = {
   date: string; // YYYY-MM-DD (spent-on / occurrence date)
   description: string;
   amountCentavos: number;
-  paidBy: string; // 'Kyle' / 'Mikee' / 'Unspecified'
+  paidBy: string; // 'Kyle' / 'Mikey' / 'Unspecified'
   projectName: string;
   settled: boolean;
 };

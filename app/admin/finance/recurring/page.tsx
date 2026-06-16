@@ -68,10 +68,8 @@ export default async function FinanceRecurringPage() {
                     >
                       <td className="px-4 py-2.5 font-medium text-slate-800">
                         {r.name}
-                        {r.isAbono && (
-                          <span className="pill pill-cyan ml-2">
-                            abono{r.paidBy ? ` · ${r.paidBy}` : ''}
-                          </span>
+                        {r.isAbono && r.paidBy && (
+                          <span className="pill pill-cyan ml-2">Paid by {r.paidBy}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
@@ -161,24 +159,19 @@ export default async function FinanceRecurringPage() {
           <p className="text-[11px] leading-relaxed text-slate-400">
             Monthly: day of month (1–31). Weekly: weekday number — 0 = Sunday … 6 = Saturday.
           </p>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
-              <input type="checkbox" name="isAbono" value="1" className="h-4 w-4 accent-cyan-600" />
-              Abono — someone fronts this each time
-            </label>
-            <div className="mt-3">
-              <label className="label">Paid by (optional)</label>
-              <select name="paidBy" className="select" defaultValue="">
-                <option value="">—</option>
-                {PAYERS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-              Each due occurrence is added to Accounts Payable until you reimburse the person.
+          <div>
+            <label className="label">Paid by (optional)</label>
+            <select name="paidBy" className="select" defaultValue="">
+              <option value="">— Business pays directly —</option>
+              {PAYERS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+              If someone fronts this each time, pick who — every due occurrence is added to Accounts
+              Payable until reimbursed.
             </p>
           </div>
           <button type="submit" className="btn btn-primary w-full">

@@ -118,9 +118,9 @@ export default async function FinanceExpensesPage({
                         {!r.credited && (
                           <span className="pill pill-amber ml-2">upcoming</span>
                         )}
-                        {r.isAbono && (
+                        {r.isAbono && r.paidBy && (
                           <span className={`pill ml-2 ${r.abonoSettled ? 'pill-green' : 'pill-cyan'}`}>
-                            abono{r.paidBy ? ` · ${r.paidBy}` : ''}{r.abonoSettled ? ' · paid' : ''}
+                            Paid by {r.paidBy}{r.abonoSettled ? ' · reimbursed' : ''}
                           </span>
                         )}
                       </td>
@@ -224,24 +224,19 @@ export default async function FinanceExpensesPage({
                 ))}
               </select>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
-                <input type="checkbox" name="isAbono" value="1" className="h-4 w-4 accent-cyan-600" />
-                Abono — someone fronted this (reimbursable)
-              </label>
-              <div className="mt-3">
-                <label className="label">Paid by (optional)</label>
-                <select name="paidBy" className="select" defaultValue="">
-                  <option value="">—</option>
-                  {PAYERS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                Marking an abono adds it to Accounts Payable until you reimburse the person.
+            <div>
+              <label className="label">Paid by (optional)</label>
+              <select name="paidBy" className="select" defaultValue="">
+                <option value="">— Business paid directly —</option>
+                {PAYERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                If someone fronted this, pick who — it's added to Accounts Payable until you reimburse
+                them.
               </p>
             </div>
             <button type="submit" className="btn btn-primary w-full">

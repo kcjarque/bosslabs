@@ -16,7 +16,7 @@ export default async function PayablesPage() {
     <div>
       <PageHeader
         title="Accounts Payable"
-        subtitle="Money the business owes for abono (fronted) expenses. Mark an item PAID when you reimburse the person — the total drops. Reimbursing doesn't change the original expense."
+        subtitle="Money the business owes for expenses someone fronted (a 'Paid by' was set). Mark an item PAID when you reimburse the person — the total drops. Reimbursing doesn't change the original expense."
       />
 
       {/* Per-person totals */}
@@ -58,7 +58,7 @@ export default async function PayablesPage() {
               {ap.open.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                    Nothing owed right now. Mark an expense as an abono on the{' '}
+                    Nothing owed right now. Set a "Paid by" person on an expense in the{' '}
                     <Link href="/admin/finance" className="text-cyan-700 hover:underline">
                       Expenses
                     </Link>{' '}
