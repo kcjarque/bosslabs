@@ -140,11 +140,7 @@ export async function AdsResultsView({
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Card
-          label="Budget set"
-          value={totals.budgetSetCentavos == null ? '—' : formatPHP(totals.budgetSetCentavos)}
-        />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card label="Budget spent" value={formatPHP(totals.spendCentavos)} />
         <Card label="Revenue" value={formatPHP(totals.revCentavos)} tone="emerald" />
         <Card
@@ -164,11 +160,10 @@ export async function AdsResultsView({
       {/* Table — centered columns, row hover, horizontal scroll on mobile */}
       <div className="card overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-sm">
+          <table className="w-full min-w-[520px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-center text-[11px] uppercase tracking-wide text-slate-400">
                 <th className="px-4 py-2.5 font-semibold">{gran === 'weekly' ? 'Week' : 'Date'}</th>
-                <th className="px-4 py-2.5 font-semibold">Set</th>
                 <th className="px-4 py-2.5 font-semibold">Spent</th>
                 <th className="px-4 py-2.5 font-semibold">Revenue</th>
                 <th className="px-4 py-2.5 font-semibold">Net</th>
@@ -179,7 +174,7 @@ export async function AdsResultsView({
             <tbody>
               {tableRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                     No data in this range.
                   </td>
                 </tr>
@@ -193,9 +188,6 @@ export async function AdsResultsView({
                     >
                       <td className="whitespace-nowrap px-4 py-2.5 font-medium text-slate-800">
                         {r.label}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-500">
-                        {r.budgetSetCentavos == null ? '—' : formatPHP(r.budgetSetCentavos)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-600">
                         {formatPHP(r.spendCentavos)}
