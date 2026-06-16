@@ -6,6 +6,9 @@ import { requireAdmin } from '@/lib/admin-auth';
 import {
   addExpense,
   deleteExpense,
+  updateExpenseAmount,
+  setRecurringOverride,
+  clearRecurringOverride,
   addCategory,
   deleteCategory,
   addProject,
@@ -53,6 +56,47 @@ export async function deleteExpenseAction(fd: FormData) {
   requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteExpense(id);
+  refresh();
+}
+
+/**
+ * Edit a row's amount in the consolidated Expenses view. Stored expenses are
+ * updated directly; recurring occurrences get a per-month override.
+ */
+export async function editRowAmountAction(fd: FormData) {
+  requireAdmin();
+  const centavos = parsePesoToCentavos(str(fd, 'amount'));
+  const expenseId = nullable(fd, 'expenseId');
+  if (expenseId) {
+    await updateExpenseAmount(expenseId, centavos);
+  } else {
+    const recurringId = nullable(fd, 'recurringId');
+    const date = str(fd, 'date');
+    if (recurringId && date) await setRecurringOverride(recurringId, date, { amountCentavos: centavos });
+  }
+  refresh();
+}
+
+/** Delete a row: stored expense → removed; recurring occurrence → skipped for the month. */
+export async function deleteRowAction(fd: FormData) {
+  requireAdmin();
+  const expenseId = nullable(fd, 'expenseId');
+  if (expenseId) {
+    await deleteExpense(expenseId);
+  } else {
+    const recurringId = nullable(fd, 'recurringId');
+    const date = str(fd, 'date');
+    if (recurringId && date) await setRecurringOverride(recurringId, date, { skipped: true });
+  }
+  refresh();
+}
+
+/** Revert a recurring occurrence to its default amount (clear the override). */
+export async function resetRecurringOverrideAction(fd: FormData) {
+  requireAdmin();
+  const recurringId = nullable(fd, 'recurringId');
+  const date = str(fd, 'date');
+  if (recurringId && date) await clearRecurringOverride(recurringId, date);
   refresh();
 }
 

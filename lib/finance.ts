@@ -72,7 +72,9 @@ export type MonthRow = {
   source: ExpenseSource;
   amountCentavos: number;
   credited: boolean; // false = upcoming (future-dated recurring)
-  expenseId: string | null; // stored rows can be deleted; recurring (virtual) cannot
+  expenseId: string | null; // stored rows: edit/delete by id
+  recurringId: string | null; // recurring rows: override/skip by (id, date)
+  overridden: boolean; // recurring occurrence whose amount was corrected this month
 };
 
 export type MonthlyConsolidation = {
@@ -417,6 +419,76 @@ export async function deleteExpense(id: string): Promise<void> {
   if (error) throw new Error(`deleteExpense: ${error.message}`);
 }
 
+/** Correct the amount on a stored expense row (inline edit). */
+export async function updateExpenseAmount(id: string, centavos: number): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('finance_expenses')
+    .update({ amount_centavos: Math.max(0, Math.round(centavos)) })
+    .eq('id', id);
+  if (error) throw new Error(`updateExpenseAmount: ${error.message}`);
+}
+
+// ─── Recurring per-occurrence overrides ─────────────────────────────────────
+
+/**
+ * Layer an exception on a single recurring occurrence (identified by its date):
+ * pass amountCentavos to correct that month's amount, or skipped:true to remove
+ * it from Expenses. Upserts so repeated edits replace cleanly.
+ */
+export async function setRecurringOverride(
+  recurringId: string,
+  date: string,
+  patch: { amountCentavos?: number; skipped?: boolean },
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const row: Record<string, unknown> = { recurring_id: recurringId, occurrence_date: date };
+  if (patch.amountCentavos !== undefined) {
+    row.amount_centavos = Math.max(0, Math.round(patch.amountCentavos));
+    row.skipped = false; // correcting an amount un-skips the occurrence
+  }
+  if (patch.skipped !== undefined) row.skipped = patch.skipped;
+  const { error } = await getSupabase()
+    .from('finance_recurring_overrides')
+    .upsert(row, { onConflict: 'recurring_id,occurrence_date' });
+  if (error) throw new Error(`setRecurringOverride: ${error.message}`);
+}
+
+/** Remove an override — the occurrence reverts to the recurring's default. */
+export async function clearRecurringOverride(recurringId: string, date: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('finance_recurring_overrides')
+    .delete()
+    .eq('recurring_id', recurringId)
+    .eq('occurrence_date', date);
+  if (error) throw new Error(`clearRecurringOverride: ${error.message}`);
+}
+
+/** Overrides whose occurrence falls in the given month, keyed `${id}_${date}`. */
+async function listRecurringOverrides(
+  year: number,
+  month: number,
+): Promise<Map<string, { amountCentavos: number | null; skipped: boolean }>> {
+  const map = new Map<string, { amountCentavos: number | null; skipped: boolean }>();
+  if (!isSupabaseConfigured()) return map;
+  const start = `${year}-${pad2(month)}-01`;
+  const end = `${year}-${pad2(month)}-${pad2(daysInMonth(year, month))}`;
+  const { data, error } = await getSupabase()
+    .from('finance_recurring_overrides')
+    .select('recurring_id, occurrence_date, amount_centavos, skipped')
+    .gte('occurrence_date', start)
+    .lte('occurrence_date', end);
+  if (error) return map;
+  for (const o of (data as OverrideRow[]) ?? []) {
+    map.set(`${o.recurring_id}_${o.occurrence_date}`, {
+      amountCentavos: o.amount_centavos,
+      skipped: o.skipped,
+    });
+  }
+  return map;
+}
+
 // ─── Consolidated monthly view (stored expenses + computed recurring) ────────
 
 /** Compute the occurrence dates (YYYY-MM-DD) of a recurring item within a month. */
@@ -440,9 +512,10 @@ export async function getMonthlyConsolidation(
   year: number,
   month: number,
 ): Promise<MonthlyConsolidation> {
-  const [expenses, recurring] = await Promise.all([
+  const [expenses, recurring, overrides] = await Promise.all([
     listExpenses({ year, month }),
     listRecurring(),
+    listRecurringOverrides(year, month),
   ]);
   const today = manilaToday();
   const rows: MonthRow[] = [];
@@ -461,21 +534,28 @@ export async function getMonthlyConsolidation(
       amountCentavos: e.amountCentavos,
       credited: e.spentOn <= today,
       expenseId: e.id,
+      recurringId: null,
+      overridden: false,
     });
   }
 
   for (const r of recurring) {
     if (!r.active) continue;
     for (const date of recurringOccurrences(r, year, month)) {
+      const ov = overrides.get(`${r.id}_${date}`);
+      if (ov?.skipped) continue; // occurrence deleted for this month
+      const amount = ov && ov.amountCentavos != null ? ov.amountCentavos : r.amountCentavos;
       rows.push({
         key: `r_${r.id}_${date}`,
         date,
         description: r.name,
         tag: `Recurring · ${r.categoryName}`,
         source: 'recurring',
-        amountCentavos: r.amountCentavos,
+        amountCentavos: amount,
         credited: date <= today,
         expenseId: null,
+        recurringId: r.id,
+        overridden: Boolean(ov && ov.amountCentavos != null),
       });
     }
   }
@@ -537,4 +617,10 @@ type ExpenseRow = {
   project_item_id: string | null;
   source: string;
   created_at: string;
+};
+type OverrideRow = {
+  recurring_id: string;
+  occurrence_date: string;
+  amount_centavos: number | null;
+  skipped: boolean;
 };

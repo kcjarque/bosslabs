@@ -3,13 +3,19 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
+import { EditableAmount } from '@/components/finance/EditableAmount';
 import {
   getMonthlyConsolidation,
   listCategories,
   manilaToday,
   manilaYearMonth,
 } from '@/lib/finance';
-import { addExpenseAction, deleteExpenseAction } from './actions';
+import {
+  addExpenseAction,
+  editRowAmountAction,
+  deleteRowAction,
+  resetRecurringOverrideAction,
+} from './actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Expenses · BOSSLABS AI' };
@@ -125,28 +131,55 @@ export default async function FinanceExpensesPage({
                           {r.tag}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">
-                        {formatPHP(r.amountCentavos)}
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <EditableAmount
+                          display={formatPHP(r.amountCentavos)}
+                          amountCentavos={r.amountCentavos}
+                          action={editRowAmountAction}
+                          fields={
+                            r.expenseId
+                              ? { expenseId: r.expenseId }
+                              : { recurringId: r.recurringId ?? '', date: r.date }
+                          }
+                        />
+                        {r.overridden && <span className="pill pill-amber ml-1.5">edited</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        {r.expenseId ? (
-                          <form action={deleteExpenseAction}>
-                            <input type="hidden" name="id" value={r.expenseId} />
+                        <div className="flex items-center justify-end gap-2">
+                          {r.overridden && (
+                            <form action={resetRecurringOverrideAction}>
+                              <input type="hidden" name="recurringId" value={r.recurringId ?? ''} />
+                              <input type="hidden" name="date" value={r.date} />
+                              <button
+                                type="submit"
+                                title="Revert to the default recurring amount"
+                                className="text-[12px] text-slate-400 hover:text-cyan-700"
+                              >
+                                Reset
+                              </button>
+                            </form>
+                          )}
+                          <form action={deleteRowAction}>
+                            {r.expenseId ? (
+                              <input type="hidden" name="expenseId" value={r.expenseId} />
+                            ) : (
+                              <>
+                                <input type="hidden" name="recurringId" value={r.recurringId ?? ''} />
+                                <input type="hidden" name="date" value={r.date} />
+                              </>
+                            )}
                             <ConfirmButton
-                              message="Delete this expense?"
+                              message={
+                                r.expenseId
+                                  ? 'Delete this expense?'
+                                  : 'Remove this recurring charge for this month only?'
+                              }
                               className="text-[12px] text-slate-400 hover:text-red-600"
                             >
                               Delete
                             </ConfirmButton>
                           </form>
-                        ) : (
-                          <Link
-                            href="/admin/finance/recurring"
-                            className="text-[12px] text-slate-400 hover:text-cyan-700"
-                          >
-                            Edit
-                          </Link>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))
