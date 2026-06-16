@@ -274,6 +274,27 @@ async function handleOtoPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
+  const amountPhp = event.amount ?? OFFER.oto2.priceCentavos / 100;
+
+  // Confirmation email + SMS for the standalone OTO (the main checkout sends its
+  // own; this leg previously sent nothing, so OTO buyers got no receipt). The
+  // `amount` var is overridden to the OTO amount, formatted GSM-7-safe (no ₱)
+  // so the SMS stays a single segment.
+  const webinar = await getWebinarInfo();
+  const baseVars = await templateVarsForSignup(signup, webinar);
+  const otoVars = {
+    ...baseVars,
+    amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
+  };
+  const otoEmailRes = await sendEmail({
+    to: signup.email,
+    templateId: 'oto_confirmation',
+    vars: otoVars,
+  });
+  const otoSmsRes = signup.phone
+    ? await sendSms({ to: signup.phone, templateId: 'oto_confirmation', vars: otoVars })
+    : null;
+
   await updateSignup(signup.id, {
     bumped: true,
     metadata: {
@@ -282,6 +303,11 @@ async function handleOtoPaid(event: XenditEvent) {
       otoInvoiceId: event.id,
       otoExternalId: event.external_id,
       otoAmount: event.amount,
+      otoConfirmationStatus: otoEmailRes.ok ? 'sent' : 'failed',
+      ...(otoEmailRes.ok ? { otoConfirmationMessageId: otoEmailRes.id } : {}),
+      ...(otoSmsRes
+        ? { otoConfirmationSmsOk: otoSmsRes.ok, otoConfirmationSmsId: otoSmsRes.ok ? otoSmsRes.id : null }
+        : {}),
     },
   });
 
@@ -292,7 +318,6 @@ async function handleOtoPaid(event: XenditEvent) {
   // Fire a separate CAPI Purchase for the OTO so Meta attributes the
   // upsell revenue. Distinct eventId from the main invoice — these are
   // two separate purchases in Meta's eyes.
-  const amountPhp = event.amount ?? OFFER.oto.priceCentavos / 100;
   void sendCapiEvent({
     eventName: 'Purchase',
     eventId: `purchase_${event.external_id}`,
