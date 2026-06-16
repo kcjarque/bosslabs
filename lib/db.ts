@@ -1797,6 +1797,8 @@ export type AdSpendDay = {
   impressions: number;
   clicks: number;
   reach: number;
+  /** Budget configured in Ads Manager that day, centavos. Null = unknown. */
+  budgetSetCentavos: number | null;
 };
 
 /** All recorded daily ad-spend rows, ascending by date. Empty in demo mode
@@ -1805,7 +1807,7 @@ export async function getAdSpendByDay(): Promise<AdSpendDay[]> {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getSupabase()
     .from('ad_spend_daily')
-    .select('date, spend_centavos, impressions, clicks, reach')
+    .select('date, spend_centavos, impressions, clicks, reach, budget_set_centavos')
     .order('date', { ascending: true });
   if (error) return [];
   return ((data ?? []) as Array<{
@@ -1814,12 +1816,14 @@ export async function getAdSpendByDay(): Promise<AdSpendDay[]> {
     impressions: number | null;
     clicks: number | null;
     reach: number | null;
+    budget_set_centavos: number | null;
   }>).map((r) => ({
     date: r.date,
     spendCentavos: r.spend_centavos ?? 0,
     impressions: r.impressions ?? 0,
     clicks: r.clicks ?? 0,
     reach: r.reach ?? 0,
+    budgetSetCentavos: r.budget_set_centavos ?? null,
   }));
 }
 
@@ -1833,20 +1837,22 @@ export async function upsertAdSpendDay(row: {
   clicks?: number;
   reach?: number;
   campaignId?: string;
+  budgetSetCentavos?: number | null;
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  const { error } = await getSupabase().from('ad_spend_daily').upsert(
-    {
-      date: row.date,
-      spend_centavos: Math.round(row.spendCentavos),
-      impressions: row.impressions ?? 0,
-      clicks: row.clicks ?? 0,
-      reach: row.reach ?? 0,
-      campaign_id: row.campaignId ?? null,
-      synced_at: new Date().toISOString(),
-    },
-    { onConflict: 'date' },
-  );
+  const payload: Record<string, unknown> = {
+    date: row.date,
+    spend_centavos: Math.round(row.spendCentavos),
+    impressions: row.impressions ?? 0,
+    clicks: row.clicks ?? 0,
+    reach: row.reach ?? 0,
+    campaign_id: row.campaignId ?? null,
+    synced_at: new Date().toISOString(),
+  };
+  // Only write the budget when we have it, so a spend-only sync never nulls an
+  // existing value.
+  if (row.budgetSetCentavos != null) payload.budget_set_centavos = row.budgetSetCentavos;
+  const { error } = await getSupabase().from('ad_spend_daily').upsert(payload, { onConflict: 'date' });
   return !error;
 }
 

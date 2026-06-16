@@ -8,6 +8,8 @@
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { getSignups } from './db';
+import { sendEmail } from './email';
+import { sendSms } from './sms';
 import { RETREAT_CRM_STAGES, type RetreatCrmStage, type RetreatCrmCard } from './retreat-crm-stages';
 
 export {
@@ -235,27 +237,43 @@ export async function logRetreatPayment(id: string, centavos: number, note?: str
   if (error) throw new Error(`logRetreatPayment: ${error.message}`);
 }
 
-/** Mark a VCR card paid in full — logs a payment for the remaining balance. */
+/** Mark a VCR card paid in full — logs a payment for the remaining balance, then
+ *  emails the customer their payment confirmation (once, on the transition). */
 export async function markRetreatPaidInFull(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const sb = getSupabase();
   const { data } = await sb
     .from('retreat_crm_cards')
-    .select('deal_amount_centavos, payments')
+    .select('deal_amount_centavos, payments, paid_at, name, email, phone')
     .eq('id', id)
     .maybeSingle();
-  const payments = (Array.isArray(data?.payments) ? data!.payments : []) as VcrPayment[];
+  if (!data) return;
+  const wasPaid = Boolean(data.paid_at);
+  const payments = (Array.isArray(data.payments) ? data.payments : []) as VcrPayment[];
   const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
-  const deal = (data?.deal_amount_centavos as number | null) ?? DEFAULT_VCR_DEAL_CENTAVOS;
+  const deal = (data.deal_amount_centavos as number | null) ?? DEFAULT_VCR_DEAL_CENTAVOS;
   const remaining = Math.max(0, deal - collected);
   if (remaining <= 0) {
     await sb
       .from('retreat_crm_cards')
-      .update({ paid_at: new Date().toISOString(), stage: 'paid' })
+      .update({ paid_at: data.paid_at ?? new Date().toISOString(), stage: 'paid' })
       .eq('id', id);
-    return;
+  } else {
+    await logRetreatPayment(id, remaining, 'Marked paid in full');
   }
-  await logRetreatPayment(id, remaining, 'Marked paid in full');
+
+  // Payment confirmation — only on the first transition to paid, and only if we
+  // have an email. Best-effort so a delivery failure never breaks marking paid.
+  const email = String(data.email ?? '').trim();
+  if (!wasPaid && email) {
+    const name = String(data.name ?? '').trim();
+    const firstName = name.split(/\s+/)[0] || name || 'there';
+    const amount = `PHP ${(deal / 100).toLocaleString('en-PH')}`;
+    const vars = { firstName, amount };
+    await sendEmail({ to: email, templateId: 'retreat_confirmation', vars }).catch(() => null);
+    const phone = String(data.phone ?? '').trim();
+    if (phone) await sendSms({ to: phone, templateId: 'retreat_confirmation', vars }).catch(() => null);
+  }
 }
 
 /**

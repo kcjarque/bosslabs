@@ -12,6 +12,7 @@ export type Granularity = 'daily' | 'weekly';
 export type AdResultRow = {
   key: string; // bucket key (date or week-start date)
   label: string; // human label
+  budgetSetCentavos: number | null; // budget configured in Ads Manager
   spendCentavos: number;
   revCentavos: number;
   roas: number | null;
@@ -20,7 +21,13 @@ export type AdResultRow = {
 
 export type AdsResults = {
   rows: AdResultRow[]; // chronological (oldest → newest)
-  totals: { spendCentavos: number; revCentavos: number; roas: number | null; sales: number };
+  totals: {
+    budgetSetCentavos: number | null;
+    spendCentavos: number;
+    revCentavos: number;
+    roas: number | null;
+    sales: number;
+  };
 };
 
 const DAY_MS = 86_400_000;
@@ -83,16 +90,26 @@ export async function getAdsResults(opts: {
     }
   }
   const spendByDay = new Map<string, number>();
-  for (const d of spendDays) spendByDay.set(d.date, d.spendCentavos);
+  const budgetByDay = new Map<string, number | null>();
+  for (const d of spendDays) {
+    spendByDay.set(d.date, d.spendCentavos);
+    budgetByDay.set(d.date, d.budgetSetCentavos);
+  }
 
   // One entry per day in the range, then fold into weekly buckets if asked.
-  const buckets = new Map<string, { spend: number; rev: number; sales: number }>();
+  type Bucket = { spend: number; rev: number; sales: number; budget: number; hasBudget: boolean };
+  const buckets = new Map<string, Bucket>();
   for (const day of dateRange(fromDate, toDate)) {
     const key = granularity === 'weekly' ? weekStart(day) : day;
-    const b = buckets.get(key) ?? { spend: 0, rev: 0, sales: 0 };
+    const b = buckets.get(key) ?? { spend: 0, rev: 0, sales: 0, budget: 0, hasBudget: false };
     b.spend += spendByDay.get(day) ?? 0;
     b.rev += revByDay.get(day) ?? 0;
     b.sales += salesByDay.get(day) ?? 0;
+    const bud = budgetByDay.get(day);
+    if (bud != null) {
+      b.budget += bud;
+      b.hasBudget = true;
+    }
     buckets.set(key, b);
   }
 
@@ -101,6 +118,7 @@ export async function getAdsResults(opts: {
     .map(([key, b]) => ({
       key,
       label: granularity === 'weekly' ? `Week of ${fmtDay(key)}` : fmtDay(key),
+      budgetSetCentavos: b.hasBudget ? b.budget : null,
       spendCentavos: b.spend,
       revCentavos: b.rev,
       roas: b.spend > 0 ? b.rev / b.spend : null,
@@ -110,10 +128,15 @@ export async function getAdsResults(opts: {
   const totalSpend = rows.reduce((s, r) => s + r.spendCentavos, 0);
   const totalRev = rows.reduce((s, r) => s + r.revCentavos, 0);
   const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+  const budgetRows = rows.filter((r) => r.budgetSetCentavos != null);
+  const totalBudget = budgetRows.length
+    ? budgetRows.reduce((s, r) => s + (r.budgetSetCentavos ?? 0), 0)
+    : null;
 
   return {
     rows,
     totals: {
+      budgetSetCentavos: totalBudget,
       spendCentavos: totalSpend,
       revCentavos: totalRev,
       roas: totalSpend > 0 ? totalRev / totalSpend : null,

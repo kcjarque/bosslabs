@@ -289,6 +289,13 @@ export async function syncAdSpendDaily(
     `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
     `&access_token=${encodeURIComponent(token)}`;
 
+  // Snapshot the CURRENT set budget so each synced (recent) day records what was
+  // configured. Meta has no per-day budget history, so this captures it forward:
+  // every nightly run stamps the live budget onto the recent days it overwrites.
+  const { dailyCentavos: budgetSetCentavos } = await getCampaignBudget().catch(() => ({
+    dailyCentavos: null,
+  }));
+
   const synced: string[] = [];
   try {
     const res = await fetch(url, { cache: 'no-store' });
@@ -312,6 +319,7 @@ export async function syncAdSpendDaily(
         clicks: parseInt(row.clicks ?? '0', 10) || 0,
         reach: parseInt(row.reach ?? '0', 10) || 0,
         campaignId: CAMPAIGN_ID,
+        budgetSetCentavos,
       });
       if (ok) synced.push(row.date_start);
     }
