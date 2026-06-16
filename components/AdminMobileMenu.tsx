@@ -8,12 +8,12 @@ import { NavIcon } from '@/components/admin/NavIcon';
 export function AdminMobileMenu({
   nav,
 }: {
-  nav: { href: string; label: string; icon?: string }[];
+  nav: { href: string; label: string; icon?: string; exact?: boolean }[];
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname() || '';
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'));
+  const isActive = (href: string, exact?: boolean) =>
+    exact ? pathname === href : pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'));
 
   async function logout() {
     await fetch('/api/admin/logout', { method: 'POST' });
@@ -48,7 +48,7 @@ export function AdminMobileMenu({
           />
           <div className="absolute right-4 top-14 z-30 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
             {nav.map((item) => {
-              const active = isActive(item.href);
+              const active = isActive(item.href, item.exact);
               return (
                 <Link
                   key={item.href}

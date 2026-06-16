@@ -1,0 +1,160 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { requireAdmin } from '@/lib/admin-auth';
+import {
+  addExpense,
+  deleteExpense,
+  addCategory,
+  deleteCategory,
+  addProject,
+  deleteProject,
+  addProjectItem,
+  updateProjectItem,
+  deleteProjectItem,
+  addRecurring,
+  setRecurringActive,
+  deleteRecurring,
+  parsePesoToCentavos,
+  manilaToday,
+  type Cadence,
+} from '@/lib/finance';
+
+function str(fd: FormData, k: string): string {
+  const v = fd.get(k);
+  return typeof v === 'string' ? v : '';
+}
+function nullable(fd: FormData, k: string): string | null {
+  const v = str(fd, k).trim();
+  return v ? v : null;
+}
+
+function refresh() {
+  revalidatePath('/admin/finance', 'layout');
+}
+
+// ─── Expenses ───────────────────────────────────────────────────────────────
+
+export async function addExpenseAction(fd: FormData) {
+  requireAdmin();
+  await addExpense({
+    description: str(fd, 'description'),
+    amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
+    categoryId: nullable(fd, 'categoryId'),
+    spentOn: str(fd, 'spentOn') || manilaToday(),
+    projectId: nullable(fd, 'projectId'),
+    projectItemId: nullable(fd, 'projectItemId'),
+  });
+  refresh();
+}
+
+export async function deleteExpenseAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deleteExpense(id);
+  refresh();
+}
+
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+export async function addCategoryAction(fd: FormData) {
+  requireAdmin();
+  await addCategory(str(fd, 'name'));
+  refresh();
+}
+
+export async function deleteCategoryAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deleteCategory(id);
+  refresh();
+}
+
+// ─── Projects + line items ──────────────────────────────────────────────────
+
+export async function addProjectAction(fd: FormData) {
+  requireAdmin();
+  const id = await addProject(str(fd, 'name'), str(fd, 'note'));
+  refresh();
+  if (id) redirect(`/admin/finance/projects/${id}`);
+}
+
+export async function deleteProjectAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deleteProject(id);
+  refresh();
+  redirect('/admin/finance/projects');
+}
+
+export async function addProjectItemAction(fd: FormData) {
+  requireAdmin();
+  const projectId = str(fd, 'projectId');
+  if (projectId) {
+    await addProjectItem(projectId, str(fd, 'name'), parsePesoToCentavos(str(fd, 'budget')));
+  }
+  refresh();
+}
+
+export async function updateProjectItemAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) {
+    await updateProjectItem(id, { budgetCentavos: parsePesoToCentavos(str(fd, 'budget')) });
+  }
+  refresh();
+}
+
+export async function deleteProjectItemAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deleteProjectItem(id);
+  refresh();
+}
+
+/** Add an expense already tagged to a project (and optionally a BOM line item). */
+export async function addProjectExpenseAction(fd: FormData) {
+  requireAdmin();
+  const projectId = str(fd, 'projectId');
+  if (projectId) {
+    await addExpense({
+      description: str(fd, 'description'),
+      amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
+      categoryId: nullable(fd, 'categoryId'),
+      spentOn: str(fd, 'spentOn') || manilaToday(),
+      projectId,
+      projectItemId: nullable(fd, 'projectItemId'),
+    });
+  }
+  refresh();
+}
+
+// ─── Recurring ──────────────────────────────────────────────────────────────
+
+export async function addRecurringAction(fd: FormData) {
+  requireAdmin();
+  const cadence: Cadence = str(fd, 'cadence') === 'weekly' ? 'weekly' : 'monthly';
+  await addRecurring({
+    name: str(fd, 'name'),
+    amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
+    categoryId: nullable(fd, 'categoryId'),
+    cadence,
+    creditDay: Number(str(fd, 'creditDay')) || (cadence === 'weekly' ? 1 : 1),
+  });
+  refresh();
+}
+
+export async function setRecurringActiveAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await setRecurringActive(id, str(fd, 'active') === '1');
+  refresh();
+}
+
+export async function deleteRecurringAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deleteRecurring(id);
+  refresh();
+}

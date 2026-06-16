@@ -21,7 +21,7 @@ export const metadata = { title: 'Admin · BOSSLABS AI' };
  * AdminMobileMenu uses a flat list (drawer pattern), so we also derive
  * a flat NAV_FLAT array from the groups for the mobile menu.
  */
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: string; exact?: boolean };
 const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
   {
     heading: 'Overview',
@@ -54,6 +54,15 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { href: '/admin/crm', label: 'CRM', icon: 'crm' },
       { href: '/admin/recordings', label: 'Recordings', icon: 'recordings' },
       { href: '/admin/capi-status', label: 'CAPI status', icon: 'capi' },
+    ],
+  },
+  {
+    heading: 'Finance',
+    items: [
+      { href: '/admin/finance', label: 'Expenses', icon: 'expenses', exact: true },
+      { href: '/admin/finance/projects', label: 'Projects', icon: 'projects' },
+      { href: '/admin/finance/recurring', label: 'Recurring', icon: 'recurring' },
+      { href: '/admin/finance/settings', label: 'Settings', icon: 'settings' },
     ],
   },
   {
@@ -141,7 +150,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 </div>
                 <div className="space-y-0.5">
                   {group.items.map((item) => (
-                    <AdminNavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
+                    <AdminNavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      exact={item.exact}
+                    />
                   ))}
                 </div>
               </div>

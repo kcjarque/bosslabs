@@ -114,6 +114,27 @@ const PATHS: Record<string, ReactNode> = {
       <path d="m8.5 12 2.5 2.5 4.5-5" />
     </>
   ),
+  expenses: (
+    <>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M5 10v4M19 10v4" />
+    </>
+  ),
+  projects: (
+    <>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 13 9 5 9-5" />
+    </>
+  ),
+  recurring: (
+    <>
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </>
+  ),
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {
