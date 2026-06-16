@@ -32,9 +32,9 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
   const N = rows.length;
   const W = 720;
   const padX = 14;
-  const padTop = 18;
-  const padBottom = 26;
-  const H = 296;
+  const padTop = 16;
+  const padBottom = 24;
+  const H = 196;
   const innerH = H - padTop - padBottom;
   const baseY = padTop + innerH;
   const innerW = W - padX * 2;
