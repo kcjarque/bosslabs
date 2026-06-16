@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { RefreshButton } from './RefreshButton';
+import { AdsResultsView } from './AdsResultsView';
 import {
   getAdsReportCached,
   ADS_RANGES,
@@ -48,12 +49,55 @@ const cprTone = (n: number | null, benchmark: number | null): Tone => {
   return 'bad';
 };
 
+function AdsTabs({ view }: { view: 'live' | 'results' }) {
+  const tabs = [
+    { key: 'live' as const, label: 'Live (Meta)', href: '/admin/ads' },
+    { key: 'results' as const, label: 'Results over time', href: '/admin/ads?view=results' },
+  ];
+  return (
+    <div className="flex flex-wrap gap-2 border-b border-slate-200">
+      {tabs.map((t) => {
+        const active = t.key === view;
+        return (
+          <Link
+            key={t.key}
+            href={t.href}
+            className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition ${
+              active
+                ? 'border-cyan-600 text-cyan-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function AdsPage({
   searchParams,
 }: {
-  searchParams: { range?: string; active?: string };
+  searchParams: { range?: string; active?: string; view?: string; gran?: string; from?: string; to?: string };
 }) {
   requireAdmin();
+
+  // Tabbed: "Live (Meta)" (default) and "Results over time" (stored daily/weekly
+  // spend + revenue + ROAS). Branch before the Meta fetch so the results tab
+  // doesn't hit the Graph API.
+  if (searchParams?.view === 'results') {
+    return (
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Ads</h1>
+        </header>
+        <AdsTabs view="results" />
+        <AdsResultsView searchParams={searchParams} />
+      </div>
+    );
+  }
+
   const rangeKey: AdsRangeKey = isRangeKey(searchParams?.range) ? searchParams.range : 'all';
   const activeOnly = searchParams?.active === '1';
   const report = await getAdsReportCached(rangeKey);
@@ -81,6 +125,8 @@ export default async function AdsPage({
           </p>
         </div>
       </header>
+
+      <AdsTabs view="live" />
 
       {!report.configured ? (
         <ConnectTokenCard />
