@@ -145,7 +145,11 @@ export async function updateProjectItemAction(fd: FormData) {
   requireAdmin();
   const id = str(fd, 'id');
   if (id) {
-    await updateProjectItem(id, { budgetCentavos: parsePesoToCentavos(str(fd, 'budget')) });
+    const name = str(fd, 'name').trim();
+    await updateProjectItem(id, {
+      ...(name ? { name } : {}), // don't blank the name if the field is empty
+      budgetCentavos: parsePesoToCentavos(str(fd, 'budget')),
+    });
   }
   refresh();
 }

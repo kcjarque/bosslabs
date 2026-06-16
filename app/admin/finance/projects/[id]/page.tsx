@@ -80,21 +80,39 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   const v = it.budgetCentavos - it.actualCentavos;
                   return (
                     <tr key={it.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-2 font-medium text-slate-800">{it.name}</td>
                       <td className="px-4 py-2">
-                        <form action={updateProjectItemAction} className="flex items-center gap-1">
+                        {/* one form per row (holds the id); the name + budget
+                            inputs and Save live in their own cells but submit
+                            here via the form= attribute, so one Save commits both. */}
+                        <form id={`fi_${it.id}`} action={updateProjectItemAction} className="hidden">
                           <input type="hidden" name="id" value={it.id} />
+                        </form>
+                        <input
+                          form={`fi_${it.id}`}
+                          name="name"
+                          defaultValue={it.name}
+                          placeholder="Line item"
+                          className="input !w-full !max-w-[240px] !px-2 !py-1 font-medium"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1">
                           <span className="text-slate-400">₱</span>
                           <input
+                            form={`fi_${it.id}`}
                             name="budget"
                             inputMode="decimal"
                             defaultValue={(it.budgetCentavos / 100).toString()}
                             className="input !w-24 !px-2 !py-1 tabular-nums"
                           />
-                          <button type="submit" className="text-[12px] text-cyan-700 hover:underline">
+                          <button
+                            form={`fi_${it.id}`}
+                            type="submit"
+                            className="text-[12px] text-cyan-700 hover:underline"
+                          >
                             Save
                           </button>
-                        </form>
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-right font-semibold tabular-nums text-red-600">
                         {formatPHP(it.actualCentavos)}
