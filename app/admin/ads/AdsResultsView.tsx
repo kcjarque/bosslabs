@@ -151,50 +151,65 @@ export async function AdsResultsView({
         <AdsTrendChart rows={rows} />
       </div>
 
-      {/* Table */}
+      {/* Table — centered columns, row hover, horizontal scroll on mobile */}
       <div className="card overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[520px] text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-200 text-center text-[11px] uppercase tracking-wide text-slate-400">
                 <th className="px-4 py-2.5 font-semibold">{gran === 'weekly' ? 'Week' : 'Date'}</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Budget</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Revenue</th>
-                <th className="px-4 py-2.5 text-right font-semibold">ROAS</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Sales</th>
+                <th className="px-4 py-2.5 font-semibold">Budget</th>
+                <th className="px-4 py-2.5 font-semibold">Revenue</th>
+                <th className="px-4 py-2.5 font-semibold">Net</th>
+                <th className="px-4 py-2.5 font-semibold">ROAS</th>
+                <th className="px-4 py-2.5 font-semibold">Sales</th>
               </tr>
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                     No data in this range.
                   </td>
                 </tr>
               ) : (
-                tableRows.map((r) => (
-                  <tr key={r.key} className="border-b border-slate-100 last:border-0">
-                    <td className="whitespace-nowrap px-4 py-2.5 font-medium text-slate-800">
-                      {r.label}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-600">
-                      {formatPHP(r.spendCentavos)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">
-                      {formatPHP(r.revCentavos)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums ${
-                        r.roas == null ? 'text-slate-400' : r.roas >= 1 ? 'text-emerald-600' : 'text-rose-600'
-                      }`}
+                tableRows.map((r) => {
+                  const net = r.revCentavos - r.spendCentavos;
+                  return (
+                    <tr
+                      key={r.key}
+                      className="border-b border-slate-100 text-center transition last:border-0 hover:bg-slate-50/70"
                     >
-                      {r.roas == null ? '—' : `${r.roas.toFixed(2)}×`}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-600">
-                      {r.sales}
-                    </td>
-                  </tr>
-                ))
+                      <td className="whitespace-nowrap px-4 py-2.5 font-medium text-slate-800">
+                        {r.label}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-600">
+                        {formatPHP(r.spendCentavos)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 font-semibold tabular-nums text-emerald-600">
+                        {formatPHP(r.revCentavos)}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-4 py-2.5 font-medium tabular-nums ${
+                          net >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {net >= 0 ? '' : '-'}
+                        {formatPHP(Math.abs(net))}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-4 py-2.5 font-semibold tabular-nums ${
+                          r.roas == null ? 'text-slate-400' : r.roas >= 1 ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {r.roas == null ? '—' : `${r.roas.toFixed(2)}×`}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-600">
+                        {r.sales}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
