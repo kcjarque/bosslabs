@@ -55,7 +55,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       {/* BOM line items */}
       <div className="card mt-6 overflow-hidden p-0">
         <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
-          Bill of materials
+          Budget
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
