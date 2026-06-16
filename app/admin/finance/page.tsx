@@ -9,6 +9,7 @@ import {
   listCategories,
   manilaToday,
   manilaYearMonth,
+  PAYERS,
 } from '@/lib/finance';
 import {
   addExpenseAction,
@@ -117,6 +118,11 @@ export default async function FinanceExpensesPage({
                         {!r.credited && (
                           <span className="pill pill-amber ml-2">upcoming</span>
                         )}
+                        {r.isAbono && (
+                          <span className={`pill ml-2 ${r.abonoSettled ? 'pill-green' : 'pill-cyan'}`}>
+                            abono{r.paidBy ? ` · ${r.paidBy}` : ''}{r.abonoSettled ? ' · paid' : ''}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <span
@@ -217,6 +223,26 @@ export default async function FinanceExpensesPage({
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+                <input type="checkbox" name="isAbono" value="1" className="h-4 w-4 accent-cyan-600" />
+                Abono — someone fronted this (reimbursable)
+              </label>
+              <div className="mt-3">
+                <label className="label">Paid by (optional)</label>
+                <select name="paidBy" className="select" defaultValue="">
+                  <option value="">—</option>
+                  {PAYERS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                Marking an abono adds it to Accounts Payable until you reimburse the person.
+              </p>
             </div>
             <button type="submit" className="btn btn-primary w-full">
               Add expense

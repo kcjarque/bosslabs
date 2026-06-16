@@ -7,6 +7,8 @@ import {
   addExpense,
   deleteExpense,
   updateExpenseAmount,
+  settleAbono,
+  unsettleAbono,
   setRecurringOverride,
   clearRecurringOverride,
   addCategory,
@@ -41,6 +43,7 @@ function refresh() {
 
 export async function addExpenseAction(fd: FormData) {
   requireAdmin();
+  const isAbono = str(fd, 'isAbono') === '1';
   await addExpense({
     description: str(fd, 'description'),
     amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
@@ -48,7 +51,23 @@ export async function addExpenseAction(fd: FormData) {
     spentOn: str(fd, 'spentOn') || manilaToday(),
     projectId: nullable(fd, 'projectId'),
     projectItemId: nullable(fd, 'projectItemId'),
+    isAbono,
+    paidBy: nullable(fd, 'paidBy'),
   });
+  refresh();
+}
+
+export async function settleAbonoAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await settleAbono(id);
+  refresh();
+}
+
+export async function unsettleAbonoAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await unsettleAbono(id);
   refresh();
 }
 

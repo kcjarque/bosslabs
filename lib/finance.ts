@@ -17,6 +17,9 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 export type Cadence = 'monthly' | 'weekly';
 export type ExpenseSource = 'single' | 'project' | 'recurring';
 
+/** People who can front (abono) an expense — the Accounts Payable is owed to one of these. */
+export const PAYERS = ['Kyle', 'Mikee'] as const;
+
 export type Category = { id: string; name: string };
 
 export type Project = {
@@ -61,6 +64,28 @@ export type Expense = {
   projectItemId: string | null;
   projectItemName: string;
   source: ExpenseSource;
+  isAbono: boolean;
+  paidBy: string | null;
+  abonoSettled: boolean;
+};
+
+/** One open/settled Accounts-Payable line (an abono expense). */
+export type PayableItem = {
+  id: string;
+  description: string;
+  amountCentavos: number;
+  spentOn: string;
+  paidBy: string; // 'Kyle' / 'Mikee' / 'Unspecified'
+  projectName: string;
+  settled: boolean;
+  settledAt: string | null;
+};
+
+export type AccountsPayable = {
+  byPayer: { payer: string; centavos: number; count: number }[];
+  totalCentavos: number;
+  open: PayableItem[];
+  settled: PayableItem[];
 };
 
 /** One line in the consolidated monthly Expenses view. */
@@ -75,6 +100,9 @@ export type MonthRow = {
   expenseId: string | null; // stored rows: edit/delete by id
   recurringId: string | null; // recurring rows: override/skip by (id, date)
   overridden: boolean; // recurring occurrence whose amount was corrected this month
+  isAbono: boolean; // fronted (reimbursable) expense
+  paidBy: string | null; // who fronted it
+  abonoSettled: boolean; // reimbursed already
 };
 
 export type MonthlyConsolidation = {
@@ -387,6 +415,9 @@ export async function listExpenses(filters?: {
     projectItemId: r.project_item_id,
     projectItemName: r.project_item_id ? itemNames.get(r.project_item_id) ?? '' : '',
     source: (r.source as ExpenseSource) ?? 'single',
+    isAbono: Boolean(r.is_abono),
+    paidBy: r.paid_by ?? null,
+    abonoSettled: Boolean(r.abono_settled),
   }));
 }
 
@@ -397,6 +428,8 @@ export async function addExpense(input: {
   spentOn: string;
   projectId?: string | null;
   projectItemId?: string | null;
+  isAbono?: boolean;
+  paidBy?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const clean = input.description.trim();
@@ -409,6 +442,8 @@ export async function addExpense(input: {
     project_id: input.projectId ?? null,
     project_item_id: input.projectItemId ?? null,
     source: input.projectId ? 'project' : 'single',
+    is_abono: Boolean(input.isAbono),
+    paid_by: input.paidBy ?? null,
   });
   if (error) throw new Error(`addExpense: ${error.message}`);
 }
@@ -427,6 +462,84 @@ export async function updateExpenseAmount(id: string, centavos: number): Promise
     .update({ amount_centavos: Math.max(0, Math.round(centavos)) })
     .eq('id', id);
   if (error) throw new Error(`updateExpenseAmount: ${error.message}`);
+}
+
+// ─── Accounts Payable (abono / reimbursable advances) ───────────────────────
+
+/**
+ * Everything the business owes for fronted (abono) expenses, grouped by who
+ * paid. Open = not yet reimbursed (the live payable); settled = already paid
+ * back (kept for backtracking / undo). The expense cost itself is untouched.
+ */
+export async function listAccountsPayable(): Promise<AccountsPayable> {
+  const empty: AccountsPayable = { byPayer: [], totalCentavos: 0, open: [], settled: [] };
+  if (!isSupabaseConfigured()) return empty;
+  const { data, error } = await getSupabase()
+    .from('finance_expenses')
+    .select('id, description, amount_centavos, spent_on, paid_by, project_id, abono_settled, abono_settled_at')
+    .eq('is_abono', true)
+    .order('spent_on', { ascending: false });
+  if (error) return empty;
+  const rows = (data as ExpenseRow[]) ?? [];
+
+  const projIds = [...new Set(rows.map((r) => r.project_id).filter(Boolean))] as string[];
+  const projNames = new Map<string, string>();
+  if (projIds.length) {
+    const { data: ps } = await getSupabase().from('finance_projects').select('id, name').in('id', projIds);
+    for (const p of (ps as { id: string; name: string }[]) ?? []) projNames.set(p.id, p.name);
+  }
+  const toItem = (r: ExpenseRow): PayableItem => ({
+    id: r.id,
+    description: r.description,
+    amountCentavos: r.amount_centavos || 0,
+    spentOn: r.spent_on,
+    paidBy: r.paid_by || 'Unspecified',
+    projectName: r.project_id ? projNames.get(r.project_id) ?? '' : '',
+    settled: Boolean(r.abono_settled),
+    settledAt: r.abono_settled_at ?? null,
+  });
+
+  const open = rows.filter((r) => !r.abono_settled).map(toItem);
+  const settled = rows.filter((r) => r.abono_settled).map(toItem);
+
+  const totals = new Map<string, { centavos: number; count: number }>();
+  for (const it of open) {
+    const cur = totals.get(it.paidBy) ?? { centavos: 0, count: 0 };
+    cur.centavos += it.amountCentavos;
+    cur.count += 1;
+    totals.set(it.paidBy, cur);
+  }
+  // Known payers first (stable order), then any others (e.g. "Unspecified").
+  const order = [
+    ...PAYERS,
+    ...[...totals.keys()].filter((p) => !(PAYERS as readonly string[]).includes(p)),
+  ];
+  const byPayer = order
+    .filter((p) => totals.has(p))
+    .map((p) => ({ payer: p, centavos: totals.get(p)!.centavos, count: totals.get(p)!.count }));
+  const totalCentavos = open.reduce((s, it) => s + it.amountCentavos, 0);
+
+  return { byPayer, totalCentavos, open, settled };
+}
+
+/** Reimburse an abono — drops it from Accounts Payable. */
+export async function settleAbono(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('finance_expenses')
+    .update({ abono_settled: true, abono_settled_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`settleAbono: ${error.message}`);
+}
+
+/** Undo a reimbursement — puts the abono back into Accounts Payable. */
+export async function unsettleAbono(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('finance_expenses')
+    .update({ abono_settled: false, abono_settled_at: null })
+    .eq('id', id);
+  if (error) throw new Error(`unsettleAbono: ${error.message}`);
 }
 
 // ─── Recurring per-occurrence overrides ─────────────────────────────────────
@@ -536,6 +649,9 @@ export async function getMonthlyConsolidation(
       expenseId: e.id,
       recurringId: null,
       overridden: false,
+      isAbono: e.isAbono,
+      paidBy: e.paidBy,
+      abonoSettled: e.abonoSettled,
     });
   }
 
@@ -556,6 +672,9 @@ export async function getMonthlyConsolidation(
         expenseId: null,
         recurringId: r.id,
         overridden: Boolean(ov && ov.amountCentavos != null),
+        isAbono: false,
+        paidBy: null,
+        abonoSettled: false,
       });
     }
   }
@@ -617,6 +736,10 @@ type ExpenseRow = {
   project_item_id: string | null;
   source: string;
   created_at: string;
+  is_abono?: boolean;
+  paid_by?: string | null;
+  abono_settled?: boolean;
+  abono_settled_at?: string | null;
 };
 type OverrideRow = {
   recurring_id: string;
