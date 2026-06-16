@@ -18,27 +18,26 @@ const peso = (centavos: number) =>
   }).format(Math.round(centavos / 100));
 
 /**
- * Two stacked panels sharing one x-axis + one hover, so each panel keeps a
- * SINGLE scale (the cardinal rule a dual-axis line chart breaks):
- *   • Money panel — Revenue (filled area) vs Budget (line). The gap between them
- *     is profit, readable at a glance.
- *   • ROAS panel  — ROAS line with a 1× breakeven; points are green ≥1× / red <1×.
- * Hovering anywhere drops a guide across both panels and shows one tooltip
- * (Revenue / Budget / Net / ROAS). Fixed viewBox + w-full → mobile-responsive.
+ * One combo chart, dual-axis:
+ *   • LEFT (₱): Budget + Revenue as lines (Revenue filled — the gap is profit).
+ *   • RIGHT (×): ROAS as BARS so its magnitude/"gravity" reads at a glance,
+ *     green ≥1× / red <1×, with a dashed 1× breakeven. Bars sit behind the
+ *     lines (low opacity) so the two encodings never get confused.
+ * Shared hover guide + one tooltip (Revenue / Budget / Net / ROAS). Fixed
+ * viewBox + w-full → mobile-responsive.
  */
 export function AdsTrendChart({ rows }: { rows: Row[] }) {
   const [hover, setHover] = useState<number | null>(null);
 
   const N = rows.length;
   const W = 720;
-  const padX = 10;
-  const moneyTop = 16;
-  const moneyH = 128;
-  const moneyBase = moneyTop + moneyH;
-  const roasTop = moneyBase + 30;
-  const roasH = 46;
-  const roasBase = roasTop + roasH;
-  const H = roasBase + 22;
+  const padX = 14;
+  const padTop = 18;
+  const padBottom = 26;
+  const H = 296;
+  const innerH = H - padTop - padBottom;
+  const baseY = padTop + innerH;
+  const innerW = W - padX * 2;
 
   const spend = rows.map((d) => d.spendCentavos / 100);
   const rev = rows.map((d) => d.revCentavos / 100);
@@ -46,35 +45,21 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
   const roasVals = rows.map((d) => d.roas).filter((r): r is number => r != null);
   const rightMax = Math.max(2, Math.ceil(Math.max(1, ...roasVals)));
 
-  const innerW = W - padX * 2;
-  const cx = (i: number) => (N <= 1 ? W / 2 : padX + (innerW * i) / (N - 1));
-  const yM = (php: number) => moneyBase - (php / leftMax) * moneyH;
-  const yR = (v: number) => roasBase - (Math.min(v, rightMax) / rightMax) * roasH;
+  // Slot-centered x so bars and line points align perfectly (no edge clipping).
+  const slotW = innerW / Math.max(1, N);
+  const x = (i: number) => padX + slotW * (i + 0.5);
+  const yL = (php: number) => baseY - (php / leftMax) * innerH;
+  const yR = (v: number) => baseY - (Math.min(v, rightMax) / rightMax) * innerH;
+  const barW = Math.min(24, slotW * 0.6);
 
-  const linePath = (vals: number[], y: (v: number) => number) =>
-    vals.map((v, i) => `${i ? 'L' : 'M'} ${cx(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
-
+  const linePath = (vals: number[]) =>
+    vals.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${yL(v).toFixed(1)}`).join(' ');
   const revArea =
     N > 0
-      ? `M ${cx(0)} ${moneyBase} ${rev
-          .map((v, i) => `L ${cx(i).toFixed(1)} ${yM(v).toFixed(1)}`)
-          .join(' ')} L ${cx(N - 1)} ${moneyBase} Z`
+      ? `M ${x(0).toFixed(1)} ${baseY} ${rev
+          .map((v, i) => `L ${x(i).toFixed(1)} ${yL(v).toFixed(1)}`)
+          .join(' ')} L ${x(N - 1).toFixed(1)} ${baseY} Z`
       : '';
-
-  // ROAS line, broken where a bucket has no ROAS.
-  const roasSegments: string[] = [];
-  let cur: string[] = [];
-  rows.forEach((d, i) => {
-    if (d.roas == null) {
-      if (cur.length) {
-        roasSegments.push(cur.join(' '));
-        cur = [];
-      }
-      return;
-    }
-    cur.push(`${cur.length ? 'L' : 'M'} ${cx(i).toFixed(1)} ${yR(d.roas).toFixed(1)}`);
-  });
-  if (cur.length) roasSegments.push(cur.join(' '));
 
   const labelEvery = Math.max(1, Math.ceil(N / 8));
   const pesoK = (php: number) =>
@@ -82,7 +67,7 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
 
   const active = hover != null ? rows[hover] : null;
   const net = active ? active.revCentavos - active.spendCentavos : 0;
-  const tipLeftPct = hover != null ? Math.min(84, Math.max(16, (cx(hover) / W) * 100)) : 0;
+  const tipLeftPct = hover != null ? Math.min(84, Math.max(16, (x(hover) / W) * 100)) : 0;
 
   if (N === 0) {
     return (
@@ -102,7 +87,7 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
           <span className="inline-block h-0.5 w-3 bg-slate-400" />Budget
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-3 bg-cyan-600" />ROAS
+          <span className="inline-block h-2.5 w-2 rounded-[1px] bg-cyan-500/50" />ROAS (bars)
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -118,34 +103,39 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
 
       <div className="relative rounded-xl border border-slate-100 bg-slate-50/30 p-1.5">
         <svg viewBox={`0 0 ${W} ${H}`} className="block w-full text-slate-300">
-          {/* ── MONEY PANEL ─────────────────────────────────────────────── */}
-          {[0.5, 1].map((t) => (
+          {/* left-axis gridlines */}
+          {[0.25, 0.5, 0.75, 1].map((t) => (
             <line
               key={t}
               x1={padX}
               x2={W - padX}
-              y1={moneyBase - moneyH * t}
-              y2={moneyBase - moneyH * t}
+              y1={baseY - innerH * t}
+              y2={baseY - innerH * t}
               stroke="currentColor"
               strokeWidth="0.5"
               opacity="0.4"
               strokeDasharray="2 3"
             />
           ))}
-          <line x1={padX} x2={W - padX} y1={moneyBase} y2={moneyBase} stroke="#cbd5e1" strokeWidth="1" />
-          {/* revenue area + lines */}
-          <path d={revArea} fill="#10b981" opacity="0.12" />
-          <path d={linePath(spend, yM)} fill="none" stroke="#94a3b8" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
-          <path d={linePath(rev, yM)} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          <text x={padX} y={moneyTop - 4} fontSize="9" fill="#94a3b8" textAnchor="start">
-            {pesoK(leftMax)}
-          </text>
-          <text x={padX} y={moneyTop + 7} fontSize="8.5" fill="#94a3b8" textAnchor="start" opacity="0.7">
-            Budget vs Revenue
-          </text>
+          <line x1={padX} x2={W - padX} y1={baseY} y2={baseY} stroke="#cbd5e1" strokeWidth="1" />
 
-          {/* ── ROAS PANEL ──────────────────────────────────────────────── */}
-          <line x1={padX} x2={W - padX} y1={roasBase} y2={roasBase} stroke="#e2e8f0" strokeWidth="1" />
+          {/* ROAS bars (behind), green ≥1× / red <1× */}
+          {rows.map((d, i) =>
+            d.roas == null ? null : (
+              <rect
+                key={'b' + d.key}
+                x={x(i) - barW / 2}
+                y={yR(d.roas)}
+                width={barW}
+                height={Math.max(0, baseY - yR(d.roas))}
+                rx="1.5"
+                fill={d.roas >= 1 ? '#10b981' : '#ef4444'}
+                opacity={hover === i ? 0.5 : 0.22}
+              />
+            ),
+          )}
+
+          {/* 1× breakeven (right-axis scale) */}
           <line
             x1={padX}
             x2={W - padX}
@@ -154,70 +144,63 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
             stroke="#f59e0b"
             strokeWidth="1"
             strokeDasharray="4 4"
-            opacity="0.85"
+            opacity="0.9"
           />
-          {roasSegments.map((seg, i) => (
-            <path key={i} d={seg} fill="none" stroke="#0891b2" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
-          ))}
-          {rows.map((d, i) =>
-            d.roas == null ? null : (
-              <circle
-                key={'rd' + d.key}
-                cx={cx(i)}
-                cy={yR(d.roas)}
-                r={hover === i ? 3 : 1.8}
-                fill={d.roas >= 1 ? '#10b981' : '#ef4444'}
-              />
-            ),
-          )}
-          <text x={W - padX} y={roasTop - 3} fontSize="9" fill="#0891b2" textAnchor="end">
-            {rightMax}× ROAS
-          </text>
 
-          {/* ── shared hover guide + points ─────────────────────────────── */}
+          {/* Revenue area + lines on top */}
+          <path d={revArea} fill="#10b981" opacity="0.12" />
+          <path d={linePath(spend)} fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={linePath(rev)} fill="none" stroke="#10b981" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+
+          {/* hover guide + line points */}
           {hover != null && (
             <>
               <line
-                x1={cx(hover)}
-                x2={cx(hover)}
-                y1={moneyTop}
-                y2={roasBase}
+                x1={x(hover)}
+                x2={x(hover)}
+                y1={padTop}
+                y2={baseY}
                 stroke="#94a3b8"
                 strokeWidth="1"
                 strokeDasharray="3 3"
                 opacity="0.6"
               />
-              <circle cx={cx(hover)} cy={yM(rev[hover])} r="3.2" fill="#10b981" />
-              <circle cx={cx(hover)} cy={yM(spend[hover])} r="3.2" fill="#64748b" />
+              <circle cx={x(hover)} cy={yL(rev[hover])} r="3.4" fill="#10b981" />
+              <circle cx={x(hover)} cy={yL(spend[hover])} r="3.4" fill="#64748b" />
             </>
           )}
 
-          {/* x-axis labels (shared) */}
+          {/* axis labels */}
+          <text x={padX} y={padTop - 5} fontSize="9.5" fill="#94a3b8" textAnchor="start">
+            {pesoK(leftMax)}
+          </text>
+          <text x={W - padX} y={padTop - 5} fontSize="9.5" fill="#0e7490" textAnchor="end">
+            {rightMax}× ROAS
+          </text>
+
+          {/* x-axis labels */}
           {rows.map((d, i) =>
             i % labelEvery === 0 || i === N - 1 ? (
-              <text key={'x' + d.key} x={cx(i)} y={H - 6} fontSize="9" fill="#94a3b8" textAnchor="middle">
+              <text key={'x' + d.key} x={x(i)} y={H - 8} fontSize="9" fill="#94a3b8" textAnchor="middle">
                 {d.label.replace('Week of ', '')}
               </text>
             ) : null,
           )}
 
-          {/* full-height hover hit areas */}
-          {rows.map((d, i) => {
-            const half = N <= 1 ? innerW / 2 : innerW / (N - 1) / 2;
-            return (
-              <rect
-                key={'h' + d.key}
-                x={cx(i) - half}
-                y={moneyTop}
-                width={Math.max(8, half * 2)}
-                height={roasBase - moneyTop}
-                fill="transparent"
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHover(i)}
-                onMouseLeave={() => setHover(null)}
-              />
-            );
-          })}
+          {/* hover hit areas */}
+          {rows.map((d, i) => (
+            <rect
+              key={'h' + d.key}
+              x={padX + slotW * i}
+              y={padTop}
+              width={slotW}
+              height={innerH}
+              fill="transparent"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+            />
+          ))}
         </svg>
 
         {active && (
