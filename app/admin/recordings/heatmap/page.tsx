@@ -76,32 +76,61 @@ export default async function HeatmapPage({
           through, then come back.
         </div>
       ) : (
-        <div className="space-y-10">
-          {surfaces.map((s) => (
-            <section key={s.page} className="space-y-3">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {PAGE_LABEL[s.page] ?? s.page}
-                </h2>
-                <span className="text-[12px] text-slate-500">
-                  {s.sessionCount} session{s.sessionCount === 1 ? '' : 's'} · {s.clickCount} clicks ·{' '}
-                  {s.chunkCount} chunks
-                </span>
-              </div>
-              {s.chunkCount === 0 ? (
-                <div className="card text-center text-[13px] text-slate-400">
-                  No recordings on {s.page} yet.
+        <div className="space-y-12">
+          {surfaces.map((s) => {
+            // Show a device only if it has activity — most funnels are
+            // mobile-heavy, so the desktop map is often empty and vice-versa.
+            const devices = [s.desktop, s.mobile].filter(
+              (d) => d.clicks.length > 0 || d.moves.length > 0,
+            );
+            return (
+              <section key={s.page} className="space-y-4">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {PAGE_LABEL[s.page] ?? s.page}
+                  </h2>
+                  <span className="text-[12px] text-slate-500">{s.chunkCount} chunks</span>
                 </div>
-              ) : (
-                <HeatmapCanvas
-                  page={s.page}
-                  recordedWidth={s.recordedWidth}
-                  clicks={s.clicks}
-                  moves={s.moves}
-                />
-              )}
-            </section>
-          ))}
+                {devices.length === 0 ? (
+                  <div className="card text-center text-[13px] text-slate-400">
+                    No recorded clicks on {s.page} yet.
+                  </div>
+                ) : (
+                  devices.map((d) => (
+                    <div key={d.device} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                            d.device === 'mobile'
+                              ? 'bg-cyan-50 text-cyan-700'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {d.device}
+                        </span>
+                        <span className="text-[12px] text-slate-500">
+                          {d.sessionCount} session{d.sessionCount === 1 ? '' : 's'} ·{' '}
+                          {d.clickCount} clicks
+                        </span>
+                      </div>
+                      <div
+                        className={
+                          d.device === 'mobile' ? 'mx-auto w-full max-w-[390px]' : 'w-full'
+                        }
+                      >
+                        <HeatmapCanvas
+                          page={s.page}
+                          backdropWidth={d.backdropWidth}
+                          clicks={d.clicks}
+                          moves={d.moves}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 

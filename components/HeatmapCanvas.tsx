@@ -16,10 +16,11 @@ import type { HeatPoint } from '@/lib/recordings-heatmap';
  * framed page runs ZERO JavaScript — no tracking, no pixel, no recording — while
  * still being same-origin so we can measure its full scroll height.
  *
- * Coordinate model: points are page-absolute (scroll already folded in by the
- * server). The iframe renders at the recorded width; we CSS-scale the whole
- * stage to fit the admin column, so the canvas draws in raw recorded
- * coordinates and inherits the same scale — no per-point math.
+ * Coordinate model: x is a fraction (0..1) of the device's screen width and y
+ * is page-absolute (scroll folded in by the server). The iframe renders the
+ * responsive page at this device's representative backdrop width; we CSS-scale
+ * the whole stage to fit the admin column, so the canvas draws at backdrop
+ * width and inherits the same scale.
  */
 
 type Mode = 'clicks' | 'moves';
@@ -28,12 +29,12 @@ const MAX_CANVAS_HEIGHT = 8000; // guard against pathological page heights
 
 export function HeatmapCanvas({
   page,
-  recordedWidth,
+  backdropWidth,
   clicks,
   moves,
 }: {
   page: string;
-  recordedWidth: number;
+  backdropWidth: number;
   clicks: HeatPoint[];
   moves: HeatPoint[];
 }) {
@@ -52,18 +53,18 @@ export function HeatmapCanvas({
     return Math.min(MAX_CANVAS_HEIGHT, Math.max(800, maxY + 200));
   })();
 
-  // Fit the stage to the admin column width whenever it (or the recorded width)
+  // Fit the stage to the admin column width whenever it (or the backdrop width)
   // changes.
   useEffect(() => {
     function fit() {
       const outer = outerRef.current;
-      const fitWidth = outer ? outer.clientWidth : recordedWidth;
-      setScale(Math.min(1, fitWidth / Math.max(1, recordedWidth)));
+      const fitWidth = outer ? outer.clientWidth : backdropWidth;
+      setScale(Math.min(1, fitWidth / Math.max(1, backdropWidth)));
     }
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [recordedWidth]);
+  }, [backdropWidth]);
 
   // Measure the iframe's real page height once it loads (same-origin read). The
   // page runs no scripts, so layout is stable by load — but we re-measure after
@@ -99,8 +100,8 @@ export function HeatmapCanvas({
     // Render the heat at a capped resolution (≤640px wide) and CSS-upscale to
     // fill — blobs are low-frequency so it's visually identical, but the
     // per-pixel colorize loop drops from millions of pixels to a fraction.
-    const RES = Math.min(1, 640 / Math.max(1, recordedWidth));
-    const w = Math.max(1, Math.round(recordedWidth * RES));
+    const RES = Math.min(1, 640 / Math.max(1, backdropWidth));
+    const w = Math.max(1, Math.round(backdropWidth * RES));
     const h = Math.max(1, Math.round(height * RES));
     canvas.width = w;
     canvas.height = h;
@@ -117,7 +118,7 @@ export function HeatmapCanvas({
     ctx.globalCompositeOperation = 'lighter';
     for (const p of points) {
       if (p.y > height) continue; // bounds check in recorded coords
-      const x = p.x * RES;
+      const x = p.xFrac * w; // xFrac is a fraction of screen width → canvas px
       const y = p.y * RES;
       const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
       g.addColorStop(0, `rgba(0,0,0,${alpha})`);
@@ -143,7 +144,7 @@ export function HeatmapCanvas({
       d[i + 3] = Math.min(220, a * 1.6); // lift faint regions, cap opacity
     }
     ctx.putImageData(img, 0, 0);
-  }, [ready, height, mode, clicks, moves, recordedWidth]);
+  }, [ready, height, mode, clicks, moves, backdropWidth]);
 
   const scaledHeight = (height || pointHeight) * scale;
 
@@ -187,7 +188,7 @@ export function HeatmapCanvas({
         )}
         <div
           style={{
-            width: recordedWidth,
+            width: backdropWidth,
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
             position: 'relative',
@@ -204,7 +205,7 @@ export function HeatmapCanvas({
             tabIndex={-1}
             aria-hidden="true"
             style={{
-              width: recordedWidth,
+              width: backdropWidth,
               height: height || pointHeight,
               border: 0,
               display: 'block',
@@ -215,7 +216,7 @@ export function HeatmapCanvas({
           <canvas
             ref={canvasRef}
             className="pointer-events-none absolute left-0 top-0"
-            style={{ width: recordedWidth, height: height || pointHeight }}
+            style={{ width: backdropWidth, height: height || pointHeight }}
           />
         </div>
       </div>
