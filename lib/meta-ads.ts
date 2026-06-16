@@ -151,6 +151,42 @@ async function graph(path: string, fields: string): Promise<unknown> {
 }
 
 /**
+ * Current budget configured in Ads Manager (centavos — Meta returns budgets in
+ * the account's minor currency unit). Handles CBO (budget on the campaign) and
+ * ABO (sum of the ACTIVE ad sets' budgets). Best-effort: any failure → nulls so
+ * the caller degrades gracefully. Used to show set-vs-spent budget progression.
+ */
+export async function getCampaignBudget(): Promise<{
+  dailyCentavos: number | null;
+  lifetimeCentavos: number | null;
+}> {
+  if (!process.env.META_ADS_TOKEN) return { dailyCentavos: null, lifetimeCentavos: null };
+  try {
+    const campRaw = (await graph(CAMPAIGN_ID, 'id,daily_budget,lifetime_budget')) as {
+      daily_budget?: string;
+      lifetime_budget?: string;
+    };
+    let daily = campRaw.daily_budget ? Number(campRaw.daily_budget) : 0;
+    let lifetime = campRaw.lifetime_budget ? Number(campRaw.lifetime_budget) : 0;
+    // CBO has no campaign budget → fall back to ABO (active ad sets).
+    if (!daily && !lifetime) {
+      const adsetsRaw = (await graph(
+        `${CAMPAIGN_ID}/adsets`,
+        'id,effective_status,daily_budget,lifetime_budget',
+      )) as { data?: Array<Record<string, unknown>> };
+      for (const a of adsetsRaw?.data ?? []) {
+        if (String(a.effective_status ?? '').toUpperCase() !== 'ACTIVE') continue;
+        daily += a.daily_budget ? Number(a.daily_budget) : 0;
+        lifetime += a.lifetime_budget ? Number(a.lifetime_budget) : 0;
+      }
+    }
+    return { dailyCentavos: daily || null, lifetimeCentavos: lifetime || null };
+  } catch {
+    return { dailyCentavos: null, lifetimeCentavos: null };
+  }
+}
+
+/**
  * Live report for the BOSSLABS campaign at the given window. Best-effort: any
  * Graph failure returns { configured:true, error } with whatever resolved, so
  * the page degrades instead of 500-ing.

@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
-import { getProject, listCategories, manilaToday } from '@/lib/finance';
+import { getProject, listCategories, manilaToday, PAYERS } from '@/lib/finance';
 import {
   addProjectItemAction,
   updateProjectItemAction,
@@ -262,6 +262,20 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label">Paid by (optional)</label>
+            <select name="paidBy" className="select" defaultValue="">
+              <option value="">— Business paid directly —</option>
+              {PAYERS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+              If someone fronted this, pick who — it's added to Accounts Payable until reimbursed.
+            </p>
           </div>
           <button type="submit" className="btn btn-primary w-full">
             Add to project

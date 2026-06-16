@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatPHP } from '@/lib/config';
 import { getAdsResults, type Granularity } from '@/lib/ads-results';
+import { getCampaignBudget } from '@/lib/meta-ads';
 import { AdsTrendChart } from '@/components/AdsTrendChart';
 
 const DAY_MS = 86_400_000;
@@ -46,6 +47,21 @@ export async function AdsResultsView({
   }
 
   const { rows, totals } = await getAdsResults({ fromDate, toDate, granularity: gran });
+
+  // Set budget from Ads Manager (best-effort live fetch) → spend-vs-set pacing.
+  const budget = await getCampaignBudget().catch(() => ({
+    dailyCentavos: null,
+    lifetimeCentavos: null,
+  }));
+  const days =
+    Math.round((Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDate}T00:00:00Z`)) / DAY_MS) + 1;
+  const periodSetCentavos =
+    budget.dailyCentavos != null ? budget.dailyCentavos * days : budget.lifetimeCentavos;
+  const pacePct =
+    periodSetCentavos && periodSetCentavos > 0
+      ? Math.round((totals.spendCentavos / periodSetCentavos) * 100)
+      : null;
+  const hasBudget = budget.dailyCentavos != null || budget.lifetimeCentavos != null;
 
   // Build hrefs that preserve the other controls.
   const href = (over: Record<string, string>) => {
@@ -133,9 +149,41 @@ export async function AdsResultsView({
         </form>
       )}
 
+      {/* Budget pacing — set (Ads Manager) vs spent */}
+      {hasBudget && (
+        <div className="card">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-900">Budget pacing</span>
+            <span className="text-[12px] text-slate-500">
+              {budget.dailyCentavos != null
+                ? `${formatPHP(budget.dailyCentavos)} / day set in Ads Manager`
+                : `${formatPHP(budget.lifetimeCentavos!)} lifetime set`}
+            </span>
+          </div>
+          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full ${pacePct != null && pacePct > 100 ? 'bg-amber-500' : 'bg-cyan-500'}`}
+              style={{ width: `${Math.min(100, pacePct ?? 0)}%` }}
+            />
+          </div>
+          <div className="mt-1.5 text-[12px] text-slate-500">
+            Spent <span className="font-semibold text-slate-700">{formatPHP(totals.spendCentavos)}</span>
+            {periodSetCentavos ? (
+              <>
+                {' '}
+                of ~
+                <span className="font-semibold text-slate-700">{formatPHP(periodSetCentavos)}</span>{' '}
+                {budget.dailyCentavos != null ? `(${days}-day budget)` : '(lifetime)'}
+                {pacePct != null ? ` · ${pacePct}%` : ''}
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card label="Budget (spend)" value={formatPHP(totals.spendCentavos)} />
+        <Card label="Budget spent" value={formatPHP(totals.spendCentavos)} />
         <Card label="Revenue" value={formatPHP(totals.revCentavos)} tone="emerald" />
         <Card
           label="ROAS"
@@ -158,7 +206,7 @@ export async function AdsResultsView({
             <thead>
               <tr className="border-b border-slate-200 text-center text-[11px] uppercase tracking-wide text-slate-400">
                 <th className="px-4 py-2.5 font-semibold">{gran === 'weekly' ? 'Week' : 'Date'}</th>
-                <th className="px-4 py-2.5 font-semibold">Budget</th>
+                <th className="px-4 py-2.5 font-semibold">Spent</th>
                 <th className="px-4 py-2.5 font-semibold">Revenue</th>
                 <th className="px-4 py-2.5 font-semibold">Net</th>
                 <th className="px-4 py-2.5 font-semibold">ROAS</th>

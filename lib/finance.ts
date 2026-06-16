@@ -543,7 +543,11 @@ export async function listAccountsPayable(): Promise<AccountsPayable> {
         const y = Math.floor(idx / 12);
         const m = (idx % 12) + 1;
         for (const date of recurringOccurrences({ cadence, creditDay }, y, m)) {
-          if (date < createdDate || date > today) continue; // not due / pre-existence
+          // Skip only future occurrences. We start iterating at the creation
+          // MONTH, so a recurring set up mid-month still owes that month's
+          // occurrence even if its credit day already passed (e.g. created the
+          // 16th, bills on the 1st → this month counts).
+          if (date > today) continue;
           const ov = ovMap.get(`${r.id}_${date}`);
           if (ov?.skipped) continue; // occurrence removed for that month
           const amount = ov && ov.amount_centavos != null ? ov.amount_centavos : r.amount_centavos || 0;
