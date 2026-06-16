@@ -67,12 +67,13 @@ export default async function PayablesPage() {
                 </tr>
               ) : (
                 ap.open.map((it) => (
-                  <tr key={it.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={it.key} className="border-b border-slate-100 last:border-0">
                     <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-500">
-                      {it.spentOn.slice(8)}/{it.spentOn.slice(5, 7)}
+                      {it.date.slice(8)}/{it.date.slice(5, 7)}
                     </td>
                     <td className="px-4 py-2.5 font-medium text-slate-800">
                       {it.description}
+                      {it.kind === 'recurring' && <span className="pill ml-2">recurring</span>}
                       {it.projectName && (
                         <span className="pill pill-green ml-2">{it.projectName}</span>
                       )}
@@ -85,7 +86,15 @@ export default async function PayablesPage() {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <form action={settleAbonoAction}>
-                        <input type="hidden" name="id" value={it.id} />
+                        <input type="hidden" name="kind" value={it.kind} />
+                        {it.kind === 'recurring' ? (
+                          <>
+                            <input type="hidden" name="recurringId" value={it.recurringId ?? ''} />
+                            <input type="hidden" name="date" value={it.date} />
+                          </>
+                        ) : (
+                          <input type="hidden" name="expenseId" value={it.expenseId ?? ''} />
+                        )}
                         <button type="submit" className="btn btn-secondary !px-3 !py-1 text-[12px]">
                           Mark PAID
                         </button>
@@ -110,11 +119,14 @@ export default async function PayablesPage() {
               <table className="w-full text-sm">
                 <tbody>
                   {ap.settled.map((it) => (
-                    <tr key={it.id} className="border-b border-slate-100 text-slate-500 last:border-0">
+                    <tr key={it.key} className="border-b border-slate-100 text-slate-500 last:border-0">
                       <td className="whitespace-nowrap px-4 py-2 tabular-nums">
-                        {it.spentOn.slice(8)}/{it.spentOn.slice(5, 7)}
+                        {it.date.slice(8)}/{it.date.slice(5, 7)}
                       </td>
-                      <td className="px-4 py-2">{it.description}</td>
+                      <td className="px-4 py-2">
+                        {it.description}
+                        {it.kind === 'recurring' && <span className="pill ml-2">recurring</span>}
+                      </td>
                       <td className="px-4 py-2">
                         <span className="pill">{it.paidBy}</span>
                       </td>
@@ -123,7 +135,15 @@ export default async function PayablesPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         <form action={unsettleAbonoAction}>
-                          <input type="hidden" name="id" value={it.id} />
+                          <input type="hidden" name="kind" value={it.kind} />
+                          {it.kind === 'recurring' ? (
+                            <>
+                              <input type="hidden" name="recurringId" value={it.recurringId ?? ''} />
+                              <input type="hidden" name="date" value={it.date} />
+                            </>
+                          ) : (
+                            <input type="hidden" name="expenseId" value={it.expenseId ?? ''} />
+                          )}
                           <button
                             type="submit"
                             className="text-[12px] text-slate-400 hover:text-cyan-700"

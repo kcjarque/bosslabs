@@ -9,6 +9,7 @@ import {
   updateExpenseAmount,
   settleAbono,
   unsettleAbono,
+  setRecurringAbonoSettled,
   setRecurringOverride,
   clearRecurringOverride,
   addCategory,
@@ -59,15 +60,27 @@ export async function addExpenseAction(fd: FormData) {
 
 export async function settleAbonoAction(fd: FormData) {
   requireAdmin();
-  const id = str(fd, 'id');
-  if (id) await settleAbono(id);
+  if (str(fd, 'kind') === 'recurring') {
+    const recurringId = nullable(fd, 'recurringId');
+    const date = str(fd, 'date');
+    if (recurringId && date) await setRecurringAbonoSettled(recurringId, date, true);
+  } else {
+    const id = str(fd, 'expenseId') || str(fd, 'id');
+    if (id) await settleAbono(id);
+  }
   refresh();
 }
 
 export async function unsettleAbonoAction(fd: FormData) {
   requireAdmin();
-  const id = str(fd, 'id');
-  if (id) await unsettleAbono(id);
+  if (str(fd, 'kind') === 'recurring') {
+    const recurringId = nullable(fd, 'recurringId');
+    const date = str(fd, 'date');
+    if (recurringId && date) await setRecurringAbonoSettled(recurringId, date, false);
+  } else {
+    const id = str(fd, 'expenseId') || str(fd, 'id');
+    if (id) await unsettleAbono(id);
+  }
   refresh();
 }
 
@@ -208,6 +221,8 @@ export async function addRecurringAction(fd: FormData) {
     categoryId: nullable(fd, 'categoryId'),
     cadence,
     creditDay: Number(str(fd, 'creditDay')) || (cadence === 'weekly' ? 1 : 1),
+    isAbono: str(fd, 'isAbono') === '1',
+    paidBy: nullable(fd, 'paidBy'),
   });
   refresh();
 }

@@ -50,6 +50,8 @@ export type Recurring = {
   creditDay: number;
   active: boolean;
   monthlyEquivalentCentavos: number;
+  isAbono: boolean;
+  paidBy: string | null;
 };
 
 export type Expense = {
@@ -69,16 +71,19 @@ export type Expense = {
   abonoSettled: boolean;
 };
 
-/** One open/settled Accounts-Payable line (an abono expense). */
+/** One open/settled Accounts-Payable line — a stored abono expense OR a
+ *  recurring abono occurrence (which is virtual, keyed by recurring + date). */
 export type PayableItem = {
-  id: string;
+  key: string;
+  kind: 'expense' | 'recurring';
+  expenseId: string | null; // set when kind === 'expense'
+  recurringId: string | null; // set when kind === 'recurring'
+  date: string; // YYYY-MM-DD (spent-on / occurrence date)
   description: string;
   amountCentavos: number;
-  spentOn: string;
   paidBy: string; // 'Kyle' / 'Mikee' / 'Unspecified'
   projectName: string;
   settled: boolean;
-  settledAt: string | null;
 };
 
 export type AccountsPayable = {
@@ -331,6 +336,8 @@ export async function listRecurring(): Promise<Recurring[]> {
     creditDay: r.credit_day ?? 1,
     active: r.active,
     monthlyEquivalentCentavos: monthlyEquivalent(r.amount_centavos || 0, (r.cadence === 'weekly' ? 'weekly' : 'monthly')),
+    isAbono: Boolean(r.is_abono),
+    paidBy: r.paid_by ?? null,
   }));
 }
 
@@ -340,6 +347,8 @@ export async function addRecurring(input: {
   categoryId: string | null;
   cadence: Cadence;
   creditDay: number;
+  isAbono?: boolean;
+  paidBy?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const clean = input.name.trim();
@@ -353,6 +362,8 @@ export async function addRecurring(input: {
     category_id: input.categoryId,
     cadence: input.cadence,
     credit_day: day,
+    is_abono: Boolean(input.isAbono),
+    paid_by: input.paidBy ?? null,
   });
   if (error) throw new Error(`addRecurring: ${error.message}`);
 }
@@ -474,33 +485,88 @@ export async function updateExpenseAmount(id: string, centavos: number): Promise
 export async function listAccountsPayable(): Promise<AccountsPayable> {
   const empty: AccountsPayable = { byPayer: [], totalCentavos: 0, open: [], settled: [] };
   if (!isSupabaseConfigured()) return empty;
-  const { data, error } = await getSupabase()
+  const sb = getSupabase();
+  const today = manilaToday();
+  const open: PayableItem[] = [];
+  const settled: PayableItem[] = [];
+
+  // 1) Stored abono expenses.
+  const { data: expData } = await sb
     .from('finance_expenses')
-    .select('id, description, amount_centavos, spent_on, paid_by, project_id, abono_settled, abono_settled_at')
+    .select('id, description, amount_centavos, spent_on, paid_by, project_id, abono_settled')
     .eq('is_abono', true)
     .order('spent_on', { ascending: false });
-  if (error) return empty;
-  const rows = (data as ExpenseRow[]) ?? [];
-
-  const projIds = [...new Set(rows.map((r) => r.project_id).filter(Boolean))] as string[];
+  const expRows = (expData as ExpenseRow[]) ?? [];
+  const projIds = [...new Set(expRows.map((r) => r.project_id).filter(Boolean))] as string[];
   const projNames = new Map<string, string>();
   if (projIds.length) {
-    const { data: ps } = await getSupabase().from('finance_projects').select('id, name').in('id', projIds);
+    const { data: ps } = await sb.from('finance_projects').select('id, name').in('id', projIds);
     for (const p of (ps as { id: string; name: string }[]) ?? []) projNames.set(p.id, p.name);
   }
-  const toItem = (r: ExpenseRow): PayableItem => ({
-    id: r.id,
-    description: r.description,
-    amountCentavos: r.amount_centavos || 0,
-    spentOn: r.spent_on,
-    paidBy: r.paid_by || 'Unspecified',
-    projectName: r.project_id ? projNames.get(r.project_id) ?? '' : '',
-    settled: Boolean(r.abono_settled),
-    settledAt: r.abono_settled_at ?? null,
-  });
+  for (const r of expRows) {
+    const item: PayableItem = {
+      key: `e_${r.id}`,
+      kind: 'expense',
+      expenseId: r.id,
+      recurringId: null,
+      date: r.spent_on,
+      description: r.description,
+      amountCentavos: r.amount_centavos || 0,
+      paidBy: r.paid_by || 'Unspecified',
+      projectName: r.project_id ? projNames.get(r.project_id) ?? '' : '',
+      settled: Boolean(r.abono_settled),
+    };
+    (item.settled ? settled : open).push(item);
+  }
 
-  const open = rows.filter((r) => !r.abono_settled).map(toItem);
-  const settled = rows.filter((r) => r.abono_settled).map(toItem);
+  // 2) Recurring abono occurrences — accrue once due (date <= today), from the
+  //    recurring's creation date forward. Per-occurrence settlement lives in the
+  //    overrides table (also carries amount overrides / skips).
+  const { data: recData } = await sb.from('finance_recurring').select('*').eq('is_abono', true);
+  const recRows = (recData as RecurringRow[]) ?? [];
+  if (recRows.length) {
+    const { data: ovData } = await sb
+      .from('finance_recurring_overrides')
+      .select('recurring_id, occurrence_date, amount_centavos, skipped, abono_settled')
+      .in('recurring_id', recRows.map((r) => r.id));
+    const ovMap = new Map<string, OverrideRow>();
+    for (const o of (ovData as OverrideRow[]) ?? []) ovMap.set(`${o.recurring_id}_${o.occurrence_date}`, o);
+
+    const [curY, curM] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
+    for (const r of recRows) {
+      const cadence: Cadence = r.cadence === 'weekly' ? 'weekly' : 'monthly';
+      const creditDay = r.credit_day ?? 1;
+      const createdDate = new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      const startIdx = Number(createdDate.slice(0, 4)) * 12 + (Number(createdDate.slice(5, 7)) - 1);
+      const endIdx = curY * 12 + (curM - 1);
+      for (let idx = startIdx; idx <= endIdx; idx++) {
+        const y = Math.floor(idx / 12);
+        const m = (idx % 12) + 1;
+        for (const date of recurringOccurrences({ cadence, creditDay }, y, m)) {
+          if (date < createdDate || date > today) continue; // not due / pre-existence
+          const ov = ovMap.get(`${r.id}_${date}`);
+          if (ov?.skipped) continue; // occurrence removed for that month
+          const amount = ov && ov.amount_centavos != null ? ov.amount_centavos : r.amount_centavos || 0;
+          const item: PayableItem = {
+            key: `r_${r.id}_${date}`,
+            kind: 'recurring',
+            expenseId: null,
+            recurringId: r.id,
+            date,
+            description: r.name,
+            amountCentavos: amount,
+            paidBy: r.paid_by || 'Unspecified',
+            projectName: '',
+            settled: Boolean(ov?.abono_settled),
+          };
+          (item.settled ? settled : open).push(item);
+        }
+      }
+    }
+  }
+
+  open.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  settled.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const totals = new Map<string, { centavos: number; count: number }>();
   for (const it of open) {
@@ -509,7 +575,6 @@ export async function listAccountsPayable(): Promise<AccountsPayable> {
     cur.count += 1;
     totals.set(it.paidBy, cur);
   }
-  // Known payers first (stable order), then any others (e.g. "Unspecified").
   const order = [
     ...PAYERS,
     ...[...totals.keys()].filter((p) => !(PAYERS as readonly string[]).includes(p)),
@@ -522,7 +587,7 @@ export async function listAccountsPayable(): Promise<AccountsPayable> {
   return { byPayer, totalCentavos, open, settled };
 }
 
-/** Reimburse an abono — drops it from Accounts Payable. */
+/** Reimburse a stored abono expense — drops it from Accounts Payable. */
 export async function settleAbono(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase()
@@ -532,7 +597,7 @@ export async function settleAbono(id: string): Promise<void> {
   if (error) throw new Error(`settleAbono: ${error.message}`);
 }
 
-/** Undo a reimbursement — puts the abono back into Accounts Payable. */
+/** Undo a stored abono reimbursement — puts it back into Accounts Payable. */
 export async function unsettleAbono(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase()
@@ -540,6 +605,27 @@ export async function unsettleAbono(id: string): Promise<void> {
     .update({ abono_settled: false, abono_settled_at: null })
     .eq('id', id);
   if (error) throw new Error(`unsettleAbono: ${error.message}`);
+}
+
+/** Reimburse (or un-reimburse) a single recurring abono occurrence. */
+export async function setRecurringAbonoSettled(
+  recurringId: string,
+  date: string,
+  settled: boolean,
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase()
+    .from('finance_recurring_overrides')
+    .upsert(
+      {
+        recurring_id: recurringId,
+        occurrence_date: date,
+        abono_settled: settled,
+        abono_settled_at: settled ? new Date().toISOString() : null,
+      },
+      { onConflict: 'recurring_id,occurrence_date' },
+    );
+  if (error) throw new Error(`setRecurringAbonoSettled: ${error.message}`);
 }
 
 // ─── Recurring per-occurrence overrides ─────────────────────────────────────
@@ -582,14 +668,14 @@ export async function clearRecurringOverride(recurringId: string, date: string):
 async function listRecurringOverrides(
   year: number,
   month: number,
-): Promise<Map<string, { amountCentavos: number | null; skipped: boolean }>> {
-  const map = new Map<string, { amountCentavos: number | null; skipped: boolean }>();
+): Promise<Map<string, { amountCentavos: number | null; skipped: boolean; abonoSettled: boolean }>> {
+  const map = new Map<string, { amountCentavos: number | null; skipped: boolean; abonoSettled: boolean }>();
   if (!isSupabaseConfigured()) return map;
   const start = `${year}-${pad2(month)}-01`;
   const end = `${year}-${pad2(month)}-${pad2(daysInMonth(year, month))}`;
   const { data, error } = await getSupabase()
     .from('finance_recurring_overrides')
-    .select('recurring_id, occurrence_date, amount_centavos, skipped')
+    .select('recurring_id, occurrence_date, amount_centavos, skipped, abono_settled')
     .gte('occurrence_date', start)
     .lte('occurrence_date', end);
   if (error) return map;
@@ -597,6 +683,7 @@ async function listRecurringOverrides(
     map.set(`${o.recurring_id}_${o.occurrence_date}`, {
       amountCentavos: o.amount_centavos,
       skipped: o.skipped,
+      abonoSettled: Boolean(o.abono_settled),
     });
   }
   return map;
@@ -605,7 +692,11 @@ async function listRecurringOverrides(
 // ─── Consolidated monthly view (stored expenses + computed recurring) ────────
 
 /** Compute the occurrence dates (YYYY-MM-DD) of a recurring item within a month. */
-function recurringOccurrences(r: Recurring, year: number, month: number): string[] {
+function recurringOccurrences(
+  r: { cadence: Cadence; creditDay: number },
+  year: number,
+  month: number,
+): string[] {
   const dim = daysInMonth(year, month);
   if (r.cadence === 'monthly') {
     const day = Math.min(r.creditDay, dim);
@@ -672,9 +763,9 @@ export async function getMonthlyConsolidation(
         expenseId: null,
         recurringId: r.id,
         overridden: Boolean(ov && ov.amountCentavos != null),
-        isAbono: false,
-        paidBy: null,
-        abonoSettled: false,
+        isAbono: r.isAbono,
+        paidBy: r.paidBy,
+        abonoSettled: Boolean(ov?.abonoSettled),
       });
     }
   }
@@ -725,6 +816,8 @@ type RecurringRow = {
   credit_day: number;
   active: boolean;
   created_at: string;
+  is_abono?: boolean;
+  paid_by?: string | null;
 };
 type ExpenseRow = {
   id: string;
@@ -746,4 +839,5 @@ type OverrideRow = {
   occurrence_date: string;
   amount_centavos: number | null;
   skipped: boolean;
+  abono_settled?: boolean;
 };
