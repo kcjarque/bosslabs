@@ -62,6 +62,9 @@ export default async function PnlPage({
 
   const { rows, totals } = await getPnl({ fromDate, toDate });
   const tableRows = [...rows].reverse(); // newest first
+  // Net margin = profit ÷ revenue.
+  const marginPct =
+    totals.incomeCentavos > 0 ? (totals.netCentavos / totals.incomeCentavos) * 100 : null;
   const href = (over: Record<string, string>) =>
     `/admin/finance/pnl?${new URLSearchParams({
       range,
@@ -126,6 +129,7 @@ export default async function PnlPage({
           label="Net profit"
           value={`${totals.netCentavos < 0 ? '-' : ''}${formatPHP(Math.abs(totals.netCentavos))}`}
           tone={totals.netCentavos >= 0 ? 'emerald' : 'rose'}
+          sub={marginPct == null ? undefined : `${marginPct.toFixed(1)}% margin (profit ÷ revenue)`}
         />
       </div>
 
@@ -230,16 +234,19 @@ function Card({
   label,
   value,
   tone = 'slate',
+  sub,
 }: {
   label: string;
   value: string;
   tone?: 'slate' | 'emerald' | 'rose';
+  sub?: string;
 }) {
   const color = tone === 'emerald' ? 'text-emerald-600' : tone === 'rose' ? 'text-rose-600' : 'text-slate-900';
   return (
     <div className="card">
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`mt-1 text-xl font-semibold tabular-nums sm:text-2xl ${color}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
     </div>
   );
 }
