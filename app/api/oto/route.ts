@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { OFFER } from '@/lib/config';
 import { createInvoice } from '@/lib/xendit';
 import { findSignupByExternalId } from '@/lib/db';
+import { buildOtoExternalId } from '@/lib/oto-external';
 import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'parent order not found' }, { status: 404 });
     }
 
-    const externalId = `BL-OTO-${mainOrder}-${Date.now()}`;
+    const externalId = buildOtoExternalId('oto2', mainOrder);
     const base = siteUrl(req);
 
     const invoice = await createInvoice({

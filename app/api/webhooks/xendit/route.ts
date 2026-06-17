@@ -31,6 +31,7 @@ import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
+import { parseOtoExternalId } from '@/lib/oto-external';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -246,11 +247,10 @@ async function handleMainPaid(event: XenditEvent) {
 /* OTO purchase — standalone 1:1 audit invoice (bought after main checkout) */
 /* --------------------------------------------------------------------- */
 async function handleOtoPaid(event: XenditEvent) {
-  // OTO externalId pattern: BL-OTO-<mainOrderId>-<ts>
-  // Extract the main order ID by stripping prefix + the trailing -<ts>.
-  const stripped = event.external_id!.replace(/^BL-OTO-/, '');
-  const lastDash = stripped.lastIndexOf('-');
-  const mainOrderId = lastDash > 0 ? stripped.slice(0, lastDash) : stripped;
+  // Decode the product + parent order from the externalId (marker-aware;
+  // legacy unmarked IDs resolve to the 1:1).
+  const { product: otoProduct, mainOrderId } = parseOtoExternalId(event.external_id!);
+  const otoOffer = otoProduct === 'oto' ? OFFER.oto : OFFER.oto2;
 
   const signup = await findSignupByExternalId(mainOrderId);
   if (!signup) {
@@ -274,12 +274,11 @@ async function handleOtoPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
-  const amountPhp = event.amount ?? OFFER.oto2.priceCentavos / 100;
+  const amountPhp = event.amount ?? otoOffer.priceCentavos / 100;
 
-  // Confirmation email + SMS for the standalone OTO (the main checkout sends its
-  // own; this leg previously sent nothing, so OTO buyers got no receipt). The
-  // `amount` var is overridden to the OTO amount, formatted GSM-7-safe (no ₱)
-  // so the SMS stays a single segment.
+  // Product-specific confirmation email + SMS (Vault = instant access, 1:1 =
+  // we'll schedule). `amount` is GSM-7-safe (no ₱) so the SMS stays one segment.
+  const otoTemplateId = otoProduct === 'oto' ? 'vault_confirmation' : 'oto_confirmation';
   const webinar = await getWebinarInfo();
   const baseVars = await templateVarsForSignup(signup, webinar);
   const otoVars = {
@@ -288,11 +287,11 @@ async function handleOtoPaid(event: XenditEvent) {
   };
   const otoEmailRes = await sendEmail({
     to: signup.email,
-    templateId: 'oto_confirmation',
+    templateId: otoTemplateId,
     vars: otoVars,
   });
   const otoSmsRes = signup.phone
-    ? await sendSms({ to: signup.phone, templateId: 'oto_confirmation', vars: otoVars })
+    ? await sendSms({ to: signup.phone, templateId: otoTemplateId, vars: otoVars })
     : null;
 
   await updateSignup(signup.id, {
@@ -337,8 +336,8 @@ async function handleOtoPaid(event: XenditEvent) {
     customData: {
       value: amountPhp,
       currency: 'PHP',
-      contentName: OFFER.oto.name,
-      contentIds: [OFFER.oto.sku],
+      contentName: otoOffer.name,
+      contentIds: [otoOffer.sku],
       numItems: 1,
     },
   });

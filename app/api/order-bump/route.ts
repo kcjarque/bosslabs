@@ -21,6 +21,7 @@ import {
   updateSignup,
 } from '@/lib/db';
 import { closeLeadAndRecordCommission } from '@/lib/closers';
+import { buildOtoExternalId } from '@/lib/oto-external';
 import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -68,7 +69,8 @@ export async function POST(req: Request) {
     const group = GROUPS.includes(body.paymentMethod ?? '')
       ? (body.paymentMethod as PaymentMethodGroup)
       : undefined;
-    const externalId = `BL-OTO-${mainOrder}-${Date.now()}`;
+    // Encode the product so the webhook sends the right confirmation.
+    const externalId = buildOtoExternalId(body.product === 'oto2' ? 'oto2' : 'oto', mainOrder);
     const base = siteUrl(req);
 
     // Promo code (optional) — same codes as the main checkout, priced against
