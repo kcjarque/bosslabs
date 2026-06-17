@@ -117,10 +117,11 @@ export default async function PnlPage({
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Card label="Income" value={formatPHP(totals.incomeCentavos)} tone="emerald" />
         <Card label="Ads (VAT incl.)" value={formatPHP(totals.adsCentavos)} tone="rose" />
         <Card label="Operating expenses" value={formatPHP(totals.opexCentavos)} tone="rose" />
+        <Card label="Total expenses" value={formatPHP(totals.outCentavos)} tone="rose" />
         <Card
           label="Net profit"
           value={`${totals.netCentavos < 0 ? '-' : ''}${formatPHP(Math.abs(totals.netCentavos))}`}
