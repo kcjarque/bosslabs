@@ -28,9 +28,10 @@ export async function POST(req: Request) {
     code?: string;
     bump?: boolean;
     bump2?: boolean;
-    /** 'oto' prices the discount against the ₱1,997 order-bump instead of the
-     *  main webinar ticket (used by /order-bump). */
-    base?: 'main' | 'oto';
+    /** Prices the discount against a specific product instead of the main
+     *  webinar ticket (used by /order-bump): 'oto' = ₱999 Vault, 'oto2' = the
+     *  ₱3,997 1:1 Build Session. */
+    base?: 'main' | 'oto' | 'oto2';
   };
   const code = (body.code ?? '').trim();
   if (!code) return NextResponse.json({ error: 'Code required' }, { status: 400 });
@@ -51,9 +52,11 @@ export async function POST(req: Request) {
   const totalCentavos =
     body.base === 'oto'
       ? OFFER.oto.priceCentavos
-      : OFFER.main.priceCentavos +
-        (bumped ? OFFER.oto.priceCentavos : 0) +
-        (bumped2 ? OFFER.oto2.priceCentavos : 0);
+      : body.base === 'oto2'
+        ? OFFER.oto2.priceCentavos
+        : OFFER.main.priceCentavos +
+          (bumped ? OFFER.oto.priceCentavos : 0) +
+          (bumped2 ? OFFER.oto2.priceCentavos : 0);
   const discountCentavos = computeDiscountCentavos(promo, totalCentavos);
   const finalCentavos = Math.max(0, totalCentavos - discountCentavos);
 

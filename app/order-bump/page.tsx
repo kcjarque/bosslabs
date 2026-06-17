@@ -2,7 +2,6 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OrderBumpActions } from '@/components/OrderBumpActions';
-import { OFFER, formatPHP } from '@/lib/config';
 
 export const metadata = {
   title: 'Add the 1on1 MVP Session · BOSSLABS AI',
@@ -35,9 +34,8 @@ export default function OrderBumpPage({
             Proceed with your <span className="accent-italic">order bump</span>.
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Ready to add your{' '}
-            <span className="text-white">{OFFER.oto.name}</span>? Enter the email you
-            registered with and choose how you&rsquo;d like to pay.
+            Pick your upgrade below, enter the email you registered with, and choose how you&rsquo;d
+            like to pay.
           </p>
         </div>
 
@@ -49,34 +47,6 @@ export default function OrderBumpPage({
           )}
 
           <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-5 shadow-glow sm:p-10">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">{OFFER.oto.eyebrow}</div>
-            <h2 className="h-sub mt-3">{OFFER.oto.name}</h2>
-            <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
-              {OFFER.oto.promise}
-            </p>
-
-            <ul className="mt-7 space-y-3">
-              {OFFER.oto.inclusions.map((line) => (
-                <li
-                  key={line}
-                  className="flex items-start gap-3 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[2px] flex-none text-cyan-400">
-                    <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-8 flex items-baseline gap-3 border-t border-white/[0.07] pt-7">
-              <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">{OFFER.oto.label}</div>
-              <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">{OFFER.oto.crossed}</div>
-              <div className="text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-                One-time · {formatPHP(OFFER.oto.priceCentavos)}
-              </div>
-            </div>
-
             <OrderBumpActions />
           </div>
 

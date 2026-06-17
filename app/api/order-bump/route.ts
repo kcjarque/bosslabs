@@ -34,7 +34,10 @@ export async function POST(req: Request) {
       email?: string;
       paymentMethod?: string;
       promoCode?: string;
+      /** Which upgrade to buy: 'oto2' = ₱3,997 1:1 Build Session, else ₱999 Vault. */
+      product?: 'oto' | 'oto2';
     };
+    const offer = body.product === 'oto2' ? OFFER.oto2 : OFFER.oto;
     const email = (body.email || '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Please enter a valid email.' }, { status: 400 });
@@ -71,7 +74,7 @@ export async function POST(req: Request) {
     // Promo code (optional) — same codes as the main checkout, priced against
     // the ₱1,997 OTO. Validate, then redeem atomically (so the use is claimed
     // when the invoice is created, matching /api/checkout's behaviour).
-    let amountCentavos = OFFER.oto.priceCentavos;
+    let amountCentavos = offer.priceCentavos;
     let promoApplied: string | null = null;
     const promoCode = (body.promoCode || '').trim();
     if (promoCode) {
@@ -85,7 +88,7 @@ export async function POST(req: Request) {
       if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
         return NextResponse.json({ error: 'This promo code has been fully claimed.' }, { status: 409 });
       }
-      const discount = computeDiscountCentavos(promo, OFFER.oto.priceCentavos);
+      const discount = computeDiscountCentavos(promo, offer.priceCentavos);
       const redeemed = await redeemPromoCode(promo.code);
       if (!redeemed) {
         return NextResponse.json(
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
-      amountCentavos = Math.max(0, OFFER.oto.priceCentavos - discount);
+      amountCentavos = Math.max(0, offer.priceCentavos - discount);
       promoApplied = redeemed.code;
     }
 
@@ -117,7 +120,7 @@ export async function POST(req: Request) {
     const invoice = await createInvoice({
       externalId,
       amount: amountCentavos / 100,
-      description: promoApplied ? `${OFFER.oto.name} (promo ${promoApplied})` : OFFER.oto.name,
+      description: promoApplied ? `${offer.name} (promo ${promoApplied})` : offer.name,
       payerEmail: parent.email,
       successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,
       failureRedirectUrl: `${base}/order-bump?status=failed`,
