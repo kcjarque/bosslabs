@@ -10,6 +10,7 @@ import { formatPHP } from '@/lib/config';
 import { sendTelegram, esc } from '@/lib/telegram';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { isSameOrigin } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +21,11 @@ function phpPlain(centavos: number): string {
 
 export async function POST(req: Request) {
   try {
+    // Same-origin only — this route sends email + paid SMS + Telegram, so an
+    // open cross-origin endpoint is a spam/cost amplification vector.
+    if (!isSameOrigin(req)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const b = (await req.json()) as Record<string, unknown>;
     const name = String(b.name ?? '').trim();
     const email = String(b.email ?? '').trim();

@@ -277,6 +277,62 @@ export async function markRetreatPaidInFull(id: string): Promise<void> {
 }
 
 /**
+ * Log a card (Xendit) retreat payment onto the reservation's CRM card so it
+ * flows into VCR income (dashboard + P&L) the same way manual payments do, and
+ * stamps the card paid (so a later "mark paid in full" won't re-send the
+ * confirmation). Idempotent: skips if a payment already references this invoice.
+ * Called from the retreat webhook.
+ */
+export async function logRetreatCardPayment(
+  reservationId: string,
+  centavos: number,
+  invoiceId: string,
+): Promise<void> {
+  if (!isSupabaseConfigured() || !reservationId) return;
+  const amount = Math.max(0, Math.round(centavos));
+  if (amount <= 0) return;
+  const sb = getSupabase();
+
+  let card = (
+    await sb
+      .from('retreat_crm_cards')
+      .select('id, payments, paid_at')
+      .eq('reservation_id', reservationId)
+      .maybeSingle()
+  ).data as { id: string; payments: VcrPayment[] | null; paid_at: string | null } | null;
+
+  if (!card) {
+    const res = (
+      await sb
+        .from('retreat_reservations')
+        .select('name, email, phone')
+        .eq('id', reservationId)
+        .maybeSingle()
+    ).data as { name: string; email: string; phone: string } | null;
+    if (!res) return;
+    card = (
+      await sb
+        .from('retreat_crm_cards')
+        .upsert(
+          { reservation_id: reservationId, name: res.name, email: res.email, phone: res.phone, stage: 'paid' },
+          { onConflict: 'reservation_id' },
+        )
+        .select('id, payments, paid_at')
+        .single()
+    ).data as { id: string; payments: VcrPayment[] | null; paid_at: string | null } | null;
+  }
+  if (!card) return;
+
+  const payments = Array.isArray(card.payments) ? card.payments : [];
+  if (invoiceId && payments.some((p) => p.note?.includes(invoiceId))) return; // already logged this invoice
+  payments.push({ amountCentavos: amount, at: new Date().toISOString(), note: `Card payment ${invoiceId}` });
+  await sb
+    .from('retreat_crm_cards')
+    .update({ payments, paid_at: card.paid_at ?? new Date().toISOString(), stage: 'paid' })
+    .eq('id', card.id);
+}
+
+/**
  * Total VCR ("Webinar") income from the card payments log, optionally scoped to
  * a [sinceMs, untilMs) window by each payment's timestamp. Used by the dashboard
  * Income section — kept separate from the ₱999 front-end ROAS/daily metrics.

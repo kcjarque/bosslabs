@@ -16,7 +16,9 @@ import {
   countPageViews,
   purgeIdleRecordings,
   purgeOldRecordings,
+  getAdSpendByDay,
 } from '@/lib/db';
+import { syncAdSpendDaily } from '@/lib/meta-ads';
 import { sendTelegram } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
@@ -95,6 +97,13 @@ export async function GET(req: Request) {
   // or manually-triggered run doesn't bleed in today's traffic.
   const visits = await countPageViews({ sinceIso: dayStartIso, untilIso: dayEndIso });
 
+  // Refresh ad spend inline so the summary's ROAS is fresh even if the 00:01
+  // ads-sync cron was delayed (best-effort — never block the summary on Meta).
+  await syncAdSpendDaily(3).catch(() => undefined);
+  const adDay = (await getAdSpendByDay().catch(() => [])).find((d) => d.date === dateStr);
+  const adSpend = adDay ? adDay.spendCentavos / 100 : 0;
+  const roas = adSpend > 0 ? revenue / adSpend : null;
+
   const lines = [
     `📊 <b>Daily Summary — ${dateStr}</b>`,
     '',
@@ -107,6 +116,8 @@ export async function GET(req: Request) {
     `  Revenue: <b>₱${revenue.toLocaleString()}</b>`,
     `  With bump: <b>${bumpCount}</b>`,
     `  Abandoned: <b>${abandoned}</b>`,
+    `  Ad spend: <b>₱${adSpend.toLocaleString()}</b>`,
+    `  ROAS: <b>${roas == null ? '—' : `${roas.toFixed(2)}×`}</b>`,
     '',
     `<b>Funnel (yesterday)</b>`,
     `  Visits: <b>${visits.uniqueSessions}</b>`,

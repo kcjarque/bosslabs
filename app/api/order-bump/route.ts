@@ -22,6 +22,7 @@ import {
 } from '@/lib/db';
 import { closeLeadAndRecordCommission } from '@/lib/closers';
 import { buildOtoExternalId } from '@/lib/oto-external';
+import { isSameOrigin } from '@/lib/admin-auth';
 import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,11 @@ const GROUPS = ['GCASH', 'CREDIT_CARD', 'BANKS'];
 
 export async function POST(req: Request) {
   try {
+    // Same-origin only — refuse cross-origin scripted posts (promo-burn,
+    // email enumeration, free-upgrade abuse). Matches /api/checkout/promo.
+    if (!isSameOrigin(req)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const body = (await req.json().catch(() => ({}))) as {
       email?: string;
       paymentMethod?: string;

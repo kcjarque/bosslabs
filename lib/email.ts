@@ -83,7 +83,9 @@ export async function renderEmail(
   return {
     template,
     subject: renderTemplate(template.subject, vars),
-    html: renderTemplate(html, vars),
+    // Escape var values in the HTML body (data, incl. unauthenticated input) to
+    // prevent markup/phishing-link injection. Subject stays plain.
+    html: renderTemplate(html, vars, { escapeHtml: true }),
   };
 }
 

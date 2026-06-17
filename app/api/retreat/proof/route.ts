@@ -7,6 +7,7 @@ import { formatPHP } from '@/lib/config';
 import { sendTelegramPhoto, esc } from '@/lib/telegram';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { isSameOrigin } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,9 @@ const MAX_BYTES = 10 * 1024 * 1024; // Telegram sendPhoto limit
 
 export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const form = await req.formData();
     const id = String(form.get('id') ?? '');
     const file = form.get('file');
@@ -47,16 +51,21 @@ export async function POST(req: Request) {
     ].join('\n');
 
     await sendTelegramPhoto(bytes, filename, caption);
+
+    // Only send the customer confirmation on the FIRST proof submission — a
+    // re-upload (status already proof_submitted/paid) must not re-send.
+    const firstSubmission = r.status === 'reserved';
     await markRetreatReservationProof(id);
 
-    // Payment confirmation to the customer — they've paid + uploaded proof.
-    const firstName = r.name.split(/\s+/)[0] || r.name;
-    const vars = {
-      firstName,
-      amount: `PHP ${((r.amountDueCentavos ?? 0) / 100).toLocaleString('en-PH')}`,
-    };
-    await sendEmail({ to: r.email, templateId: 'retreat_confirmation', vars }).catch(() => null);
-    if (r.phone) await sendSms({ to: r.phone, templateId: 'retreat_confirmation', vars }).catch(() => null);
+    if (firstSubmission) {
+      const firstName = r.name.split(/\s+/)[0] || r.name;
+      const vars = {
+        firstName,
+        amount: `PHP ${((r.amountDueCentavos ?? 0) / 100).toLocaleString('en-PH')}`,
+      };
+      await sendEmail({ to: r.email, templateId: 'retreat_confirmation', vars }).catch(() => null);
+      if (r.phone) await sendSms({ to: r.phone, templateId: 'retreat_confirmation', vars }).catch(() => null);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

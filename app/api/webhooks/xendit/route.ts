@@ -32,6 +32,7 @@ import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { parseOtoExternalId } from '@/lib/oto-external';
+import { logRetreatCardPayment } from '@/lib/retreat-crm';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -398,6 +399,15 @@ async function handleRetreatPaid(event: XenditEvent) {
   if (r.phone) {
     await sendSms({ to: r.phone, templateId: 'retreat_confirmation', vars: retreatVars }).catch(() => null);
   }
+
+  // Log the payment onto the CRM card so it counts as VCR income (dashboard +
+  // P&L) and stamps the card paid — so a later "mark paid in full" won't
+  // re-send the confirmation. Idempotent on the invoice id.
+  await logRetreatCardPayment(
+    r.id,
+    Math.round(amountPhp * 100),
+    event.id ?? event.external_id ?? '',
+  ).catch(() => undefined);
 
   // AWAITED — void promises can be killed when the serverless fn returns.
   await sendTelegram(

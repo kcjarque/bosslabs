@@ -1492,13 +1492,29 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
 /* Template rendering — Mustache-style {{var}} substitution              */
 /* --------------------------------------------------------------------- */
 
+function escapeHtmlValue(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function renderTemplate(
   template: string,
   vars: Record<string, string | number | undefined>,
+  opts?: { escapeHtml?: boolean },
 ): string {
   return template.replace(/{{\s*(\w+)\s*}}/g, (_, key) => {
     const v = vars[key];
-    return v === undefined || v === null ? '' : String(v);
+    if (v === undefined || v === null) return '';
+    const s = String(v);
+    // Escape ONLY when rendering into HTML (email body) — never for plain-text
+    // SMS or the subject header. Var values are data (firstName, amount, URLs),
+    // and some come from unauthenticated input (retreat reservation name), so
+    // raw substitution into HTML would allow markup/phishing-link injection.
+    return opts?.escapeHtml ? escapeHtmlValue(s) : s;
   });
 }
 

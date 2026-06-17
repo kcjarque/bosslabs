@@ -32,6 +32,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'parent order not found' }, { status: 404 });
     }
 
+    // One OTO per order: don't create a second invoice the webhook would drop
+    // (handleOtoPaid bails on meta.otoConfirmed → money taken, nothing delivered).
+    if ((parent.metadata as { otoConfirmed?: string } | undefined)?.otoConfirmed) {
+      return NextResponse.json(
+        { error: 'This order already has an upgrade — no need to pay again.' },
+        { status: 409 },
+      );
+    }
+
     const externalId = buildOtoExternalId('oto2', mainOrder);
     const base = siteUrl(req);
 

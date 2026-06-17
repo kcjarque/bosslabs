@@ -199,6 +199,7 @@ export async function addProjectExpenseAction(fd: FormData) {
   requireAdmin();
   const projectId = str(fd, 'projectId');
   if (projectId) {
+    const paidBy = nullable(fd, 'paidBy');
     await addExpense({
       description: str(fd, 'description'),
       amountCentavos: parsePesoToCentavos(str(fd, 'amount')),
@@ -206,6 +207,8 @@ export async function addProjectExpenseAction(fd: FormData) {
       spentOn: str(fd, 'spentOn') || manilaToday(),
       projectId,
       projectItemId: nullable(fd, 'projectItemId'),
+      isAbono: Boolean(paidBy),
+      paidBy,
     });
   }
   refresh();

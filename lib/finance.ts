@@ -52,6 +52,7 @@ export type Recurring = {
   monthlyEquivalentCentavos: number;
   isAbono: boolean;
   paidBy: string | null;
+  createdAt: string;
 };
 
 export type Expense = {
@@ -338,7 +339,25 @@ export async function listRecurring(): Promise<Recurring[]> {
     monthlyEquivalentCentavos: monthlyEquivalent(r.amount_centavos || 0, (r.cadence === 'weekly' ? 'weekly' : 'monthly')),
     isAbono: Boolean(r.is_abono),
     paidBy: r.paid_by ?? null,
+    createdAt: r.created_at,
   }));
+}
+
+/**
+ * Whether a recurring occurrence on `date` (YYYY-MM-DD) should count, given the
+ * recurring's Manila creation date. Counts from creation forward; the creation
+ * MONTH's monthly occurrence counts even if its credit day already passed (so a
+ * recurring set up mid-month still owes that month). Weekly only counts
+ * occurrences on/after the creation date — never pre-creation weeks.
+ */
+function recurringOccurrenceApplies(date: string, createdManila: string, cadence: Cadence): boolean {
+  if (date >= createdManila) return true;
+  return cadence === 'monthly' && date.slice(0, 7) === createdManila.slice(0, 7);
+}
+
+/** Manila YYYY-MM-DD for a timestamp/ISO string. */
+function manilaDateOf(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 export async function addRecurring(input: {
@@ -543,11 +562,12 @@ export async function listAccountsPayable(): Promise<AccountsPayable> {
         const y = Math.floor(idx / 12);
         const m = (idx % 12) + 1;
         for (const date of recurringOccurrences({ cadence, creditDay }, y, m)) {
-          // Skip only future occurrences. We start iterating at the creation
-          // MONTH, so a recurring set up mid-month still owes that month's
-          // occurrence even if its credit day already passed (e.g. created the
-          // 16th, bills on the 1st → this month counts).
-          if (date > today) continue;
+          if (date > today) continue; // not due yet
+          // Don't accrue occurrences before the recurring existed. The creation
+          // month's MONTHLY occurrence still counts even if its credit day
+          // already passed (set up mid-month → still owes that month); weekly
+          // does NOT count pre-creation weeks.
+          if (!recurringOccurrenceApplies(date, createdDate, cadence)) continue;
           const ov = ovMap.get(`${r.id}_${date}`);
           if (ov?.skipped) continue; // occurrence removed for that month
           const amount = ov && ov.amount_centavos != null ? ov.amount_centavos : r.amount_centavos || 0;
@@ -752,7 +772,11 @@ export async function getMonthlyConsolidation(
 
   for (const r of recurring) {
     if (!r.active) continue;
+    const createdManila = manilaDateOf(r.createdAt);
     for (const date of recurringOccurrences(r, year, month)) {
+      // Don't show/accrue occurrences from before the recurring was created
+      // (e.g. a P&L range that predates it). Same rule as Accounts Payable.
+      if (!recurringOccurrenceApplies(date, createdManila, r.cadence)) continue;
       const ov = overrides.get(`${r.id}_${date}`);
       if (ov?.skipped) continue; // occurrence deleted for this month
       const amount = ov && ov.amountCentavos != null ? ov.amountCentavos : r.amountCentavos;

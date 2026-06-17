@@ -292,9 +292,8 @@ export async function syncAdSpendDaily(
   // Snapshot the CURRENT set budget so each synced (recent) day records what was
   // configured. Meta has no per-day budget history, so this captures it forward:
   // every nightly run stamps the live budget onto the recent days it overwrites.
-  const { dailyCentavos: budgetSetCentavos } = await getCampaignBudget().catch(() => ({
-    dailyCentavos: null,
-  }));
+  const _b = await getCampaignBudget().catch(() => ({ dailyCentavos: null, lifetimeCentavos: null }));
+  const budgetSetCentavos = _b.dailyCentavos ?? _b.lifetimeCentavos;
 
   const synced: string[] = [];
   try {

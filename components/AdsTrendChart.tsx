@@ -84,7 +84,7 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
           <span className="inline-block h-2 w-2.5 rounded-sm bg-emerald-400/60" />Revenue
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-3 bg-slate-400" />Budget
+          <span className="inline-block h-0.5 w-3 bg-slate-400" />Spent
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2 rounded-[1px] bg-cyan-500/50" />ROAS (bars)
@@ -217,7 +217,7 @@ export function AdsTrendChart({ rows }: { rows: Row[] }) {
             </div>
             <div className="mt-0.5 flex items-center justify-between gap-3 text-slate-600">
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-sm bg-slate-400" />Budget
+                <span className="inline-block h-2 w-2 rounded-sm bg-slate-400" />Spent
               </span>
               <span className="font-medium tabular-nums">{peso(active.spendCentavos)}</span>
             </div>
