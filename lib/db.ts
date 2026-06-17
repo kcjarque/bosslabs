@@ -777,6 +777,7 @@ export async function updateSignup(id: string, patch: Partial<Signup>): Promise<
     if (patch.bumped !== undefined) update.bumped = patch.bumped ?? null;
     if (patch.message !== undefined) update.message = patch.message ?? null;
     if (patch.metadata !== undefined) update.metadata = patch.metadata ?? null;
+    if (patch.eventId !== undefined) update.event_id = patch.eventId ?? null;
     const { data, error } = await getSupabase()
       .from('signups')
       .update(update)

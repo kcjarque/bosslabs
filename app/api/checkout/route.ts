@@ -14,6 +14,7 @@ import {
   countPaidOrders,
   findPromoCode,
   findSignupByEmail,
+  getSettings,
   redeemPromoCode,
   updateSignup,
 } from '@/lib/db';
@@ -167,6 +168,10 @@ export async function POST(req: Request) {
       let signupId: string;
       if (existing) {
         signupId = existing.id;
+        // Re-tag to the active event (see the paid-invoice branch below) so a
+        // returning lead who claims a free seat for the NEW event lands on its
+        // list and gets this event's reminders.
+        const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
         await updateSignup(existing.id, {
           firstName,
           lastName: rest.join(' ') || undefined,
@@ -174,6 +179,7 @@ export async function POST(req: Request) {
           status: 'paid',
           amountCentavos: 0,
           bumped,
+          ...(activeEventId ? { eventId: activeEventId } : {}),
           metadata: {
             ...(existing.metadata ?? {}),
             ...baseMeta,
@@ -344,12 +350,20 @@ export async function POST(req: Request) {
       // Same buyer retrying — point the existing row at the new Xendit
       // invoice. Preserve their CAPI event ID + match keys from any
       // earlier attempt so InitiateCheckout deduplicates cleanly.
+      //
+      // CRITICAL: re-tag them to the CURRENTLY active event. A returning lead
+      // who registered for a PAST event (never paid) and now checks out for the
+      // new one must move to the new event's list — otherwise they'd stay on
+      // the old list and never get this event's reminders / Zoom link. No-op
+      // when the active event hasn't changed.
+      const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
       await updateSignup(existing.id, {
         firstName,
         lastName: rest.join(' ') || undefined,
         phone: body.mobile || existing.phone,
         amountCentavos,
         bumped,
+        ...(activeEventId ? { eventId: activeEventId } : {}),
         metadata: {
           ...(existing.metadata ?? {}),
           ...sharedMetadata,
