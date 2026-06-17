@@ -60,6 +60,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
     heading: 'Finance',
     items: [
       { href: '/admin/finance', label: 'Expenses', icon: 'expenses', exact: true },
+      { href: '/admin/finance/pnl', label: 'P&L', icon: 'pnl' },
       { href: '/admin/finance/projects', label: 'Projects', icon: 'projects' },
       { href: '/admin/finance/recurring', label: 'Recurring', icon: 'recurring' },
       { href: '/admin/finance/payables', label: 'Accounts Payable', icon: 'payable' },

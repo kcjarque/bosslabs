@@ -141,6 +141,12 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M9 8h6M9 12h4" />
     </>
   ),
+  pnl: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="m7 14 3-4 3 3 4-6" />
+    </>
+  ),
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {
