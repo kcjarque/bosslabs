@@ -17,6 +17,9 @@ export default async function ThankYouPage({
 }) {
   const webinar = await getWebinarInfo();
   const purchase = await resolvePurchaseAmount(searchParams.order, searchParams.oto);
+  // Standalone 1:1 buyers (bought via a shared /oto link) have no webinar seat —
+  // show a 1:1-specific confirmation, not the webinar/Zoom/onboarding content.
+  const standalone = (searchParams.order ?? '').startsWith('BL-OTOX-');
   return (
     <>
       <PurchasePixel
@@ -41,10 +44,19 @@ export default async function ThankYouPage({
         <div className="mx-auto max-w-3xl">
           {searchParams.oto === 'failed' && (
             <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center text-[13px] text-amber-100 sm:text-[14px]">
-              Your <strong>1on1 MVP Session</strong> add-on didn&rsquo;t go through,
-              but your webinar seat is locked in. We&rsquo;ll email you a private link
-              within 24 hours so you can grab it at the same checkout-only
-              price — no need to retry now.
+              {standalone ? (
+                <>
+                  Your <strong>1:1 Build Session</strong> payment didn&rsquo;t go through and
+                  no charge was made. You can try again anytime from the same link.
+                </>
+              ) : (
+                <>
+                  Your <strong>1on1 MVP Session</strong> add-on didn&rsquo;t go through,
+                  but your webinar seat is locked in. We&rsquo;ll email you a private link
+                  within 24 hours so you can grab it at the same checkout-only
+                  price — no need to retry now.
+                </>
+              )}
             </div>
           )}
           {/* Celebration hero */}
@@ -65,63 +77,108 @@ export default async function ThankYouPage({
                 />
               </svg>
             </div>
-            <div className="eyebrow mt-6 justify-center">Your seat is locked in</div>
+            <div className="eyebrow mt-6 justify-center">
+              {standalone ? 'Payment received' : 'Your seat is locked in'}
+            </div>
             <h1 className="h-display mt-4">
-              You're in.{' '}
-              <span className="accent-italic">Welcome to BOSSLABS AI.</span>
+              {standalone ? (
+                <>
+                  You're booked.{' '}
+                  <span className="accent-italic">Your 1:1 is confirmed.</span>
+                </>
+              ) : (
+                <>
+                  You're in.{' '}
+                  <span className="accent-italic">Welcome to BOSSLABS AI.</span>
+                </>
+              )}
             </h1>
             <p className="lead mx-auto mt-5 max-w-xl">
-              Your Zoom link, 7-day replay access, the Claude Code Skills Pack, and
-              your Community invite are on the way to your inbox. Check spam if it
-              doesn't show up in 5 minutes.
+              {standalone ? (
+                <>
+                  Your confirmation is on the way to your inbox. Kyle &amp; Mikey&rsquo;s team
+                  will message you shortly to schedule your <span className="text-white">1:1 Build
+                  Session</span>. Check spam if it doesn&rsquo;t show up in 5 minutes.
+                </>
+              ) : (
+                <>
+                  Your Zoom link, 7-day replay access, the Claude Code Skills Pack, and
+                  your Community invite are on the way to your inbox. Check spam if it
+                  doesn't show up in 5 minutes.
+                </>
+              )}
             </p>
           </div>
 
-          {/* Webinar details card */}
-          <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.06] sm:grid-cols-3">
-            <DetailCell label="Webinar" value={webinar.name} />
-            <DetailCell label="Date" value={webinar.date} />
-            <DetailCell label="Format" value="Live on Zoom" />
-          </div>
-
-          {/* Onboarding form */}
-          <div className="mt-16">
-            <div className="eyebrow">Last step</div>
-            <h2 className="h-section mt-3">Help us tailor the call to you.</h2>
-            <p className="lead mt-3">
-              Two minutes. Your answers shape which use-cases we live-build on the
-              webinar.
-            </p>
-            <div className="mt-8">
-              <OnboardingForm orderId={searchParams.order ?? ''} />
+          {standalone ? (
+            /* Standalone 1:1 — what happens next */
+            <div className="mt-16">
+              <div className="eyebrow">What happens next</div>
+              <h2 className="h-sub mt-3">Two steps before your session.</h2>
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5">
+                <NextStep
+                  n="01"
+                  title="Check your email"
+                  body="Your payment confirmation is in your inbox. Reply to it with your timezone + availability."
+                  Icon={EmailIcon}
+                />
+                <NextStep
+                  n="02"
+                  title="Come with your idea"
+                  body="Bring the app or workflow you want to build — we'll map it live and hand you the exact prompts."
+                  Icon={LiveIcon}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Webinar details card */}
+              <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.06] sm:grid-cols-3">
+                <DetailCell label="Webinar" value={webinar.name} />
+                <DetailCell label="Date" value={webinar.date} />
+                <DetailCell label="Format" value="Live on Zoom" />
+              </div>
 
-          {/* Next steps — illustrated */}
-          <div className="mt-16">
-            <div className="eyebrow">What happens next</div>
-            <h2 className="h-sub mt-3">Three steps before the call.</h2>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-5">
-              <NextStep
-                n="01"
-                title="Confirm Zoom"
-                body="Open your email and click the registration link. Add to your calendar."
-                Icon={EmailIcon}
-              />
-              <NextStep
-                n="02"
-                title="Open the Skills pack"
-                body="Claude Code Skills + Founder Audit Checklist + Community invite — all in your inbox."
-                Icon={PackIcon}
-              />
-              <NextStep
-                n="03"
-                title="Show up live"
-                body="5 minutes early. Audio + camera on. Bring one workflow to automate."
-                Icon={LiveIcon}
-              />
-            </div>
-          </div>
+              {/* Onboarding form */}
+              <div className="mt-16">
+                <div className="eyebrow">Last step</div>
+                <h2 className="h-section mt-3">Help us tailor the call to you.</h2>
+                <p className="lead mt-3">
+                  Two minutes. Your answers shape which use-cases we live-build on the
+                  webinar.
+                </p>
+                <div className="mt-8">
+                  <OnboardingForm orderId={searchParams.order ?? ''} />
+                </div>
+              </div>
+
+              {/* Next steps — illustrated */}
+              <div className="mt-16">
+                <div className="eyebrow">What happens next</div>
+                <h2 className="h-sub mt-3">Three steps before the call.</h2>
+                <div className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-5">
+                  <NextStep
+                    n="01"
+                    title="Confirm Zoom"
+                    body="Open your email and click the registration link. Add to your calendar."
+                    Icon={EmailIcon}
+                  />
+                  <NextStep
+                    n="02"
+                    title="Open the Skills pack"
+                    body="Claude Code Skills + Founder Audit Checklist + Community invite — all in your inbox."
+                    Icon={PackIcon}
+                  />
+                  <NextStep
+                    n="03"
+                    title="Show up live"
+                    body="5 minutes early. Audio + camera on. Bring one workflow to automate."
+                    Icon={LiveIcon}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
       <Footer />

@@ -71,7 +71,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  // Route by externalId prefix.
+  // Route by externalId prefix. BL-OTOX- (standalone) is checked before BL-OTO-
+  // (post-purchase upsell) — they're mutually exclusive, but order keeps it
+  // obvious that a standalone id never falls into the parent-lookup handler.
+  if (event.external_id.startsWith('BL-OTOX-')) {
+    return handleStandaloneOtoPaid(event);
+  }
   if (event.external_id.startsWith('BL-OTO-')) {
     return handleOtoPaid(event);
   }
@@ -354,6 +359,111 @@ async function handleOtoPaid(event: XenditEvent) {
   );
 
   return NextResponse.json({ ok: true, oto: true });
+}
+
+/* --------------------------------------------------------------------- */
+/* STANDALONE OTO — the 1:1 bought directly from a shared /oto link        */
+/* (no parent BL-MAIN order; buyer + lead row created by /api/oto)         */
+/* --------------------------------------------------------------------- */
+async function handleStandaloneOtoPaid(event: XenditEvent) {
+  const externalId = event.external_id!;
+  // /api/oto persisted a lead row keyed by metadata.externalId = this id.
+  const signup = await findSignupByExternalId(externalId);
+  if (!signup) {
+    console.warn('[xendit-webhook] standalone OTO has no lead row', externalId);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+
+  const meta = (signup.metadata ?? {}) as {
+    otoConfirmed?: string;
+    otoPromoCode?: string;
+    meta?: {
+      fbp?: string;
+      fbc?: string;
+      clientIp?: string;
+      clientUserAgent?: string;
+      sourceUrl?: string;
+    };
+  };
+
+  // Idempotency — a retried webhook bails here.
+  if (meta.otoConfirmed) {
+    return NextResponse.json({ ok: true, alreadyOto: true });
+  }
+
+  const offer = OFFER.oto2;
+  const amountPhp = event.amount ?? offer.priceCentavos / 100;
+
+  const webinar = await getWebinarInfo();
+  const otoVars = {
+    ...(await templateVarsForSignup(signup, webinar)),
+    amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
+  };
+  const emailRes = await sendEmail({ to: signup.email, templateId: 'oto_confirmation', vars: otoVars });
+  const smsRes = signup.phone
+    ? await sendSms({ to: signup.phone, templateId: 'oto_confirmation', vars: otoVars })
+    : null;
+
+  // NOTE: the promo was already redeemed atomically at invoice-create in
+  // /api/oto (same as every other money route) — do NOT redeem again here.
+  // The full sale lives in amountCentavos; we deliberately do NOT write
+  // metadata.otoAmount, because the dashboard sums amountCentavos + otoAmount
+  // for confirmed OTOs (correct for the post-purchase parent row, but it would
+  // double-count a standalone row where amountCentavos already IS the sale).
+  await updateSignup(signup.id, {
+    status: 'paid',
+    bumped: true,
+    amountCentavos: Math.round(amountPhp * 100),
+    metadata: {
+      ...(signup.metadata ?? {}),
+      otoConfirmed: new Date().toISOString(),
+      otoInvoiceId: event.id,
+      otoExternalId: externalId,
+      otoConfirmationStatus: emailRes.ok ? 'sent' : 'failed',
+      ...(emailRes.ok ? { otoConfirmationMessageId: emailRes.id } : {}),
+      ...(smsRes
+        ? { otoConfirmationSmsOk: smsRes.ok, otoConfirmationSmsId: smsRes.ok ? smsRes.id : null }
+        : {}),
+    },
+  });
+
+  // CAPI Purchase for the standalone 1:1.
+  void sendCapiEvent({
+    eventName: 'Purchase',
+    eventId: `purchase_${externalId}`,
+    eventSourceUrl: meta.meta?.sourceUrl,
+    userData: {
+      email: signup.email,
+      phone: signup.phone,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      fbp: meta.meta?.fbp,
+      fbc: meta.meta?.fbc,
+      clientIp: meta.meta?.clientIp,
+      clientUserAgent: meta.meta?.clientUserAgent,
+      country: 'ph',
+      externalId,
+    },
+    customData: {
+      value: amountPhp,
+      currency: 'PHP',
+      contentName: offer.name,
+      contentIds: [offer.sku],
+      numItems: 1,
+    },
+  });
+
+  await sendTelegram(
+    `💰 <b>1:1 Build Session paid (standalone)!</b>\n\n` +
+    `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
+    `${esc(signup.email)}\n` +
+    `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
+    `Amount: <b>₱${amountPhp.toLocaleString()}</b>` +
+    (meta.otoPromoCode ? `\nPromo: <code>${esc(meta.otoPromoCode)}</code>` : '') +
+    `\nInvoice: <code>${externalId}</code>`,
+  );
+
+  return NextResponse.json({ ok: true, standaloneOto: true });
 }
 
 /* --------------------------------------------------------------------- */

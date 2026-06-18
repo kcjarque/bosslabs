@@ -35,9 +35,12 @@ export async function GET(req: Request) {
   const abandoned = all.filter((s) => {
     if (s.source !== 'paid') return false;
     if (s.status !== 'registered') return false;
+    const meta = (s.metadata ?? {}) as { abandonedNotified?: string; standaloneOto?: boolean };
+    // Standalone 1:1 leads (shared /oto link, expected high abandon rate) are
+    // not webinar cart-abandons — don't spam the team to "recover" them.
+    if (meta.standaloneOto) return false;
     const age = now - new Date(s.createdAt).getTime();
     if (age < graceMs) return false;
-    const meta = (s.metadata ?? {}) as { abandonedNotified?: string };
     return !meta.abandonedNotified;
   });
 

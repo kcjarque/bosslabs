@@ -2313,6 +2313,10 @@ export async function computeListMembers(
   const all = await getSignups();
   const predicates = types.map(filterPredicate);
   return all.filter((s) => {
+    // Standalone 1:1 buyers (bought via a shared /oto link, no webinar seat)
+    // are not webinar leads — never sweep them into webinar lists/sequences,
+    // or they'd get Zoom reminders + cart-recovery for a product they don't have.
+    if ((s.metadata as { standaloneOto?: boolean } | undefined)?.standaloneOto) return false;
     // Unsubscribed seats never receive anything regardless of filter.
     if (s.status === 'unsubscribed') return false;
     // Hard-bounced / complained addresses are suppressed — auto-removed from

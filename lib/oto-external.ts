@@ -18,6 +18,19 @@ export function buildOtoExternalId(product: OtoProduct, mainOrder: string): stri
   return `BL-OTO-${MARKER[product]}-${mainOrder}-${Date.now()}`;
 }
 
+/**
+ * Standalone OTO purchase (no parent webinar order) — someone buying the
+ * product directly from a shared /oto link. Distinct `BL-OTOX-` prefix so the
+ * webhook routes it to handleStandaloneOtoPaid (which recovers the buyer by
+ * externalId) instead of handleOtoPaid (which expects a parent BL-MAIN order).
+ *
+ *   BL-OTOX-1ON1-<ts>-<rand>   → standalone ₱3,997 1:1 Build Session (oto2)
+ */
+export function buildStandaloneOtoExternalId(product: OtoProduct): string {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `BL-OTOX-${MARKER[product]}-${Date.now()}-${rand}`;
+}
+
 export function parseOtoExternalId(externalId: string): {
   product: OtoProduct;
   mainOrderId: string;

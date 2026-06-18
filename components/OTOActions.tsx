@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { OFFER, formatPHP } from '@/lib/config';
+import { getFbCookies } from '@/lib/meta-client';
 
 type AppliedPromo = {
   code: string;
@@ -11,8 +12,17 @@ type AppliedPromo = {
 };
 
 export function OTOActions({ orderId }: { orderId: string }) {
+  // No parent order → this is a standalone 1:1 purchase from a shared link;
+  // we collect the buyer's own details. With an order it's the post-purchase
+  // upsell and the buyer is already known (no fields shown).
+  const standalone = !orderId;
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   const [promoInput, setPromoInput] = useState('');
   const [applied, setApplied] = useState<AppliedPromo | null>(null);
@@ -69,13 +79,36 @@ export function OTOActions({ orderId }: { orderId: string }) {
   }
 
   async function addBundle() {
-    setLoading(true);
     setError(null);
+
+    // Standalone buyers must give us their details (post-purchase already has them).
+    let payload: Record<string, unknown> = { orderId, promoCode: applied?.code };
+    if (standalone) {
+      if (!name.trim() || !email.includes('@')) {
+        setError('Please enter your name and a valid email.');
+        return;
+      }
+      const fb = getFbCookies();
+      payload = {
+        standalone: true,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        promoCode: applied?.code,
+        meta: {
+          fbp: fb.fbp,
+          fbc: fb.fbc,
+          sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+        },
+      };
+    }
+
+    setLoading(true);
     try {
       const res = await fetch('/api/oto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, promoCode: applied?.code }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upgrade failed');
@@ -88,6 +121,43 @@ export function OTOActions({ orderId }: { orderId: string }) {
 
   return (
     <div className="w-full">
+      {/* Buyer details — standalone purchase only (no parent order) */}
+      {standalone && (
+        <div className="mb-4 space-y-2">
+          <label className="block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
+            Your details
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            autoComplete="name"
+            disabled={loading}
+            className="w-full rounded-2xl border border-white/15 bg-[#06070A]/60 px-5 py-3 text-[14px] text-white outline-none transition placeholder:text-ink-400 focus:border-cyan-400 disabled:opacity-60"
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            autoComplete="email"
+            inputMode="email"
+            disabled={loading}
+            className="w-full rounded-2xl border border-white/15 bg-[#06070A]/60 px-5 py-3 text-[14px] text-white outline-none transition placeholder:text-ink-400 focus:border-cyan-400 disabled:opacity-60"
+          />
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Mobile (e.g. 0917…)"
+            autoComplete="tel"
+            inputMode="tel"
+            disabled={loading}
+            className="w-full rounded-2xl border border-white/15 bg-[#06070A]/60 px-5 py-3 text-[14px] text-white outline-none transition placeholder:text-ink-400 focus:border-cyan-400 disabled:opacity-60"
+          />
+        </div>
+      )}
+
       {/* Promo code */}
       <div className="mb-4">
         <label htmlFor="oto-promo" className="block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
@@ -138,10 +208,14 @@ export function OTOActions({ orderId }: { orderId: string }) {
         className="btn-primary w-full !py-4 !px-8 text-base"
       >
         {loading
-          ? 'Adding to my order…'
+          ? standalone
+            ? 'Taking you to checkout…'
+            : 'Adding to my order…'
           : applied?.isFree
-            ? 'Claim my free upgrade →'
-            : `Yes — Add it to my order (${priceLabel})`}
+            ? 'Claim my free session →'
+            : standalone
+              ? `Get my 1:1 Build Session (${priceLabel})`
+              : `Yes — Add it to my order (${priceLabel})`}
       </button>
       {error && (
         <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">

@@ -20,6 +20,9 @@ export default async function OtoPage({
 }) {
   const orderId = searchParams.order ?? '';
   const bumped = searchParams.bumped === '1';
+  // No order param → someone arrived from a shared/influencer link, not the
+  // post-purchase redirect. The page becomes a standalone 1:1 checkout.
+  const standalone = !orderId;
 
   // Resolve the purchase amount from the actual signup row so the Pixel
   // Purchase event reports the real ₱ paid (₱999 base, ₱2,996 if bumped
@@ -37,7 +40,11 @@ export default async function OtoPage({
           bumped={purchase.bumped}
         />
       )}
-      {bumped ? <BumpedConfirmation orderId={orderId} /> : <LastChance orderId={orderId} />}
+      {bumped ? (
+        <BumpedConfirmation orderId={orderId} />
+      ) : (
+        <LastChance orderId={orderId} standalone={standalone} />
+      )}
     </>
   );
 }
@@ -92,28 +99,38 @@ function BumpedConfirmation({ orderId }: { orderId: string }) {
 /* --------------------------------------------------------------------- */
 /* LAST CHANCE — user didn't bump at checkout                            */
 /* --------------------------------------------------------------------- */
-function LastChance({ orderId }: { orderId: string }) {
+function LastChance({ orderId, standalone }: { orderId: string; standalone: boolean }) {
   return (
     <>
-      <OtoHeader label="Step 2 of 2" />
+      <OtoHeader label={standalone ? '1:1 Build Session' : 'Step 2 of 2'} />
 
       <main className="container-tight py-10 sm:py-16">
-        {/* Last Chance ribbon */}
+        {/* Ribbon */}
         <div className="mx-auto max-w-3xl">
           <div className="rounded-full border border-danger-500/50 bg-danger-900/40 px-5 py-2 text-center">
             <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-danger-200 sm:text-[12px] sm:tracking-[0.28em]">
               <span className="pulse-dot" />
-              Last chance at this price
+              {standalone ? 'Limited founder slots' : 'Last chance at this price'}
             </div>
           </div>
         </div>
 
         <div className="mx-auto mt-10 max-w-3xl text-center">
-          <div className="eyebrow justify-center">Payment received · Seat locked</div>
+          <div className="eyebrow justify-center">
+            {standalone ? 'Work 1:1 with the founders' : 'Payment received · Seat locked'}
+          </div>
           <h1 className="h-display mt-5">
-            One <span className="accent-italic">last upgrade</span>
-            <br />
-            before your webinar.
+            {standalone ? (
+              <>
+                Build your app <span className="accent-italic">with the founders</span>.
+              </>
+            ) : (
+              <>
+                One <span className="accent-italic">last upgrade</span>
+                <br />
+                before your webinar.
+              </>
+            )}
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
             Get on a <span className="text-white">1:1 call with Kyle &amp; Mikey</span> and walk
@@ -199,7 +216,7 @@ function LastChance({ orderId }: { orderId: string }) {
             <div className="mt-8 flex flex-col items-start gap-5 border-t border-white/[0.07] pt-7 sm:mt-10 sm:pt-8 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.22em] text-danger-300 sm:text-[11px]">
-                  Last chance · This page only
+                  {standalone ? "Founders' offer · This page only" : 'Last chance · This page only'}
                 </div>
                 <div className="mt-2 flex items-baseline gap-3">
                   <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">
@@ -219,10 +236,10 @@ function LastChance({ orderId }: { orderId: string }) {
 
           <div className="mt-6 text-center">
             <Link
-              href={`/thank-you${orderId ? `?order=${orderId}` : ''}`}
+              href={standalone ? '/' : `/thank-you${orderId ? `?order=${orderId}` : ''}`}
               className="text-[11px] uppercase tracking-[0.22em] text-ink-300 underline-offset-4 hover:text-ink-100 hover:underline"
             >
-              No thanks — take me to my webinar details
+              {standalone ? 'Maybe later' : 'No thanks — take me to my webinar details'}
             </Link>
           </div>
         </div>
