@@ -317,11 +317,11 @@ export const OFFER = {
     savings: 'Save ₱4,000',
     footerNote: '📅 Book your 1:1 right after you pay',
     promise:
-      'A 1-hour exclusive 1:1 call with the founders — we map your full AI integration roadmap, build out your app vision, and hand you the exact prompts to start coding in under 24 hours.',
+      'A 1-hour exclusive 1:1 call with the founders — we map your full AI integration roadmap, scope out your MVP, and hand you the exact prompts to start coding in under 24 hours.',
     inclusions: [
       '1-hour exclusive 1:1 call with Kyle & Mikey',
       'Your full AI integration roadmap',
-      'We build out the vision for your app',
+      'We map out your MVP',
       'The exact prompts to start coding',
       'Get your project started in under 24 hours',
     ],
@@ -329,7 +329,7 @@ export const OFFER = {
     valueStack: [
       { label: '1-hour 1:1 call with Kyle & Mikey', value: '₱5,000' },
       { label: 'Your full AI integration roadmap', value: '₱1,500' },
-      { label: 'We build out the vision for your app', value: '₱1,000' },
+      { label: 'We map out your MVP', value: '₱1,000' },
       { label: 'Exact prompts + 24-hour start plan', value: '₱497' },
     ],
     totalValue: '₱7,997',

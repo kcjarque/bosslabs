@@ -122,7 +122,7 @@ function LastChance({ orderId, standalone }: { orderId: string; standalone: bool
           <h1 className="h-display mt-5">
             {standalone ? (
               <>
-                Build your app <span className="accent-italic">with the founders</span>.
+                Build your MVP <span className="accent-italic">with the founders</span>.
               </>
             ) : (
               <>
@@ -134,7 +134,7 @@ function LastChance({ orderId, standalone }: { orderId: string; standalone: bool
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
             Get on a <span className="text-white">1:1 call with Kyle &amp; Mikey</span> and walk
-            out with your full AI roadmap, your app vision mapped, and the exact prompts to start
+            out with your full AI roadmap, your MVP mapped, and the exact prompts to start
             building in <span className="text-white">under 24 hours</span>. Only on this page:{' '}
             <span className="text-white">{OFFER.oto2.label}</span>{' '}
             <span className="text-ink-300 line-through">{OFFER.oto2.totalValue}</span>.
