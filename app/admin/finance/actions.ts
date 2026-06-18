@@ -7,6 +7,8 @@ import {
   addExpense,
   deleteExpense,
   updateExpenseAmount,
+  updateExpenseDescription,
+  renameRecurring,
   settleAbono,
   unsettleAbono,
   setRecurringAbonoSettled,
@@ -106,6 +108,24 @@ export async function editRowAmountAction(fd: FormData) {
     const recurringId = nullable(fd, 'recurringId');
     const date = str(fd, 'date');
     if (recurringId && date) await setRecurringOverride(recurringId, date, { amountCentavos: centavos });
+  }
+  refresh();
+}
+
+/**
+ * Edit a row's name in the consolidated Expenses view. Stored expenses (single
+ * + project) are renamed directly; a recurring row renames the subscription
+ * everywhere (the name is shared across months).
+ */
+export async function editRowDescriptionAction(fd: FormData) {
+  requireAdmin();
+  const description = str(fd, 'description');
+  const expenseId = nullable(fd, 'expenseId');
+  if (expenseId) {
+    await updateExpenseDescription(expenseId, description);
+  } else {
+    const recurringId = nullable(fd, 'recurringId');
+    if (recurringId) await renameRecurring(recurringId, description);
   }
   refresh();
 }

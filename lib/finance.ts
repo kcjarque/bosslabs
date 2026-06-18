@@ -393,6 +393,17 @@ export async function setRecurringActive(id: string, active: boolean): Promise<v
   if (error) throw new Error(`setRecurringActive: ${error.message}`);
 }
 
+/** Rename a recurring payment. The name is shared across every month, so this
+ *  renames the subscription everywhere it appears (unlike the per-month amount
+ *  override). */
+export async function renameRecurring(id: string, name: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const { error } = await getSupabase().from('finance_recurring').update({ name: clean }).eq('id', id);
+  if (error) throw new Error(`renameRecurring: ${error.message}`);
+}
+
 export async function deleteRecurring(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('finance_recurring').delete().eq('id', id);
@@ -492,6 +503,18 @@ export async function updateExpenseAmount(id: string, centavos: number): Promise
     .update({ amount_centavos: Math.max(0, Math.round(centavos)) })
     .eq('id', id);
   if (error) throw new Error(`updateExpenseAmount: ${error.message}`);
+}
+
+/** Rename a stored expense row (inline edit). */
+export async function updateExpenseDescription(id: string, description: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const clean = description.trim();
+  if (!clean) return;
+  const { error } = await getSupabase()
+    .from('finance_expenses')
+    .update({ description: clean })
+    .eq('id', id);
+  if (error) throw new Error(`updateExpenseDescription: ${error.message}`);
 }
 
 // ─── Accounts Payable (abono / reimbursable advances) ───────────────────────

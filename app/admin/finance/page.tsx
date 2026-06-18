@@ -4,6 +4,7 @@ import { formatPHP } from '@/lib/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
 import { EditableAmount } from '@/components/finance/EditableAmount';
+import { EditableText } from '@/components/finance/EditableText';
 import {
   getMonthlyConsolidation,
   listCategories,
@@ -14,6 +15,7 @@ import {
 import {
   addExpenseAction,
   editRowAmountAction,
+  editRowDescriptionAction,
   deleteRowAction,
   resetRecurringOverrideAction,
 } from './actions';
@@ -114,7 +116,20 @@ export default async function FinanceExpensesPage({
                         {r.date.slice(8)}/{r.date.slice(5, 7)}
                       </td>
                       <td className="px-4 py-2.5 font-medium text-slate-800">
-                        {r.description}
+                        <EditableText
+                          value={r.description}
+                          action={editRowDescriptionAction}
+                          fields={
+                            r.expenseId
+                              ? { expenseId: r.expenseId }
+                              : { recurringId: r.recurringId ?? '' }
+                          }
+                          title={
+                            r.source === 'recurring'
+                              ? 'Click to rename this recurring payment (applies to every month)'
+                              : 'Click to rename'
+                          }
+                        />
                         {!r.credited && (
                           <span className="pill pill-amber ml-2">upcoming</span>
                         )}
