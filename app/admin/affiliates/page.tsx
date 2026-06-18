@@ -4,6 +4,7 @@ import {
   getAffiliateStats,
   listCommissions,
   getAffiliateProgram,
+  listAllAffiliateVideos,
   PUBLIC_SITE_URL,
   type Affiliate,
 } from '@/lib/affiliates';
@@ -31,6 +32,7 @@ export default async function AffiliatesPage() {
   // Fetch commissions + program once, in parallel — then compute every
   // affiliate's stats from that single commissions list (no per-affiliate query).
   const [commissions, program] = await Promise.all([listCommissions(), getAffiliateProgram()]);
+  const videos = await listAllAffiliateVideos();
   const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a, commissions)));
   const byId = new Map(affiliates.map((a) => [a.id, a]));
 
@@ -142,6 +144,48 @@ export default async function AffiliatesPage() {
           </div>
         </div>
       </form>
+
+      {/* Testimonial videos — affiliates upload, we run ads to them */}
+      {videos.length > 0 && (
+        <div className="card">
+          <h2 className="text-base font-semibold text-slate-900">
+            Testimonial videos <span className="text-slate-400">· {videos.length}</span>
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Uploaded by affiliates for you to run ads to. Links expire after an hour — refresh to renew.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {videos.map((v) => (
+              <div key={v.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {v.url ? (
+                  <video src={v.url} controls className="aspect-video w-full bg-black object-contain" />
+                ) : (
+                  <div className="flex aspect-video w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+                    Unavailable
+                  </div>
+                )}
+                <div className="px-3 py-2">
+                  <div className="truncate text-sm font-medium text-slate-800">{v.affiliateName}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] text-slate-400" title={v.originalName}>
+                      {v.originalName}
+                    </span>
+                    {v.url && (
+                      <a
+                        href={v.url}
+                        download
+                        className="flex-none text-[11px] font-medium text-cyan-700 hover:underline"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Affiliates */}
       {affiliates.length === 0 ? (

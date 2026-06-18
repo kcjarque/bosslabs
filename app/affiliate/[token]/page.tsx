@@ -6,6 +6,7 @@ import {
   getAffiliateProgram,
   getLeaderboard,
   listCommissions,
+  listAffiliateVideos,
   PUBLIC_SITE_URL,
 } from '@/lib/affiliates';
 import { getEvents } from '@/lib/db';
@@ -13,6 +14,7 @@ import { formatPHP } from '@/lib/config';
 import { CopyLink } from '@/components/CopyLink';
 import { CopyButton } from '@/components/CopyButton';
 import { AffiliateLinkBuilder } from '@/components/AffiliateLinkBuilder';
+import { AffiliateVideoUpload } from '@/components/AffiliateVideoUpload';
 import { updateAffiliateContactAction } from './actions';
 
 function formatEventDate(iso: string): string {
@@ -53,6 +55,7 @@ export default async function AffiliateDashboard({
   const program = await getAffiliateProgram();
   const hasResources = Boolean(program.swipeCopy || program.assetsUrl || program.onePagerUrl);
   const leaderboard = await getLeaderboard(5);
+  const videos = await listAffiliateVideos(aff.id);
 
   // Per-campaign (sub-id) performance from this affiliate's own sales.
   const myCommissions = await listCommissions(aff.id);
@@ -105,6 +108,29 @@ export default async function AffiliateDashboard({
           <p className="mt-2 text-xs text-slate-400">
             Share it anywhere. The first link someone clicks is the one that gets credited.
           </p>
+        </div>
+
+        {/* Testimonial videos — affiliate uploads, we run ads to them */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+            Your testimonial videos
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Record a short, honest video about your experience. We put real ad budget behind it — and
+            every sale it drives pays you. Your words, our spend, your payday.
+          </p>
+          <div className="mt-3">
+            <AffiliateVideoUpload
+              token={params.token}
+              initialVideos={videos.map((v) => ({
+                id: v.id,
+                originalName: v.originalName,
+                sizeBytes: v.sizeBytes,
+                url: v.url,
+                createdAt: v.createdAt,
+              }))}
+            />
+          </div>
         </div>
 
         {/* Link builder — deep links + campaign tags */}

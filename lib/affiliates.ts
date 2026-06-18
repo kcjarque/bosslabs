@@ -184,6 +184,17 @@ export function commissionCentavos(aff: Affiliate, saleCentavos: number): number
   return Math.round((saleCentavos * aff.commissionValue) / 100);
 }
 
+/** Commission % for a given referred-sale count, per the milestone ladder
+ *  (e.g. 0–9 sales → 5%, 10–24 → 7.5%, 25+ → 10%). Returns the highest tier
+ *  whose threshold the count has reached. */
+export function ladderPercentForSales(salesCount: number): number {
+  let pct: number = TIER_LADDER[0].percent;
+  for (const t of TIER_LADDER) {
+    if (salesCount >= t.atSales) pct = t.percent;
+  }
+  return pct;
+}
+
 export async function listAffiliates(): Promise<Affiliate[]> {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getSupabase()
@@ -303,15 +314,21 @@ export async function recordCommission(input: {
     .neq('status', 'void');
   const salesCount = prior ?? 0;
 
-  // Effective rate: a reward tier can only bump a percent affiliate UP.
+  // Effective rate: the milestone LADDER (5→7.5→10) bumps a percent affiliate UP
+  // as their referred-sale count climbs. An admin-set custom rate or the program
+  // reward tier can only raise it further — never lower it. Persist the climb so
+  // the new rate shows in the affiliate's dashboard + admin and sticks for
+  // future sales. `salesCount` is PRIOR sales, so the 11th sale earns 7.5%, etc.
   let commission = commissionCentavos(aff, input.saleCentavos);
-  if (
-    program.tiersEnabled &&
-    aff.commissionType === 'percent' &&
-    program.tierPercent > aff.commissionValue &&
-    salesCount >= program.tierMinSales
-  ) {
-    commission = Math.round((input.saleCentavos * program.tierPercent) / 100);
+  if (aff.commissionType === 'percent') {
+    let pct = Math.max(aff.commissionValue, ladderPercentForSales(salesCount));
+    if (program.tiersEnabled && salesCount >= program.tierMinSales) {
+      pct = Math.max(pct, program.tierPercent);
+    }
+    if (pct > aff.commissionValue) {
+      await updateAffiliate(aff.id, { commissionValue: pct });
+    }
+    commission = Math.round((input.saleCentavos * pct) / 100);
   }
 
   const { data: inserted } = await sb
@@ -523,4 +540,114 @@ export async function getLeaderboard(limit = 5): Promise<LeaderboardEntry[]> {
     .filter((e) => e.sales > 0)
     .sort((a, b) => b.sales - a.sales || b.earningsCentavos - a.earningsCentavos)
     .slice(0, limit);
+}
+
+/* ─── Affiliate testimonial videos ─────────────────────────────────────── */
+// Affiliates upload testimonial videos in their dashboard; we run ads to them.
+// Files go straight to Supabase Storage via a server-signed upload URL (the
+// browser PUTs to it directly, so big videos bypass the serverless body limit).
+// Private bucket — admin views via short-lived signed URLs.
+
+const VIDEO_BUCKET = 'affiliate-videos';
+
+export type AffiliateVideo = {
+  id: string;
+  affiliateId: string;
+  path: string;
+  originalName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+  url: string | null; // short-lived signed view/download URL
+};
+
+/** Server-signed upload URL the browser PUTs the file to. Path is namespaced to
+ *  the affiliate so they can only write under their own folder. */
+export async function signAffiliateVideoUpload(
+  affiliateId: string,
+  filename: string,
+  _contentType: string,
+): Promise<{ path: string; uploadUrl: string } | null> {
+  if (!isSupabaseConfigured()) return null;
+  const stem = slugifyCode(filename.replace(/\.[^.]+$/, '')) || 'video';
+  const ext = (filename.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+  const path = `${affiliateId}/${Date.now()}-${stem}${ext}`;
+  const { data, error } = await getSupabase().storage.from(VIDEO_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return null;
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '');
+  const uploadUrl = data.signedUrl.startsWith('http') ? data.signedUrl : `${base}/storage/v1${data.signedUrl}`;
+  return { path, uploadUrl };
+}
+
+export async function addAffiliateVideo(input: {
+  affiliateId: string;
+  path: string;
+  originalName: string;
+  contentType: string;
+  sizeBytes: number;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  // Only allow rows under the affiliate's own folder — defends against a forged
+  // path in the confirm call.
+  if (!input.path.startsWith(`${input.affiliateId}/`)) return;
+  await getSupabase().from('affiliate_videos').insert({
+    affiliate_id: input.affiliateId,
+    path: input.path,
+    original_name: input.originalName.slice(0, 200),
+    content_type: input.contentType.slice(0, 100),
+    size_bytes: Math.max(0, Math.round(input.sizeBytes)),
+  });
+}
+
+type AffiliateVideoRow = {
+  id: string;
+  affiliate_id: string;
+  path: string;
+  original_name: string | null;
+  content_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+};
+
+async function rowsToVideos(rows: AffiliateVideoRow[]): Promise<AffiliateVideo[]> {
+  const sb = getSupabase();
+  const out: AffiliateVideo[] = [];
+  for (const r of rows) {
+    const { data } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(r.path, 60 * 60);
+    out.push({
+      id: r.id,
+      affiliateId: r.affiliate_id,
+      path: r.path,
+      originalName: r.original_name ?? '',
+      contentType: r.content_type ?? '',
+      sizeBytes: Number(r.size_bytes ?? 0),
+      createdAt: r.created_at,
+      url: data?.signedUrl ?? null,
+    });
+  }
+  return out;
+}
+
+/** An affiliate's own videos (for their dashboard). */
+export async function listAffiliateVideos(affiliateId: string): Promise<AffiliateVideo[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data } = await getSupabase()
+    .from('affiliate_videos')
+    .select('*')
+    .eq('affiliate_id', affiliateId)
+    .order('created_at', { ascending: false });
+  return rowsToVideos((data as AffiliateVideoRow[]) ?? []);
+}
+
+/** All videos with the affiliate's name (for admin review). */
+export async function listAllAffiliateVideos(): Promise<(AffiliateVideo & { affiliateName: string })[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data } = await getSupabase()
+    .from('affiliate_videos')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  const vids = await rowsToVideos((data as AffiliateVideoRow[]) ?? []);
+  const names = new Map((await listAffiliates()).map((a) => [a.id, a.name]));
+  return vids.map((v) => ({ ...v, affiliateName: names.get(v.affiliateId) ?? 'Affiliate' }));
 }
