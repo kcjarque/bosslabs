@@ -4,6 +4,7 @@ import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { ReplayOffer } from '@/components/ReplayOffer';
 import { ReplayGate } from '@/components/ReplayGate';
+import { OtoOfferCard } from '@/components/OtoOfferCard';
 import { OUR_APPS } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -132,6 +133,24 @@ export default function ReplayPage({
                 </a>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Order-bump checkout — grab the Vault or a 1:1, right here */}
+        <section id="upgrade" className="mx-auto mt-16 max-w-2xl scroll-mt-8 sm:mt-24">
+          <div className="text-center">
+            <div className="eyebrow justify-center">Keep building · This page only</div>
+            <h2 className="h-sub mt-4">
+              Grab what we use to <span className="accent-italic">ship apps fast.</span>
+            </h2>
+            <p className="lead mx-auto mt-4 max-w-lg">
+              Two ways to go further while it&apos;s fresh: the full <span className="text-white">AI
+              Secrets Builder Vault</span> — every recording, tutorial, prompt &amp; blueprint — or a{' '}
+              <span className="text-white">1:1 Build Session</span> with Kyle &amp; Mikey. Pick one below.
+            </p>
+          </div>
+          <div className="mt-8">
+            <OtoOfferCard orderId="" />
           </div>
         </section>
 
