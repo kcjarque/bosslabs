@@ -38,6 +38,18 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8 8h8M8 12h8M8 16h5" />
     </>
   ),
+  emaillog: (
+    <>
+      <path d="M4 13h4l1.5 2.5h5L16 13h4" />
+      <path d="M4 13 6 5h12l2 8v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Z" />
+    </>
+  ),
+  smslog: (
+    <>
+      <path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+      <path d="M8 9h8M8 12h5" />
+    </>
+  ),
   promos: (
     <>
       <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2 2 2 0 0 0 0 6 2 2 0 0 1-2 2H5a2 2 0 0 1-2-2 2 2 0 0 0 0-6Z" />

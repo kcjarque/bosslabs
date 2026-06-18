@@ -42,6 +42,8 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { href: '/admin/funnels', label: 'Funnels', icon: 'funnels' },
       { href: '/admin/sequences', label: 'Sequences', icon: 'sequences' },
       { href: '/admin/templates', label: 'Templates', icon: 'templates' },
+      { href: '/admin/messages/email', label: 'Email Logs', icon: 'emaillog' },
+      { href: '/admin/messages/sms', label: 'SMS Logs', icon: 'smslog' },
       { href: '/admin/promo-codes', label: 'Promo codes', icon: 'promos' },
       { href: '/admin/affiliates', label: 'Affiliates', icon: 'affiliates' },
       { href: '/admin/closers', label: 'Closers', icon: 'closers' },

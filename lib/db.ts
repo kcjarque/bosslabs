@@ -1263,6 +1263,75 @@ export async function getEmailStats(): Promise<EmailStats> {
 }
 
 /* --------------------------------------------------------------------- */
+/* SENT MESSAGES — consolidated Email & SMS logs                         */
+/* --------------------------------------------------------------------- */
+
+/**
+ * One row in the Email/SMS Logs feed. `groupKey` non-null = a blast (sequence
+ * or bulk admin send) collapsed to a single line; null = a solo send with its
+ * own recipient. Delivered/opened/bounced are populated for grouped email rows;
+ * solo rows carry a single `status` instead. See the sent_messages() SQL fn.
+ */
+export type SentMessageRow = {
+  groupKey: string | null;
+  ts: string;
+  kind: string;
+  label: string;
+  templateId: string | null;
+  recipient: string | null;
+  signupId: string | null;
+  recipients: number;
+  status: string | null;
+  delivered: number;
+  opened: number;
+  bounced: number;
+};
+
+/** Consolidated send log for one channel within [fromIso, toIso). */
+export async function listSentMessages(
+  channel: 'email' | 'sms',
+  fromIso: string,
+  toIso: string,
+  limit = 500,
+): Promise<SentMessageRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase().rpc('sent_messages', {
+    p_channel: channel,
+    p_from: fromIso,
+    p_to: toIso,
+  });
+  if (error) throw new Error(`listSentMessages: ${error.message}`);
+  const rows = (data ?? []) as Array<{
+    group_key: string | null;
+    ts: string;
+    kind: string;
+    label: string;
+    template_id: string | null;
+    recipient: string | null;
+    signup_id: string | null;
+    recipients: number;
+    status: string | null;
+    delivered: number;
+    opened: number;
+    bounced: number;
+  }>;
+  return rows.slice(0, limit).map((r) => ({
+    groupKey: r.group_key,
+    ts: r.ts,
+    kind: r.kind,
+    label: r.label,
+    templateId: r.template_id,
+    recipient: r.recipient,
+    signupId: r.signup_id,
+    recipients: r.recipients,
+    status: r.status,
+    delivered: r.delivered,
+    opened: r.opened,
+    bounced: r.bounced,
+  }));
+}
+
+/* --------------------------------------------------------------------- */
 /* PROMO CODES                                                           */
 /* --------------------------------------------------------------------- */
 
