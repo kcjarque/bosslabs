@@ -203,6 +203,21 @@ body:has(.admin-shell) {
   font-variant-numeric: tabular-nums;
 }
 
+/* Privacy mode ("hide values") — banking-style blur of sensitive figures.
+ * The PrivacyToggle flips `privacy-on` on <html> (sticky via localStorage);
+ * everything tagged `.bl-private` (KPI values, money cells, metrics) blurs out
+ * until toggled back on. Blur scales with font size so big numbers + small
+ * subtitles both become unreadable; user-select:none stops copying the value. */
+html.privacy-on :is(.bl-private, .tnum, .tabular-nums) {
+  filter: blur(0.5em);
+  -webkit-filter: blur(0.5em);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: filter 0.12s ease;
+}
+/* Reveal on hover/focus is intentionally NOT provided — it stays hidden until
+ * the user explicitly toggles it back on, matching the requested behavior. */
+
 /* Skeleton shimmer for client-component loading states (boards, async panels). */
 .admin-shell .skel {
   background: linear-gradient(90deg, #EEF2F7 25%, #E2E8F0 37%, #EEF2F7 63%);

@@ -9,6 +9,7 @@ import { LogoutButton } from '@/components/LogoutButton';
 import { AdminNavLink } from '@/components/admin/AdminNavLink';
 import { CommandPalette } from '@/components/admin/CommandPalette';
 import { CommandTrigger } from '@/components/admin/CommandTrigger';
+import { PrivacyToggle } from '@/components/admin/PrivacyToggle';
 import './admin.css';
 
 export const metadata = { title: 'Admin · BOSSLABS AI' };
@@ -116,6 +117,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="admin-shell min-h-screen bg-[#F5F7FB] text-slate-900">
+      {/* No-flash: apply privacy blur before paint if it was left on. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "try{if(localStorage.getItem('bl-privacy')==='1')document.documentElement.classList.add('privacy-on')}catch(e){}",
+        }}
+      />
       <CommandPalette items={paletteItems} />
       {/* Mobile header (sidebar collapses to drawer below md) */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
@@ -127,6 +135,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            <PrivacyToggle variant="icon" />
             <CommandTrigger variant="icon" />
             <AdminMobileMenu nav={navFlat} />
           </div>
@@ -167,6 +176,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="border-t border-slate-200 px-3 py-3">
+            <div className="mb-1">
+              <PrivacyToggle />
+            </div>
             <div className="px-2 pb-1 text-[11px] text-slate-400">
               Signed in as <span className="font-medium text-slate-600">{session.name}</span>
               {isStaff ? ' · staff' : ''}

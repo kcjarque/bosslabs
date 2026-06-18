@@ -245,7 +245,7 @@ export default async function AffiliatesPage() {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
-      <div className="text-base font-semibold text-slate-900">{value}</div>
+      <div className="bl-private text-base font-semibold text-slate-900">{value}</div>
       <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{label}</div>
     </div>
   );

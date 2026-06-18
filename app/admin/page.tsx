@@ -1130,7 +1130,7 @@ function StatCard({
           : '';
   const body = (
     <div className={`card ${toneClass}`.trim()}>
-      <div className="tnum text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+      <div className="bl-private tnum text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
         {value}
       </div>
       <div className="mt-1 text-[11px] uppercase tracking-[0.06em] text-slate-500 sm:text-xs">
@@ -1138,7 +1138,7 @@ function StatCard({
       </div>
       {typeof trend === 'number' && (
         <div
-          className={`mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+          className={`bl-private mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
             trend >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
           }`}
         >
@@ -1146,7 +1146,7 @@ function StatCard({
           <span className="font-normal text-slate-400">vs prev</span>
         </div>
       )}
-      {sub && <div className="mt-2 text-[11px] text-slate-500">{sub}</div>}
+      {sub && <div className="bl-private mt-2 text-[11px] text-slate-500">{sub}</div>}
       {href && (
         <div className="mt-2 text-[11px] text-cyan-600 underline-offset-4 hover:underline">
           View →

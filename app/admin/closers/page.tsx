@@ -83,7 +83,7 @@ function Stat({ label, value, tint }: { label: string; value: string; tint?: str
   return (
     <div className="card">
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${tint ?? 'text-slate-900'}`}>{value}</div>
+      <div className={`bl-private mt-1 text-xl font-semibold ${tint ?? 'text-slate-900'}`}>{value}</div>
     </div>
   );
 }
