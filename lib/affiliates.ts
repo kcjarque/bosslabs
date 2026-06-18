@@ -27,6 +27,11 @@ export function randomAffiliateCode(): string {
   return crypto.randomBytes(4).toString('hex');
 }
 
+/** Base commission for self-serve affiliate sign-ups (admin can change any
+ *  affiliate's rate after). Single source for the public /affiliate page copy
+ *  + the signup endpoint so the advertised rate and the granted rate can't drift. */
+export const AFFILIATE_DEFAULT_PERCENT = 20;
+
 export type CommissionType = 'percent' | 'fixed';
 
 export type Affiliate = {
