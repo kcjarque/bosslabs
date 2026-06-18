@@ -51,7 +51,10 @@ export const runtime = 'nodejs';
 // which Next's static analysis can't see, so without this it tries to
 // prerender the route and its no-store fetch throws at build time.
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// 300s (Pro plan) so even a large list never times out mid-send. Combined with
+// the batched-concurrency sender below, a normal run finishes in seconds — this
+// is just the safety ceiling.
+export const maxDuration = 300;
 
 /** ±15 min tolerance — matches the 10-min cron cadence with safety margin. */
 const TOLERANCE_MS = 15 * 60 * 1000;
@@ -190,7 +193,13 @@ export async function GET(req: Request) {
 
       totals.stepsFired++;
 
-      for (const signup of fresh) {
+      // Send in bounded-concurrency batches, NOT one-at-a-time. A serial loop
+      // (email + SMS + DB write per person, ~2-3s each) only got through ~20
+      // recipients before the 60s function timeout — so late steps with the
+      // full paid audience (e.g. the 1-hour/15-min reminders) ran out of window
+      // and silently under-delivered. Batched sends drain the whole list in
+      // seconds; maxDuration is also raised below as a safety net.
+      const sendToOne = async (signup: Signup) => {
         // Resolves the per-event Zoom link (falls back to global settings).
         const vars = await templateVarsForSignup(signup, webinar);
         let emailOk = false;
@@ -231,6 +240,11 @@ export async function GET(req: Request) {
 
         stepLog.sent++;
         if (step.emailTemplateId && !emailOk) stepLog.failed++;
+      };
+
+      const SEND_CONCURRENCY = 8;
+      for (let i = 0; i < fresh.length; i += SEND_CONCURRENCY) {
+        await Promise.all(fresh.slice(i, i + SEND_CONCURRENCY).map(sendToOne));
       }
 
       // Monitor copy — one email per step fire so the team sees exactly what
