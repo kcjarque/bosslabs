@@ -9,7 +9,13 @@ type Success = {
   dashboardUrl: string;
 };
 
-export function AffiliateSignupForm({ percent }: { percent: number }) {
+export function AffiliateSignupForm({
+  percent,
+  topPercent,
+}: {
+  percent: number;
+  topPercent?: number;
+}) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [promo, setPromo] = useState('');
@@ -50,8 +56,8 @@ export function AffiliateSignupForm({ percent }: { percent: number }) {
         <h2 className="h-sub mt-5">{done.existing ? "Welcome back." : "You're in."}</h2>
         <p className="lead mx-auto mt-3 max-w-md text-[15px]">
           {done.existing
-            ? 'You already have an affiliate account — here&rsquo;s your link.'
-            : `Share this link and earn ${percent}% on every sale it brings in.`}
+            ? 'You already have an affiliate account — here’s your link.'
+            : `Share this link and earn ${percent}%${topPercent ? `–${topPercent}%` : ''} on every sale it brings in.`}
         </p>
 
         <div className="mt-6 text-left">

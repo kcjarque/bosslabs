@@ -3,33 +3,16 @@ import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { AffiliateSignupForm } from '@/components/AffiliateSignupForm';
-import { AFFILIATE_DEFAULT_PERCENT } from '@/lib/affiliates';
+import { AFFILIATE_DEFAULT_PERCENT, TIER_LADDER } from '@/lib/affiliates';
 
 export const metadata: Metadata = {
-  title: 'Become an Affiliate · BOSSLABS AI',
-  description: `Earn ${AFFILIATE_DEFAULT_PERCENT}% promoting the AI webinar every PH business owner needs.`,
+  title: 'Affiliate Program · BOSSLABS AI',
+  description:
+    'We run ads to your testimonial — and every peso it earns, you earn. Start at 5%, climb to 10%.',
 };
 
-const PCT = AFFILIATE_DEFAULT_PERCENT;
-
-const PERKS = [
-  {
-    title: `${PCT}% per sale`,
-    body: `Earn ${PCT}% on every webinar ticket your link sells. Performance-based — the more you share, the more you make.`,
-  },
-  {
-    title: '15-day cookie',
-    body: "They don't have to buy right away. If they come back within 15 days, the sale is still credited to you.",
-  },
-  {
-    title: 'Instant link + live dashboard',
-    body: 'Get your unique link the second you sign up. Track clicks, sales, and earnings in real time.',
-  },
-  {
-    title: 'Done-for-you promo kit',
-    body: 'Swipe copy, captions, and a ready-to-post asset pack — so you can start sharing in minutes.',
-  },
-];
+const BASE = AFFILIATE_DEFAULT_PERCENT;
+const TOP = TIER_LADDER[TIER_LADDER.length - 1].percent;
 
 export default function AffiliatePage() {
   return (
@@ -45,62 +28,95 @@ export default function AffiliatePage() {
       </header>
 
       <main className="container-tight py-12 sm:py-20">
+        {/* Hero — lead with the win-win, not the ask */}
         <div className="mx-auto max-w-3xl text-center">
-          <div className="eyebrow justify-center">Affiliate Program</div>
+          <div className="eyebrow justify-center">Partner Program · Win-Win</div>
           <h1 className="h-display mt-5">
-            Get paid to share <br />
-            <span className="accent-italic">what already sells.</span>
+            We put real ad budget behind <span className="accent-italic">your testimonial.</span>
           </h1>
-          <p className="lead mx-auto mt-6 max-w-xl">
-            Promote the AI webinar every PH business owner needs and earn{' '}
-            <span className="text-white">{PCT}% on every sale</span>. Free to join, your link is ready
-            the moment you sign up.
+          <p className="lead mx-auto mt-6 max-w-2xl">
+            Most programs ask for a free testimonial and call it a day. We don&rsquo;t believe in that.
+            Send us yours — <span className="text-white">we run the ads, we spend the money</span> — and
+            every peso it earns, <span className="text-white">you earn your cut</span>. Start at {BASE}%,
+            climb to {TOP}%.
+          </p>
+          <a href="#join" className="btn-primary mt-8 inline-flex !py-4 !px-9 text-base">
+            Get my link + backend →
+          </a>
+        </div>
+
+        {/* The win-win, spelled out */}
+        <div className="mx-auto mt-16 max-w-3xl rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-6 shadow-glow sm:p-10">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">Not a favor — a partnership</div>
+          <h2 className="h-sub mt-3">Your testimonial shouldn&rsquo;t be a freebie.</h2>
+          <p className="mt-4 font-sans text-[15px] leading-relaxed text-ink-100">
+            Hand over a testimonial for nothing? That&rsquo;s the old way. Here, your testimonial becomes an
+            ad <span className="text-white">we fund and scale</span>. It sells while you sleep — and every
+            sale it brings in pays <span className="text-white">you</span>. Your words, our spend, your
+            payday. The harder it works, the more you both win.
           </p>
         </div>
 
-        <div className="mx-auto mt-12 grid max-w-5xl gap-8 lg:grid-cols-[1fr_minmax(360px,420px)] lg:items-start">
-          {/* Left — why + how */}
-          <div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PERKS.map((p) => (
-                <div key={p.title} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-                  <div className="font-serif text-lg text-white">{p.title}</div>
-                  <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-100">{p.body}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-8">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">How it works</div>
-              <ol className="mt-4 space-y-4">
-                {[
-                  ['Sign up', 'Drop your name + email and get your unique link instantly.'],
-                  ['Share it', 'Post your link with our ready-made swipe copy + assets.'],
-                  [`Earn ${PCT}%`, 'Every sale your link drives shows up in your dashboard, ready to be paid out.'],
-                ].map(([t, b], i) => (
-                  <li key={t} className="flex gap-4">
-                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] font-serif text-sm text-cyan-300">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <div className="font-serif text-[15px] text-white">{t}</div>
-                      <p className="mt-0.5 font-sans text-[13px] leading-relaxed text-ink-100">{b}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
+        {/* Commission ladder */}
+        <div className="mx-auto mt-16 max-w-4xl">
+          <div className="text-center">
+            <div className="eyebrow justify-center">Your rate grows with you</div>
+            <h2 className="h-sub mt-3">The more you sell, the bigger your cut.</h2>
           </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-3 sm:gap-4">
+            {TIER_LADDER.map((t, i) => (
+              <div
+                key={t.percent}
+                className={`relative rounded-2xl border p-6 text-center ${
+                  i === TIER_LADDER.length - 1
+                    ? 'border-cyan-500/40 bg-cyan-500/[0.06] shadow-glow-sm'
+                    : 'border-white/[0.08] bg-white/[0.02]'
+                }`}
+              >
+                <div className="font-serif text-4xl tracking-tight text-white sm:text-5xl">{t.percent}%</div>
+                <div className="mt-2 text-[11px] uppercase tracking-[0.22em] text-cyan-400">{t.label}</div>
+                <div className="mt-2 font-sans text-[13px] text-ink-100">
+                  {t.atSales === 0 ? 'The moment you join' : `After ${t.atSales} referred sales`}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          {/* Right — signup card */}
-          <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-6 shadow-glow sm:p-8 lg:sticky lg:top-8">
+        {/* How it works — sign up → backend → upload → ads → earn */}
+        <div className="mx-auto mt-16 max-w-3xl">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">How it works</div>
+          <ol className="mt-5 space-y-5">
+            {[
+              ['Sign up free', 'Drop your name + email and get your unique link — plus your own backend — instantly.'],
+              ['Upload your testimonial', 'Inside your backend you can upload your videos. Tell people what BOSSLABS AI did for you.'],
+              ['We turn it into an ad', 'We put real budget behind your testimonial and run it to a cold audience — on our peso.'],
+              [`You earn ${BASE}–${TOP}%`, 'Every sale your testimonial + link drive lands in your dashboard, ready to be paid out.'],
+            ].map(([t, b], i) => (
+              <li key={t} className="flex gap-4">
+                <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] font-serif text-cyan-300">
+                  {i + 1}
+                </span>
+                <div>
+                  <div className="font-serif text-[16px] text-white">{t}</div>
+                  <p className="mt-0.5 font-sans text-[14px] leading-relaxed text-ink-100">{b}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Signup */}
+        <div id="join" className="mx-auto mt-16 max-w-md scroll-mt-8">
+          <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-6 shadow-glow sm:p-8">
             <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">Join free</div>
-            <h2 className="h-sub mt-2">Get your affiliate link</h2>
+            <h2 className="h-sub mt-2">Get your link + backend</h2>
             <p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-200">
-              Takes 20 seconds. Your link + dashboard are ready immediately.
+              Takes 20 seconds. Start at {BASE}%, climb to {TOP}%. Your link, dashboard, and video uploads
+              are ready immediately.
             </p>
             <div className="mt-6">
-              <AffiliateSignupForm percent={PCT} />
+              <AffiliateSignupForm percent={BASE} topPercent={TOP} />
             </div>
           </div>
         </div>

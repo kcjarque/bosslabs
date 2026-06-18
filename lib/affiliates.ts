@@ -29,8 +29,18 @@ export function randomAffiliateCode(): string {
 
 /** Base commission for self-serve affiliate sign-ups (admin can change any
  *  affiliate's rate after). Single source for the public /affiliate page copy
- *  + the signup endpoint so the advertised rate and the granted rate can't drift. */
-export const AFFILIATE_DEFAULT_PERCENT = 20;
+ *  + the signup endpoint so the advertised rate and the granted rate can't drift.
+ *  The program is a ladder: start here, climb via milestones (see TIER_LADDER). */
+export const AFFILIATE_DEFAULT_PERCENT = 5;
+
+/** The commission ladder shown on the /affiliate page. Affiliates start at the
+ *  base rate and climb as they hit referred-sale milestones. Thresholds are a
+ *  starting proposal — tune to taste; wire enforcement once locked. */
+export const TIER_LADDER = [
+  { percent: 5, label: 'Start', atSales: 0 },
+  { percent: 7.5, label: 'Milestone 1', atSales: 10 },
+  { percent: 10, label: 'Milestone 2', atSales: 25 },
+] as const;
 
 export type CommissionType = 'percent' | 'fixed';
 
