@@ -31,6 +31,12 @@ export function buildStandaloneOtoExternalId(product: OtoProduct): string {
   return `BL-OTOX-${MARKER[product]}-${Date.now()}-${rand}`;
 }
 
+/** Product of a standalone (`BL-OTOX-`) externalId — VAULT = the ₱999 Vault,
+ *  otherwise the ₱3,997 1:1. */
+export function parseStandaloneOtoProduct(externalId: string): OtoProduct {
+  return externalId.includes('-VAULT-') ? 'oto' : 'oto2';
+}
+
 export function parseOtoExternalId(externalId: string): {
   product: OtoProduct;
   mainOrderId: string;

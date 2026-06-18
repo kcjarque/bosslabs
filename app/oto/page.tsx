@@ -3,9 +3,8 @@ import Image from 'next/image';
 import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
-import { OTOActions } from '@/components/OTOActions';
+import { OtoOfferCard } from '@/components/OtoOfferCard';
 import { PurchasePixel } from '@/components/PurchasePixel';
-import { OFFER } from '@/lib/config';
 import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 
 // Xendit's successRedirectUrl points here, not /thank-you — so /oto is the
@@ -133,11 +132,10 @@ function LastChance({ orderId, standalone }: { orderId: string; standalone: bool
             )}
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
-            Get on a <span className="text-white">1:1 call with Kyle &amp; Mikey</span> and walk
-            out with your full AI roadmap, your MVP mapped, and the exact prompts to start
-            building in <span className="text-white">under 24 hours</span>. Only on this page:{' '}
-            <span className="text-white">{OFFER.oto2.label}</span>{' '}
-            <span className="text-ink-300 line-through">{OFFER.oto2.totalValue}</span>.
+            Two ways to go further, <span className="text-white">only on this page</span>: book a{' '}
+            <span className="text-white">1:1 Build Session with Kyle &amp; Mikey</span>, or grab the{' '}
+            <span className="text-white">AI Secrets Builder Vault</span> — every recording, tutorial,
+            prompt &amp; blueprint we use to ship apps fast. Pick what fits.
           </p>
         </div>
 
@@ -179,59 +177,10 @@ function LastChance({ orderId, standalone }: { orderId: string; standalone: bool
         </div>
 
         <div className="mx-auto mt-10 max-w-3xl">
-          <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-5 shadow-glow sm:p-10">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-              {OFFER.oto2.eyebrow}
-            </div>
-            <h2 className="h-sub mt-3">{OFFER.oto2.name}</h2>
-            <p className="mt-4 font-sans text-[14px] leading-relaxed text-ink-100 sm:text-[15px]">
-              {OFFER.oto2.promise}
-            </p>
+          <OtoOfferCard orderId={orderId} />
 
-            {/* Value stack — each asset + its value, summing to ₱9,997 */}
-            <div className="mt-7 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.015]">
-              {OFFER.oto2.valueStack.map((row) => (
-                <div key={row.label} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="flex items-start gap-2.5 font-sans text-[13px] leading-snug text-ink-100 sm:text-[14px]">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-[2px] flex-none text-cyan-400">
-                      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <span>{row.label}</span>
-                  </span>
-                  <span className="flex-none font-serif text-[14px] text-ink-300 sm:text-[15px]">
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between gap-3 bg-white/[0.02] px-4 py-3">
-                <span className="font-sans text-[12px] uppercase tracking-[0.16em] text-ink-200">
-                  Total value
-                </span>
-                <span className="font-serif text-[16px] text-ink-300 line-through sm:text-[18px]">
-                  {OFFER.oto2.totalValue}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-col items-start gap-5 border-t border-white/[0.07] pt-7 sm:mt-10 sm:pt-8 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] text-danger-300 sm:text-[11px]">
-                  {standalone ? "Founders' offer · This page only" : 'Last chance · This page only'}
-                </div>
-                <div className="mt-2 flex items-baseline gap-3">
-                  <div className="font-serif text-5xl tracking-tight text-white sm:text-6xl">
-                    {OFFER.oto2.label}
-                  </div>
-                  <div className="font-serif text-xl text-ink-300 line-through sm:text-2xl">
-                    {OFFER.oto2.totalValue}
-                  </div>
-                </div>
-                <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-                  One-time · No subscription · Instant access
-                </div>
-              </div>
-              <OTOActions orderId={orderId} />
-            </div>
+          <div className="mt-3 text-center text-[10px] uppercase tracking-[0.22em] text-ink-300">
+            One-time · No subscription · Instant access · This page only
           </div>
 
           <div className="mt-6 text-center">

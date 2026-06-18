@@ -31,7 +31,7 @@ import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
-import { parseOtoExternalId } from '@/lib/oto-external';
+import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-external';
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -391,7 +391,10 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
-  const offer = OFFER.oto2;
+  // Which product this standalone purchase was for (VAULT vs 1ON1 in the id).
+  const product = parseStandaloneOtoProduct(externalId);
+  const offer = product === 'oto' ? OFFER.oto : OFFER.oto2;
+  const confirmTemplate = product === 'oto' ? 'vault_confirmation' : 'oto_confirmation';
   const amountPhp = event.amount ?? offer.priceCentavos / 100;
 
   const webinar = await getWebinarInfo();
@@ -399,9 +402,9 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     ...(await templateVarsForSignup(signup, webinar)),
     amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
   };
-  const emailRes = await sendEmail({ to: signup.email, templateId: 'oto_confirmation', vars: otoVars });
+  const emailRes = await sendEmail({ to: signup.email, templateId: confirmTemplate, vars: otoVars });
   const smsRes = signup.phone
-    ? await sendSms({ to: signup.phone, templateId: 'oto_confirmation', vars: otoVars })
+    ? await sendSms({ to: signup.phone, templateId: confirmTemplate, vars: otoVars })
     : null;
 
   // NOTE: the promo was already redeemed atomically at invoice-create in
