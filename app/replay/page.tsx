@@ -16,15 +16,15 @@ export const metadata: Metadata = {
 };
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
-const REPLAY_YOUTUBE_ID = 'DadhAnMXdfI';
-const APP_URL = 'https://bescost-ops.vercel.app/dashboard';
+const REPLAY_YOUTUBE_ID = 'o0A_LboOqtE';
+const APP_URL = 'https://meaningful-travels.vercel.app/';
 // Screenshot of the app we built live this session (drop the file in /public).
-const APP_SCREENSHOT = '/bescost-ops.png';
+const APP_SCREENSHOT = '/meaningful-travels.png';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
 // opens tomorrow (the morning after the webinar) and runs 7 days. Change this
 // single line to move the close date.
-const REPLAY_CLOSES_AT = '2026-06-20T23:59:00+08:00';
+const REPLAY_CLOSES_AT = '2026-06-25T23:59:00+08:00';
 
 export default function ReplayPage({
   searchParams,
