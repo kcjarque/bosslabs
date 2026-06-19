@@ -46,6 +46,7 @@ type ResRow = {
   status: string;
   amount_due_centavos: number | null;
   payment_method: string | null;
+  extra_person_name: string | null;
 };
 
 /** A reservation counts as paid once it has either an uploaded bank-transfer
@@ -71,6 +72,9 @@ function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
       : 'interested',
     position: r.position ?? 0,
     paid,
+    // 1, or 2 when the reservation included an extra person. Manually-added
+    // cards (no reservation) default to 1.
+    people: res?.extra_person_name && res.extra_person_name.trim() ? 2 : 1,
     amountCentavos: res?.amount_due_centavos ?? null,
     method: res?.payment_method ?? null,
     createdAt: r.created_at,
@@ -89,7 +93,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
   const [{ data: resv }, { data: cardRows }] = await Promise.all([
     sb
       .from('retreat_reservations')
-      .select('id, name, email, phone, status, amount_due_centavos, payment_method'),
+      .select('id, name, email, phone, status, amount_due_centavos, payment_method, extra_person_name'),
     sb.from('retreat_crm_cards').select('*'),
   ]);
   const reservations = (resv ?? []) as ResRow[];

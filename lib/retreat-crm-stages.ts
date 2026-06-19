@@ -22,6 +22,8 @@ export type RetreatCrmCard = {
   position: number;
   /** Has the reservation been paid (proof submitted)? Drives the badge. */
   paid: boolean;
+  /** Headcount on this reservation: 1, or 2 when an extra person was added. */
+  people: number;
   amountCentavos: number | null;
   method: string | null;
   createdAt: string;
