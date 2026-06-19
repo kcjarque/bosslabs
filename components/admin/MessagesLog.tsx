@@ -164,7 +164,7 @@ export function MessagesLog({
                       </td>
                       <td className="px-4 py-2.5">
                         {isGroup ? (
-                          channel === 'email' ? (
+                          channel === 'email' && (r.delivered > 0 || r.bounced > 0) ? (
                             <span className="text-[12px] text-slate-500">
                               <span className="text-emerald-700">{r.delivered} delivered</span>
                               {r.opened > 0 && <span className="text-cyan-700"> · {r.opened} opened</span>}
