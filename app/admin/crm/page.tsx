@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { CrmBoard } from '@/components/CrmBoard';
 import { DfyBoard } from '@/components/DfyBoard';
 import { RetreatCrmBoard } from '@/components/RetreatCrmBoard';
+import { VipBoard } from '@/components/VipBoard';
 import { PageHeader } from '@/components/admin/PageHeader';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,12 @@ const TABS = [
     label: 'Retreat',
     subtitle:
       'VibeCode Retreat leads — interested → paid. Set a deal amount, log payments, and track Webinar income.',
+  },
+  {
+    key: 'vip',
+    label: 'VIP',
+    subtitle:
+      'Your VIP watchlist — people worth tracking for future projects. Tag them, jot why, and keep their contact one tap away.',
   },
 ] as const;
 
@@ -61,6 +68,7 @@ export default function CrmPage({ searchParams }: { searchParams: { board?: stri
       {active.key === 'order-bump' && <CrmBoard />}
       {active.key === 'dfy' && <DfyBoard />}
       {active.key === 'retreat' && <RetreatCrmBoard />}
+      {active.key === 'vip' && <VipBoard />}
     </div>
   );
 }
