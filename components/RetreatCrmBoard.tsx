@@ -99,6 +99,12 @@ export function RetreatCrmBoard() {
     await api({ action: 'mark-paid-full', id: card.id });
     await load();
   }
+  function changePeople(card: RetreatCrmCard, delta: number) {
+    const people = Math.max(1, (card.people || 1) + delta);
+    if (people === card.people) return;
+    setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, people } : c)));
+    void api({ action: 'people', id: card.id, people });
+  }
 
   async function saveTemplate() {
     await api({ action: 'template', template });
@@ -316,10 +322,10 @@ export function RetreatCrmBoard() {
                         <div className="mt-1 flex flex-wrap items-center gap-1">
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              c.paid ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                              c.paid || c.paidInFull ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                             }`}
                           >
-                            {c.paid ? '✓ Paid' : 'Interested · unpaid'}
+                            {c.paid || c.paidInFull ? '✓ Paid' : 'Unpaid'}
                           </span>
                           {c.amountCentavos != null && (
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
@@ -330,11 +336,29 @@ export function RetreatCrmBoard() {
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">{c.method}</span>
                           )}
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[10px] font-medium ${
                               c.people > 1 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'
                             }`}
+                            title="Add or remove people on this reservation"
                           >
-                            👥 {c.people} {c.people === 1 ? 'person' : 'people'}
+                            <button
+                              type="button"
+                              onClick={() => changePeople(c, -1)}
+                              disabled={c.people <= 1}
+                              aria-label="Remove person"
+                              className="px-1 text-[12px] leading-none transition hover:text-indigo-900 disabled:opacity-30"
+                            >
+                              −
+                            </button>
+                            <span className="px-0.5">👥 {c.people}</span>
+                            <button
+                              type="button"
+                              onClick={() => changePeople(c, 1)}
+                              aria-label="Add person"
+                              className="px-1 text-[12px] leading-none transition hover:text-indigo-900"
+                            >
+                              +
+                            </button>
                           </span>
                         </div>
                       </div>

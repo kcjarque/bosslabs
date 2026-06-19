@@ -34,6 +34,7 @@ type CardRow = {
   deal_amount_centavos: number | null;
   payments: VcrPayment[] | null;
   paid_at: string | null;
+  people: number | null;
 };
 
 const DEFAULT_VCR_DEAL_CENTAVOS = 5_000_000; // ₱50,000
@@ -72,9 +73,9 @@ function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
       : 'interested',
     position: r.position ?? 0,
     paid,
-    // 1, or 2 when the reservation included an extra person. Manually-added
-    // cards (no reservation) default to 1.
-    people: res?.extra_person_name && res.extra_person_name.trim() ? 2 : 1,
+    // Editable headcount: a manual override on the card wins; otherwise derive
+    // from the reservation (1, or 2 when an extra person was added).
+    people: r.people ?? (res?.extra_person_name && res.extra_person_name.trim() ? 2 : 1),
     amountCentavos: res?.amount_due_centavos ?? null,
     method: res?.payment_method ?? null,
     createdAt: r.created_at,
@@ -119,9 +120,15 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
     if (inserted) cards = cards.concat(inserted as CardRow[]);
   }
 
-  // Sync 2 — auto-advance: an "interested" card whose reservation is now paid → "paid".
+  // Sync 2 — auto-advance to "paid" any card stuck in an earlier stage that is
+  // actually paid: either its reservation is paid, OR its logged payments already
+  // cover the deal (e.g. it was "Marked paid" while in Confirmed).
   for (const c of cards) {
-    if (c.reservation_id && c.stage === 'interested' && isResPaid(resById.get(c.reservation_id)?.status)) {
+    if (c.stage === 'paid') continue;
+    const resPaid = c.reservation_id ? isResPaid(resById.get(c.reservation_id)?.status) : false;
+    const collected = (Array.isArray(c.payments) ? c.payments : []).reduce((s, p) => s + (p.amountCentavos || 0), 0);
+    const deal = c.deal_amount_centavos ?? DEFAULT_VCR_DEAL_CENTAVOS;
+    if (resPaid || (deal > 0 && collected >= deal)) {
       await sb.from('retreat_crm_cards').update({ stage: 'paid' }).eq('id', c.id);
       c.stage = 'paid';
     }
@@ -212,6 +219,18 @@ export async function setRetreatDealAmount(id: string, centavos: number): Promis
   if (error) throw new Error(`setRetreatDealAmount: ${error.message}`);
 }
 
+/** Manually set the headcount on a VCR card (min 1). Overrides the value
+ *  derived from the reservation's extra-person field. */
+export async function setRetreatCardPeople(id: string, people: number): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const n = Math.max(1, Math.round(people));
+  const { error } = await getSupabase()
+    .from('retreat_crm_cards')
+    .update({ people: n })
+    .eq('id', id);
+  if (error) throw new Error(`setRetreatCardPeople: ${error.message}`);
+}
+
 /**
  * Log a (partial or full) VCR cash payment on a card. Appends to the payments
  * log; once collected reaches the deal amount it stamps paid_at and advances
@@ -235,7 +254,9 @@ export async function logRetreatPayment(id: string, centavos: number, note?: str
   const patch: Record<string, unknown> = { payments };
   if (deal > 0 && collected >= deal) {
     patch.paid_at = (data?.paid_at as string | null) ?? new Date().toISOString();
-    if (data?.stage === 'interested') patch.stage = 'paid';
+    // Fully collected → move to Paid from whatever stage it's in (interested,
+    // confirmed, …) — not only 'interested'.
+    if (data?.stage !== 'paid') patch.stage = 'paid';
   }
   const { error } = await sb.from('retreat_crm_cards').update(patch).eq('id', id);
   if (error) throw new Error(`logRetreatPayment: ${error.message}`);

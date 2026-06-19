@@ -9,6 +9,7 @@ import {
   getRetreatCrmTemplate,
   saveRetreatCrmTemplate,
   setRetreatDealAmount,
+  setRetreatCardPeople,
   logRetreatPayment,
   markRetreatPaidInFull,
 } from '@/lib/retreat-crm';
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       case 'deal-amount':
         await setRetreatDealAmount(String(body.id), Number(body.centavos) || 0);
+        return NextResponse.json({ ok: true });
+      case 'people':
+        await setRetreatCardPeople(String(body.id), Number(body.people) || 1);
         return NextResponse.json({ ok: true });
       case 'log-payment':
         await logRetreatPayment(String(body.id), Number(body.centavos) || 0, body.note ? String(body.note) : undefined);
