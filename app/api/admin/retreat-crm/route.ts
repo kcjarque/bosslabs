@@ -12,6 +12,7 @@ import {
   setRetreatCardPeople,
   logRetreatPayment,
   markRetreatPaidInFull,
+  unmarkRetreatPaid,
 } from '@/lib/retreat-crm';
 
 export const runtime = 'nodejs';
@@ -57,6 +58,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       case 'mark-paid-full':
         await markRetreatPaidInFull(String(body.id));
+        return NextResponse.json({ ok: true });
+      case 'unmark-paid':
+        await unmarkRetreatPaid(String(body.id));
         return NextResponse.json({ ok: true });
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });

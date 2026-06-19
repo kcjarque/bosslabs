@@ -120,15 +120,16 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
     if (inserted) cards = cards.concat(inserted as CardRow[]);
   }
 
-  // Sync 2 — auto-advance to "paid" any card stuck in an earlier stage that is
-  // actually paid: either its reservation is paid, OR its logged payments already
-  // cover the deal (e.g. it was "Marked paid" while in Confirmed).
+  // Sync 2 — surface externally-paid reservations only. If a card is still in the
+  // default "Interested" stage but its reservation has been paid (proof submitted
+  // / Xendit cleared), advance it to "Paid". We ONLY touch cards still sitting in
+  // "Interested" so a card the team deliberately moved is never auto-dragged back
+  // on the next load. CRM cash payments advance the stage at the moment they are
+  // logged (see logRetreatPayment / markRetreatPaidInFull) — not on every read —
+  // so a payment marked by mistake can be undone and the card stays put.
   for (const c of cards) {
-    if (c.stage === 'paid') continue;
-    const resPaid = c.reservation_id ? isResPaid(resById.get(c.reservation_id)?.status) : false;
-    const collected = (Array.isArray(c.payments) ? c.payments : []).reduce((s, p) => s + (p.amountCentavos || 0), 0);
-    const deal = c.deal_amount_centavos ?? DEFAULT_VCR_DEAL_CENTAVOS;
-    if (resPaid || (deal > 0 && collected >= deal)) {
+    if (c.stage !== 'interested' || !c.reservation_id) continue;
+    if (isResPaid(resById.get(c.reservation_id)?.status)) {
       await sb.from('retreat_crm_cards').update({ stage: 'paid' }).eq('id', c.id);
       c.stage = 'paid';
     }
@@ -299,6 +300,19 @@ export async function markRetreatPaidInFull(id: string): Promise<void> {
     const phone = String(data.phone ?? '').trim();
     if (phone) await sendSms({ to: phone, templateId: 'retreat_confirmation', vars }).catch(() => null);
   }
+}
+
+/** Undo a payment marked by mistake: clear the cash log + paid timestamp so the
+ *  card reads "Unpaid" again. If it was sitting in "Paid", drop it back to
+ *  "Confirmed" so it leaves the Paid column. The team can then move it freely. */
+export async function unmarkRetreatPaid(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const { data } = await sb.from('retreat_crm_cards').select('stage').eq('id', id).maybeSingle();
+  const patch: Record<string, unknown> = { payments: [], paid_at: null };
+  if (data?.stage === 'paid') patch.stage = 'confirmed';
+  const { error } = await sb.from('retreat_crm_cards').update(patch).eq('id', id);
+  if (error) throw new Error(`unmarkRetreatPaid: ${error.message}`);
 }
 
 /**

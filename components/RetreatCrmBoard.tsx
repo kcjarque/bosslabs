@@ -99,6 +99,16 @@ export function RetreatCrmBoard() {
     await api({ action: 'mark-paid-full', id: card.id });
     await load();
   }
+  async function unmarkPaid(card: RetreatCrmCard) {
+    if (
+      !confirm(
+        `Undo the payment on ${card.name}?\n\nThis clears the logged cash, marks the card Unpaid, and moves it out of the Paid column so you can place it back where it belongs.`,
+      )
+    )
+      return;
+    await api({ action: 'unmark-paid', id: card.id });
+    await load();
+  }
   function changePeople(card: RetreatCrmCard, delta: number) {
     const people = Math.max(1, (card.people || 1) + delta);
     if (people === card.people) return;
@@ -372,6 +382,7 @@ export function RetreatCrmBoard() {
                       onSetDeal={(v) => setDeal(c, v)}
                       onLogPayment={(v) => logPayment(c, v)}
                       onMarkPaid={() => markPaidFull(c)}
+                      onUnmarkPaid={() => unmarkPaid(c)}
                     />
 
                     {c.phone ? (
@@ -405,11 +416,13 @@ function VcrDeal({
   onSetDeal,
   onLogPayment,
   onMarkPaid,
+  onUnmarkPaid,
 }: {
   card: RetreatCrmCard;
   onSetDeal: (centavos: number) => void;
   onLogPayment: (centavos: number) => void;
   onMarkPaid: () => void;
+  onUnmarkPaid: () => void;
 }) {
   const [editDeal, setEditDeal] = useState(false);
   const [dealDraft, setDealDraft] = useState(String(card.dealAmountCentavos / 100));
@@ -501,6 +514,14 @@ function VcrDeal({
             Log
           </button>
         </div>
+      )}
+      {(card.paidInFull || card.collectedCentavos > 0) && (
+        <button
+          onClick={onUnmarkPaid}
+          className="mt-1.5 w-full rounded-md border border-rose-200 px-2 py-1 text-[11px] font-medium text-rose-600 transition hover:bg-rose-50"
+        >
+          ↩ Undo payment{card.paidInFull ? '' : ' (clear cash)'}
+        </button>
       )}
       {card.payments.length > 0 && (
         <div className="mt-1 text-[10px] text-slate-400">
