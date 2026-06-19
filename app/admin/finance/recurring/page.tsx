@@ -2,7 +2,8 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
-import { listRecurring, listCategories, PAYERS } from '@/lib/finance';
+import { PaidBySelect } from '@/components/finance/PaidBySelect';
+import { listRecurring, listCategories, listPayers } from '@/lib/finance';
 import {
   addRecurringAction,
   setRecurringActiveAction,
@@ -22,7 +23,11 @@ function ordinal(n: number): string {
 
 export default async function FinanceRecurringPage() {
   requireAdmin();
-  const [items, categories] = await Promise.all([listRecurring(), listCategories()]);
+  const [items, categories, payers] = await Promise.all([
+    listRecurring(),
+    listCategories(),
+    listPayers(),
+  ]);
   const monthlyTotal = items
     .filter((r) => r.active)
     .reduce((s, r) => s + r.monthlyEquivalentCentavos, 0);
@@ -159,21 +164,11 @@ export default async function FinanceRecurringPage() {
           <p className="text-[11px] leading-relaxed text-slate-400">
             Monthly: day of month (1–31). Weekly: weekday number — 0 = Sunday … 6 = Saturday.
           </p>
-          <div>
-            <label className="label">Paid by (optional)</label>
-            <select name="paidBy" className="select" defaultValue="">
-              <option value="">— Business pays directly —</option>
-              {PAYERS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-              If someone fronts this each time, pick who — every due occurrence is added to Accounts
-              Payable until reimbursed.
-            </p>
-          </div>
+          <PaidBySelect
+            payers={payers.map((p) => p.name)}
+            directLabel="— Business pays directly —"
+            help="If someone fronts this each time, pick who — every due occurrence is added to Accounts Payable until reimbursed."
+          />
           <button type="submit" className="btn btn-primary w-full">
             Add recurring
           </button>

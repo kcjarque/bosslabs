@@ -5,12 +5,13 @@ import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
 import { EditableAmount } from '@/components/finance/EditableAmount';
 import { EditableText } from '@/components/finance/EditableText';
+import { PaidBySelect } from '@/components/finance/PaidBySelect';
 import {
   getMonthlyConsolidation,
   listCategories,
+  listPayers,
   manilaToday,
   manilaYearMonth,
-  PAYERS,
 } from '@/lib/finance';
 import {
   addExpenseAction,
@@ -51,9 +52,10 @@ export default async function FinanceExpensesPage({
 }) {
   requireAdmin();
   const { year, month } = parseYm(searchParams.ym);
-  const [data, categories] = await Promise.all([
+  const [data, categories, payers] = await Promise.all([
     getMonthlyConsolidation(year, month),
     listCategories(),
+    listPayers(),
   ]);
   const prev = shiftMonth(year, month, -1);
   const next = shiftMonth(year, month, 1);
@@ -239,21 +241,11 @@ export default async function FinanceExpensesPage({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="label">Paid by (optional)</label>
-              <select name="paidBy" className="select" defaultValue="">
-                <option value="">— Business paid directly —</option>
-                {PAYERS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                If someone fronted this, pick who — it's added to Accounts Payable until you reimburse
-                them.
-              </p>
-            </div>
+            <PaidBySelect
+              payers={payers.map((p) => p.name)}
+              directLabel="— Business paid directly —"
+              help="If someone fronted this, pick who — it's added to Accounts Payable until you reimburse them."
+            />
             <button type="submit" className="btn btn-primary w-full">
               Add expense
             </button>

@@ -16,6 +16,8 @@ import {
   clearRecurringOverride,
   addCategory,
   deleteCategory,
+  addPayer,
+  deletePayer,
   addProject,
   deleteProject,
   addProjectItem,
@@ -165,6 +167,23 @@ export async function deleteCategoryAction(fd: FormData) {
   requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteCategory(id);
+  refresh();
+}
+
+// ─── Payers ("Paid by" people) ───────────────────────────────────────────────
+// addPayerAction is FormData-based so it serves both the settings <form> and the
+// inline "+ Add person" in PaidBySelect (which posts a one-field FormData).
+
+export async function addPayerAction(fd: FormData) {
+  requireAdmin();
+  await addPayer(str(fd, 'name'));
+  refresh();
+}
+
+export async function deletePayerAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deletePayer(id);
   refresh();
 }
 

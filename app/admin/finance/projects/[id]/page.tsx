@@ -4,7 +4,8 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { ConfirmButton } from '@/components/finance/ConfirmButton';
-import { getProject, listCategories, manilaToday, PAYERS } from '@/lib/finance';
+import { PaidBySelect } from '@/components/finance/PaidBySelect';
+import { getProject, listCategories, listPayers, manilaToday } from '@/lib/finance';
 import {
   addProjectItemAction,
   updateProjectItemAction,
@@ -18,7 +19,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   requireAdmin();
-  const [detail, categories] = await Promise.all([getProject(params.id), listCategories()]);
+  const [detail, categories, payers] = await Promise.all([
+    getProject(params.id),
+    listCategories(),
+    listPayers(),
+  ]);
   if (!detail) notFound();
   const { project, items, expenses } = detail;
   const variance = project.budgetCentavos - project.actualCentavos;
@@ -263,20 +268,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               ))}
             </select>
           </div>
-          <div>
-            <label className="label">Paid by (optional)</label>
-            <select name="paidBy" className="select" defaultValue="">
-              <option value="">— Business paid directly —</option>
-              {PAYERS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-              If someone fronted this, pick who — it's added to Accounts Payable until reimbursed.
-            </p>
-          </div>
+          <PaidBySelect
+            payers={payers.map((p) => p.name)}
+            directLabel="— Business paid directly —"
+            help="If someone fronted this, pick who — it's added to Accounts Payable until reimbursed."
+          />
           <button type="submit" className="btn btn-primary w-full">
             Add to project
           </button>

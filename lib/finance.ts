@@ -190,6 +190,34 @@ export async function deleteCategory(id: string): Promise<void> {
   if (error) throw new Error(`deleteCategory: ${error.message}`);
 }
 
+// ─── Payers (people who can front / "Paid by") ──────────────────────────────
+
+export type Payer = { id: string; name: string };
+
+export async function listPayers(): Promise<Payer[]> {
+  if (!isSupabaseConfigured()) return PAYERS.map((name) => ({ id: name, name }));
+  const { data, error } = await getSupabase()
+    .from('finance_payers')
+    .select('id, name')
+    .order('name', { ascending: true });
+  if (error) throw new Error(`listPayers: ${error.message}`);
+  return (data as Payer[]) ?? [];
+}
+
+export async function addPayer(name: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const { error } = await getSupabase().from('finance_payers').insert({ name: clean });
+  if (error && !/duplicate/i.test(error.message)) throw new Error(`addPayer: ${error.message}`);
+}
+
+export async function deletePayer(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase().from('finance_payers').delete().eq('id', id);
+  if (error) throw new Error(`deletePayer: ${error.message}`);
+}
+
 // ─── Projects + BOM line items ──────────────────────────────────────────────
 
 export async function listProjects(): Promise<Project[]> {
