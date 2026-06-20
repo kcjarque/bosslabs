@@ -272,6 +272,16 @@ export default async function AdminDashboard({
   const revenuePhp = revenueCentavos / 100;
   const aovPhp = paid.length > 0 ? revenuePhp / paid.length : 0;
 
+  // Ave. cost per customer (blended CAC) + LTV — all-time, per DISTINCT buyer
+  // (by email, so a repeat/weekly attendee counts once). CAC = all ad spend ÷
+  // customers acquired; LTV = all front-end revenue (₱999 + OTO) ÷ customers.
+  const distinctCustomers = new Set(
+    paid.map((s) => (s.email ?? '').trim().toLowerCase()).filter(Boolean),
+  ).size;
+  const totalAdSpendCentavos = adSpendByDay.reduce((sum, d) => sum + d.spendCentavos, 0);
+  const cacCentavos = distinctCustomers > 0 ? Math.round(totalAdSpendCentavos / distinctCustomers) : 0;
+  const ltvCentavos = distinctCustomers > 0 ? Math.round(revenueCentavos / distinctCustomers) : 0;
+
   // Conversion rate = paid / (anyone who hit checkout = registered + paid + refunded).
   // Excludes free-tier signups + contact-form submissions since they aren't
   // funnel-conversion candidates.
@@ -413,11 +423,8 @@ export default async function AdminDashboard({
       };
     });
 
-  // Last-N-hours splits — broken out by paid vs registered for actual signal.
+  // Paid signups in the last 24h — used in the channel-mix caption below.
   const last24Paid = within(24, (s) => s.status === 'paid');
-  const last24Reg = within(24, (s) => s.status === 'registered');
-  const last7dPaid = within(24 * 7, (s) => s.status === 'paid');
-  const last7dReg = within(24 * 7, (s) => s.status === 'registered');
 
   // Abandoned cart deep-dive — every registered signup represents a buyer
   // who got far enough to commit an intent (filled name/email/mobile,
@@ -584,14 +591,15 @@ export default async function AdminDashboard({
           sub={`${formatPHP(sRecoveredRevenueCentavos)} · paid after abandoning`}
         />
         <StatCard
-          label="Last 24 hours"
-          value={(last24Paid + last24Reg).toString()}
-          sub={`${last24Paid} paid · ${last24Reg} stuck`}
+          label="Ave. cost per customer"
+          value={formatPHP(cacCentavos)}
+          sub={`${formatPHP(totalAdSpendCentavos)} ad spend · ${distinctCustomers} customers`}
         />
         <StatCard
-          label="Last 7 days"
-          value={(last7dPaid + last7dReg).toString()}
-          sub={`${last7dPaid} paid · ${last7dReg} stuck`}
+          label="LTV (lifetime value)"
+          value={formatPHP(ltvCentavos)}
+          tone="green"
+          sub={`${formatPHP(revenueCentavos)} revenue · ${distinctCustomers} customers`}
         />
       </div>
 
