@@ -209,6 +209,8 @@ export default async function AdminDashboard({
     adSpendByDay,
     webinarIncomeCentavos,
     dfyIncomeCentavos,
+    webinarIncomeAllCentavos,
+    dfyIncomeAllCentavos,
   ] = await Promise.all([
     getSignups(),
     getSettings(),
@@ -235,6 +237,11 @@ export default async function AdminDashboard({
     sumWebinarIncomeCentavos(dashRange?.startMs, rangeEnd),
     // DFY income — won Done-For-You deals (Onboarding stage), period-scoped.
     sumDfyIncomeCentavos(dashRange?.startMs, rangeEnd),
+    // All-time back-end income (no period) for total customer LTV. Retreat + DFY
+    // buyers are the same people as our paid leads (verified 100% email overlap),
+    // so this folds into each lead's lifetime value.
+    sumWebinarIncomeCentavos(),
+    sumDfyIncomeCentavos(),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -280,7 +287,14 @@ export default async function AdminDashboard({
   ).size;
   const totalAdSpendCentavos = adSpendByDay.reduce((sum, d) => sum + d.spendCentavos, 0);
   const cacCentavos = distinctCustomers > 0 ? Math.round(totalAdSpendCentavos / distinctCustomers) : 0;
+  // Webinar (front-end) LTV — ₱999 + OTO only; shown as the card's subline.
   const ltvCentavos = distinctCustomers > 0 ? Math.round(revenueCentavos / distinctCustomers) : 0;
+  // Total LTV — front-end + all back-end (Retreat + DFY) per customer. Back-end
+  // buyers are the same leads (verified), so their cash lifts each lead's LTV.
+  const totalLtvCentavos =
+    distinctCustomers > 0
+      ? Math.round((revenueCentavos + webinarIncomeAllCentavos + dfyIncomeAllCentavos) / distinctCustomers)
+      : 0;
 
   // Conversion rate = paid / (anyone who hit checkout = registered + paid + refunded).
   // Excludes free-tier signups + contact-form submissions since they aren't
@@ -597,9 +611,9 @@ export default async function AdminDashboard({
         />
         <StatCard
           label="LTV (lifetime value)"
-          value={formatPHP(ltvCentavos)}
+          value={formatPHP(totalLtvCentavos)}
           tone="green"
-          sub={`${formatPHP(revenueCentavos)} revenue · ${distinctCustomers} customers`}
+          sub={`Webinar LTV ${formatPHP(ltvCentavos)} · incl. Retreat + DFY`}
         />
       </div>
 
