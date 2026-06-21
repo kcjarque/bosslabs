@@ -238,7 +238,8 @@ async function handleMainPaid(event: XenditEvent) {
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Amount: <b>${amtFmt}</b>${bumped ? ' (with bump)' : ''}\n` +
     (closer ? `Confirmed by: <b>${esc(closer.name)}</b>\n` : '') +
-    `Invoice: <code>${externalId}</code>\n` +
+    `Order: <code>${externalId}</code>\n` +
+    (event.id ? `Xendit invoice: <code>${esc(event.id)}</code>\n` : '') +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
     (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
   await sendTelegram(paymentMsg);

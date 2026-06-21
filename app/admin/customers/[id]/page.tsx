@@ -294,6 +294,9 @@ export default async function CustomerProfilePage({
 
   const meta = (customer.metadata as Record<string, unknown> | undefined) ?? {};
   const externalId = (meta.externalId as string | undefined) ?? '';
+  // The ACTUAL paid Xendit invoice (set by the webhook on payment). This is the
+  // one that matches Xendit's records — externalId can be a stale retry attempt.
+  const xenditInvoiceId = (meta.xenditInvoiceId as string | undefined) ?? '';
   const otoConfirmed = meta.otoConfirmed as string | undefined;
   const otoAmount = meta.otoAmount as number | undefined;
   const eventName = customer.eventId
@@ -423,6 +426,21 @@ export default async function CustomerProfilePage({
             )}
             {externalId && (
               <Field label="Order ID" value={<code className="text-xs">{externalId}</code>} />
+            )}
+            {xenditInvoiceId && (
+              <Field
+                label="Xendit invoice"
+                value={
+                  <a
+                    href={`https://dashboard.xendit.co/invoices/${xenditInvoiceId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-cyan-700 underline decoration-dotted hover:text-cyan-900"
+                  >
+                    {xenditInvoiceId}
+                  </a>
+                }
+              />
             )}
             <Field label="Row ID" value={<code className="text-xs">{customer.id}</code>} />
             {customer.message && (
