@@ -27,6 +27,8 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { recordCommission } from '@/lib/affiliates';
+import { sendCapiEvent } from '@/lib/meta';
+import { OFFER } from '@/lib/config';
 import { sendTelegram, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
@@ -42,7 +44,7 @@ const BATCH = 5;
 
 async function xenditPaidInvoice(
   externalId: string,
-): Promise<{ id: string; amount: number; payerEmail: string } | null> {
+): Promise<{ id: string; amount: number; payerEmail: string; paidAt: string | null } | null> {
   const key = process.env.XENDIT_SECRET_KEY;
   if (!key) return null;
   const auth = Buffer.from(`${key}:`).toString('base64');
@@ -57,11 +59,14 @@ async function xenditPaidInvoice(
       status: string;
       amount: number;
       payer_email?: string;
+      paid_at?: string;
     }>;
     const paid = (Array.isArray(arr) ? arr : []).find(
       (i) => i.status === 'PAID' || i.status === 'SETTLED',
     );
-    return paid ? { id: paid.id, amount: paid.amount, payerEmail: (paid.payer_email ?? '').toLowerCase() } : null;
+    return paid
+      ? { id: paid.id, amount: paid.amount, payerEmail: (paid.payer_email ?? '').toLowerCase(), paidAt: paid.paid_at ?? null }
+      : null;
   } catch {
     return null;
   }
@@ -122,6 +127,47 @@ export async function GET(req: Request) {
             sub: ref.affiliateSub || '',
           }).catch(() => {});
         }
+
+        // Meta CAPI Purchase — the same event the dropped webhook would have
+        // fired, so a reconciled sale still reports to the Pixel. Deduped by the
+        // browser's eventId; stamped with the real Xendit paid time (not "now")
+        // so attribution lands on the actual purchase day.
+        const fb = (s.metadata as {
+          meta?: {
+            purchaseEventId?: string;
+            sourceUrl?: string;
+            fbp?: string;
+            fbc?: string;
+            clientIp?: string;
+            clientUserAgent?: string;
+          };
+        } | null)?.meta;
+        const bumped = Boolean(s.bumped);
+        void sendCapiEvent({
+          eventName: 'Purchase',
+          eventId: fb?.purchaseEventId ?? `purchase_${ext}`,
+          eventTime: paid.paidAt ? Math.floor(new Date(paid.paidAt).getTime() / 1000) : undefined,
+          eventSourceUrl: fb?.sourceUrl,
+          userData: {
+            email: s.email,
+            phone: s.phone,
+            firstName: s.firstName,
+            lastName: s.lastName,
+            fbp: fb?.fbp,
+            fbc: fb?.fbc,
+            clientIp: fb?.clientIp,
+            clientUserAgent: fb?.clientUserAgent,
+            country: 'ph',
+            externalId: ext,
+          },
+          customData: {
+            value: paid.amount,
+            currency: 'PHP',
+            contentName: bumped ? `${OFFER.main.name} + ${OFFER.oto.name}` : OFFER.main.name,
+            contentIds: [bumped ? `${OFFER.main.sku}+${OFFER.oto.sku}` : OFFER.main.sku],
+            numItems: bumped ? 2 : 1,
+          },
+        });
 
         // Same paid_confirmation email/SMS (with Zoom link) the webhook sends.
         const webinar = await getWebinarInfo();
