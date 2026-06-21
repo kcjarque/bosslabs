@@ -279,14 +279,12 @@ export default async function AdminDashboard({
   const revenuePhp = revenueCentavos / 100;
   const aovPhp = paid.length > 0 ? revenuePhp / paid.length : 0;
 
-  // Ave. cost per customer (blended CAC) + LTV — all-time, per DISTINCT buyer
-  // (by email, so a repeat/weekly attendee counts once). CAC = all ad spend ÷
-  // customers acquired; LTV = all front-end revenue (₱999 + OTO) ÷ customers.
+  // LTV — all-time, per DISTINCT buyer (by email, so a repeat/weekly attendee
+  // counts once). "Lifetime" by definition, so LTV does NOT follow the duration
+  // picker. (Ave. cost per customer, computed below, DOES follow the picker.)
   const distinctCustomers = new Set(
     paid.map((s) => (s.email ?? '').trim().toLowerCase()).filter(Boolean),
   ).size;
-  const totalAdSpendCentavos = adSpendByDay.reduce((sum, d) => sum + d.spendCentavos, 0);
-  const cacCentavos = distinctCustomers > 0 ? Math.round(totalAdSpendCentavos / distinctCustomers) : 0;
   // Webinar (front-end) LTV — ₱999 + OTO only; shown as the card's subline.
   const ltvCentavos = distinctCustomers > 0 ? Math.round(revenueCentavos / distinctCustomers) : 0;
   // Total LTV — front-end + all back-end (Retreat + DFY) per customer. Back-end
@@ -406,6 +404,14 @@ export default async function AdminDashboard({
   const adCostPerSaleCentavos =
     adPaidCount > 0 ? Math.round(adSpendInPeriodCentavos / adPaidCount) : 0;
   const adNetCentavos = sRevenueByPaymentCentavos - adSpendInPeriodCentavos;
+  // Ave. cost per customer — follows the duration picker: ad spend in the period
+  // ÷ DISTINCT customers acquired in it (by payment date, matching the ROAS
+  // card's basis). All-time when no period is selected.
+  const periodCustomers = new Set(
+    sPaidByPaymentList.map((s) => (s.email ?? '').trim().toLowerCase()).filter(Boolean),
+  ).size;
+  const cacCentavos =
+    periodCustomers > 0 ? Math.round(adSpendInPeriodCentavos / periodCustomers) : 0;
   // Total revenue (all streams) + the blended/overall ROAS — front-end + VCR +
   // DFY ÷ ad spend. Distinct from the front-end-only ROAS in the Ad spend card.
   const totalIncomeCentavos = sRevenueByPaymentCentavos + webinarIncomeCentavos + dfyIncomeCentavos;
@@ -607,7 +613,7 @@ export default async function AdminDashboard({
         <StatCard
           label="Ave. cost per customer"
           value={formatPHP(cacCentavos)}
-          sub={`${formatPHP(totalAdSpendCentavos)} ad spend · ${distinctCustomers} customers`}
+          sub={`${formatPHP(adSpendInPeriodCentavos)} ad spend · ${periodCustomers} customers`}
         />
         <StatCard
           label="LTV (lifetime value)"
