@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { OFFER, WINS, formatPHP } from '@/lib/config';
 import { getFbCookies, newEventId, trackPixelEvent } from '@/lib/meta-client';
 import { PaymentLogos } from './PaymentLogos';
+import { EmailFieldWithHint } from './EmailFieldWithHint';
 
 type PayMethod = 'GCASH' | 'CREDIT_CARD' | 'BANKS';
 
@@ -329,10 +330,7 @@ export function CheckoutFlow({
             <label className="label" htmlFor="name">Full name</label>
             <input id="name" name="name" type="text" required autoComplete="name" className="input" placeholder="Juan Dela Cruz" />
           </div>
-          <div>
-            <label className="label" htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" required autoComplete="email" className="input" placeholder="you@business.com" />
-          </div>
+          <EmailFieldWithHint tone="dark" />
           <div>
             <label className="label" htmlFor="mobile">Mobile (PH)</label>
             <input

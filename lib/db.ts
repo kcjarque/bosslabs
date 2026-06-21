@@ -2369,6 +2369,52 @@ export async function suppressSignupEmail(
   return n;
 }
 
+/** After this many SOFT bounces (full mailbox / greylisting) on separate sends,
+ *  an address is treated as effectively dead and suppressed like a hard bounce. */
+const SOFT_BOUNCE_SUPPRESS_AT = 2;
+
+/**
+ * Record a SOFT (transient) bounce. A single soft bounce often recovers, but an
+ * address that soft-bounces on separate sends is effectively undeliverable —
+ * and keeps inflating the bounce rate on every drip. We count them per address
+ * and, on the Nth, suppress it (same effect as a hard bounce). Mirrors
+ * suppressSignupEmail: updates every signup row sharing the address.
+ */
+export async function recordSoftBounce(
+  email: string,
+): Promise<{ count: number; suppressed: boolean }> {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes('@') || !isSupabaseConfigured()) return { count: 0, suppressed: false };
+  const sb = getSupabase();
+  const { data } = await sb.from('signups').select('id, metadata').ilike('email', e);
+  const rows = (data ?? []) as Array<{ id: string; metadata: Record<string, unknown> | null }>;
+  if (!rows.length) return { count: 0, suppressed: false };
+  // Already suppressed (hard bounce / complaint / prior soft streak) → done.
+  if (rows.some((r) => (r.metadata as { emailSuppressed?: string } | null)?.emailSuppressed)) {
+    return { count: SOFT_BOUNCE_SUPPRESS_AT, suppressed: true };
+  }
+  const prev = Math.max(
+    0,
+    ...rows.map((r) => Number((r.metadata as { softBounceCount?: number } | null)?.softBounceCount ?? 0)),
+  );
+  const count = prev + 1;
+  const suppress = count >= SOFT_BOUNCE_SUPPRESS_AT;
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    const meta: Record<string, unknown> = {
+      ...(r.metadata ?? {}),
+      softBounceCount: count,
+      softBounceAt: now,
+    };
+    if (suppress) {
+      meta.emailSuppressed = now;
+      meta.emailSuppressedReason = 'soft_bounce';
+    }
+    await sb.from('signups').update({ metadata: meta }).eq('id', r.id);
+  }
+  return { count, suppressed: suppress };
+}
+
 /** True when this signup's email was blocked pre-send (invalid/disposable/no-MX). */
 export function isEmailBlocked(s: Pick<Signup, 'metadata'>): boolean {
   return Boolean((s.metadata as { emailBlocked?: string } | undefined)?.emailBlocked);

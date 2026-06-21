@@ -33,6 +33,7 @@ import {
   findSignupByConfirmationMessageId,
   updateConfirmationStatus,
   suppressSignupEmail,
+  recordSoftBounce,
   type AdminSendStatus,
 } from '@/lib/db';
 
@@ -162,13 +163,25 @@ export async function POST(req: Request) {
     // recover. Suppression never changes the signup's main status (a paid
     // customer stays paid), only flags the email as undeliverable.
     const isHardBounce = status === 'bounced' && ses.bounce?.bounceType === 'Permanent';
+    const bounceAddrs = () =>
+      new Set(
+        [
+          ...(ses.bounce?.bouncedRecipients?.map((r) => r.emailAddress) ?? []),
+          ...(ses.mail?.destination ?? []),
+        ]
+          .filter((a): a is string => Boolean(a))
+          .map((a) => a.toLowerCase()),
+      );
     if (isHardBounce || status === 'complained') {
-      const addrs = [
-        ...(ses.bounce?.bouncedRecipients?.map((r) => r.emailAddress) ?? []),
-        ...(ses.mail?.destination ?? []),
-      ].filter((a): a is string => Boolean(a));
-      for (const email of new Set(addrs.map((a) => a.toLowerCase()))) {
+      for (const email of bounceAddrs()) {
         await suppressSignupEmail(email, isHardBounce ? 'hard_bounce' : 'complaint').catch(() => {});
+      }
+    } else if (status === 'bounced') {
+      // Soft/transient bounce (full mailbox, greylisting). One can recover, but an
+      // address that soft-bounces on separate sends is effectively dead — count it
+      // and suppress on the Nth so it stops re-bouncing across every drip.
+      for (const email of bounceAddrs()) {
+        await recordSoftBounce(email).catch(() => {});
       }
     }
 
