@@ -132,7 +132,8 @@ export function DfyBoard() {
         .slice(0, 12)
     : [];
 
-  const funnelRows = DFY_STAGES.map((s) => {
+  // Lost leads are dead pipeline — keep them off the funnel + the pipeline value.
+  const funnelRows = DFY_STAGES.filter((s) => s !== 'lost').map((s) => {
     const inStage = cards.filter((c) => c.stage === s);
     return {
       label: DFY_STAGE_META[s].label,
@@ -141,7 +142,9 @@ export function DfyBoard() {
       dealCentavos: inStage.reduce((sum, c) => sum + (c.amountCentavos || 0), 0),
     };
   });
-  const pipelineTotalCentavos = cards.reduce((sum, c) => sum + (c.amountCentavos || 0), 0);
+  const pipelineTotalCentavos = cards
+    .filter((c) => c.stage !== 'lost')
+    .reduce((sum, c) => sum + (c.amountCentavos || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -271,7 +274,7 @@ export function DfyBoard() {
       </div>
 
       {/* Board */}
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-6">
         {DFY_STAGES.map((stage) => {
           const meta = DFY_STAGE_META[stage];
           const col = visible.filter((c) => c.stage === stage);

@@ -4,6 +4,9 @@ const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    // lib/ holds CRM stage colour classes (retreat/dfy STAGE_META) — scan it so
+    // those Tailwind classes are generated (e.g. the Lost Lead rose swatch).
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {

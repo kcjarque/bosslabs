@@ -167,7 +167,8 @@ export function RetreatCrmBoard() {
         .slice(0, 12)
     : [];
 
-  const funnelRows = RETREAT_CRM_STAGES.map((s) => {
+  // Lost leads are dead pipeline — keep them off the funnel + the pipeline value.
+  const funnelRows = RETREAT_CRM_STAGES.filter((s) => s !== 'lost').map((s) => {
     const inStage = cards.filter((c) => c.stage === s);
     return {
       label: RETREAT_CRM_STAGE_META[s].label,
@@ -176,7 +177,9 @@ export function RetreatCrmBoard() {
       dealCentavos: inStage.reduce((sum, c) => sum + (c.dealAmountCentavos || 0), 0),
     };
   });
-  const pipelineTotalCentavos = cards.reduce((sum, c) => sum + (c.dealAmountCentavos || 0), 0);
+  const pipelineTotalCentavos = cards
+    .filter((c) => c.stage !== 'lost')
+    .reduce((sum, c) => sum + (c.dealAmountCentavos || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -293,7 +296,7 @@ export function RetreatCrmBoard() {
       </div>
 
       {/* Board */}
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-6">
         {RETREAT_CRM_STAGES.map((stage) => {
           const meta = RETREAT_CRM_STAGE_META[stage];
           const col = visible.filter((c) => c.stage === stage);
