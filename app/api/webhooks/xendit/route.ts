@@ -259,9 +259,11 @@ async function handleMainPaid(event: XenditEvent) {
 /* --------------------------------------------------------------------- */
 async function handleOtoPaid(event: XenditEvent) {
   // Decode the product + parent order from the externalId (marker-aware;
-  // legacy unmarked IDs resolve to the 1:1).
+  // legacy unmarked IDs resolve to the 1:1). 'both' = the bundle.
   const { product: otoProduct, mainOrderId } = parseOtoExternalId(event.external_id!);
-  const otoOffer = otoProduct === 'oto' ? OFFER.oto : OFFER.oto2;
+  const productLabel =
+    otoProduct === 'both' ? `${OFFER.oto2.name} + ${OFFER.oto.name}` :
+    (otoProduct === 'oto' ? OFFER.oto : OFFER.oto2).name;
 
   const signup = await findSignupByExternalId(mainOrderId);
   if (!signup) {
@@ -285,25 +287,37 @@ async function handleOtoPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
-  const amountPhp = event.amount ?? otoOffer.priceCentavos / 100;
+  const fallbackCentavos =
+    otoProduct === 'both' ? OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos :
+    (otoProduct === 'oto' ? OFFER.oto.priceCentavos : OFFER.oto2.priceCentavos);
+  const amountPhp = event.amount ?? fallbackCentavos / 100;
 
   // Product-specific confirmation email + SMS (Vault = instant access, 1:1 =
-  // we'll schedule). `amount` is GSM-7-safe (no ₱) so the SMS stays one segment.
-  const otoTemplateId = otoProduct === 'oto' ? 'vault_confirmation' : 'oto_confirmation';
+  // we'll schedule). For 'both' send BOTH templates so the buyer gets
+  // delivery details for each product. `amount` is GSM-7-safe.
+  const templates =
+    otoProduct === 'both'
+      ? (['oto_confirmation', 'vault_confirmation'] as const)
+      : ([otoProduct === 'oto' ? 'vault_confirmation' : 'oto_confirmation'] as const);
   const webinar = await getWebinarInfo();
   const baseVars = await templateVarsForSignup(signup, webinar);
   const otoVars = {
     ...baseVars,
     amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
   };
-  const otoEmailRes = await sendEmail({
-    to: signup.email,
-    templateId: otoTemplateId,
-    vars: otoVars,
-  });
-  const otoSmsRes = signup.phone
-    ? await sendSms({ to: signup.phone, templateId: otoTemplateId, vars: otoVars })
-    : null;
+  let otoEmailRes = { ok: false, id: undefined as string | undefined };
+  for (const tpl of templates) {
+    const res = await sendEmail({ to: signup.email, templateId: tpl, vars: otoVars });
+    if (res.ok) otoEmailRes = { ok: true, id: res.id };
+  }
+  let otoSmsRes: { ok: boolean; id?: string } | null = null;
+  if (signup.phone) {
+    for (const tpl of templates) {
+      const res = await sendSms({ to: signup.phone, templateId: tpl, vars: otoVars });
+      if (res.ok) otoSmsRes = { ok: true, id: res.id };
+      else if (!otoSmsRes) otoSmsRes = { ok: false };
+    }
+  }
 
   await updateSignup(signup.id, {
     bumped: true,
@@ -347,9 +361,9 @@ async function handleOtoPaid(event: XenditEvent) {
     customData: {
       value: amountPhp,
       currency: 'PHP',
-      contentName: otoOffer.name,
-      contentIds: [otoOffer.sku],
-      numItems: 1,
+      contentName: productLabel,
+      contentIds: otoProduct === 'both' ? [OFFER.oto2.sku, OFFER.oto.sku] : [(otoProduct === 'oto' ? OFFER.oto : OFFER.oto2).sku],
+      numItems: otoProduct === 'both' ? 2 : 1,
     },
   });
 
@@ -359,6 +373,7 @@ async function handleOtoPaid(event: XenditEvent) {
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
+    `Product: ${esc(productLabel)}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
     `OTO invoice: <code>${event.external_id}</code>`,
   );
@@ -396,21 +411,38 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
-  // Which product this standalone purchase was for (VAULT vs 1ON1 in the id).
+  // Which product this standalone purchase was for (VAULT / 1ON1 / BOTH in the id).
   const product = parseStandaloneOtoProduct(externalId);
-  const offer = product === 'oto' ? OFFER.oto : OFFER.oto2;
-  const confirmTemplate = product === 'oto' ? 'vault_confirmation' : 'oto_confirmation';
-  const amountPhp = event.amount ?? offer.priceCentavos / 100;
+  const productLabel =
+    product === 'both' ? `${OFFER.oto2.name} + ${OFFER.oto.name}` :
+    (product === 'oto' ? OFFER.oto : OFFER.oto2).name;
+  const fallbackCentavos =
+    product === 'both' ? OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos :
+    (product === 'oto' ? OFFER.oto.priceCentavos : OFFER.oto2.priceCentavos);
+  const amountPhp = event.amount ?? fallbackCentavos / 100;
 
+  const templates =
+    product === 'both'
+      ? (['oto_confirmation', 'vault_confirmation'] as const)
+      : ([product === 'oto' ? 'vault_confirmation' : 'oto_confirmation'] as const);
   const webinar = await getWebinarInfo();
   const otoVars = {
     ...(await templateVarsForSignup(signup, webinar)),
     amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
   };
-  const emailRes = await sendEmail({ to: signup.email, templateId: confirmTemplate, vars: otoVars });
-  const smsRes = signup.phone
-    ? await sendSms({ to: signup.phone, templateId: confirmTemplate, vars: otoVars })
-    : null;
+  let emailRes: { ok: boolean; id?: string } = { ok: false };
+  for (const tpl of templates) {
+    const r = await sendEmail({ to: signup.email, templateId: tpl, vars: otoVars });
+    if (r.ok) emailRes = { ok: true, id: r.id };
+  }
+  let smsRes: { ok: boolean; id?: string } | null = null;
+  if (signup.phone) {
+    for (const tpl of templates) {
+      const r = await sendSms({ to: signup.phone, templateId: tpl, vars: otoVars });
+      if (r.ok) smsRes = { ok: true, id: r.id };
+      else if (!smsRes) smsRes = { ok: false };
+    }
+  }
 
   // NOTE: the promo was already redeemed atomically at invoice-create in
   // /api/oto (same as every other money route) — do NOT redeem again here.
@@ -455,17 +487,20 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     customData: {
       value: amountPhp,
       currency: 'PHP',
-      contentName: offer.name,
-      contentIds: [offer.sku],
-      numItems: 1,
+      contentName: productLabel,
+      contentIds:
+        product === 'both' ? [OFFER.oto2.sku, OFFER.oto.sku] :
+        [(product === 'oto' ? OFFER.oto : OFFER.oto2).sku],
+      numItems: product === 'both' ? 2 : 1,
     },
   });
 
   await sendTelegram(
-    `💰 <b>1:1 Build Session paid (standalone)!</b>\n\n` +
+    `💰 <b>${product === 'both' ? 'Bundle' : '1:1 Build Session'} paid (standalone)!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
+    `Product: ${esc(productLabel)}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>` +
     (meta.otoPromoCode ? `\nPromo: <code>${esc(meta.otoPromoCode)}</code>` : '') +
     `\nInvoice: <code>${externalId}</code>`,

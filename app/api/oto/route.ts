@@ -46,12 +46,35 @@ type Body = {
   meta?: { fbp?: string; fbc?: string; sourceUrl?: string };
 };
 
-/** Resolve the picked product → its offer + confirmation template. */
+/** Resolve the picked product → price, description, confirmation templates.
+ *  For 'both' we synthesize a combined "offer" for invoice purposes; the
+ *  webhook sends both per-product confirmation emails on clear. */
 function resolve(body: Body) {
-  const product: OtoProduct = body.product === 'oto' ? 'oto' : 'oto2';
+  let product: OtoProduct = 'oto2';
+  if (body.product === 'oto') product = 'oto';
+  else if (body.product === 'both') product = 'both';
+
+  if (product === 'both') {
+    const priceCentavos = OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos;
+    const description = `${OFFER.oto2.name} + ${OFFER.oto.name}`;
+    // The webhook handles the dual-template send; this return shape just keeps
+    // the route's free-promo branch using one template.
+    return {
+      product,
+      priceCentavos,
+      description,
+      confirmTemplates: ['oto_confirmation', 'vault_confirmation'] as const,
+    };
+  }
+
   const offer = OFFER[product];
   const confirmTemplate = product === 'oto' ? 'vault_confirmation' : 'oto_confirmation';
-  return { product, offer, confirmTemplate };
+  return {
+    product,
+    priceCentavos: offer.priceCentavos,
+    description: offer.name,
+    confirmTemplates: [confirmTemplate] as const,
+  };
 }
 
 export async function POST(req: Request) {
@@ -63,10 +86,19 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const promoCode = (body.promoCode || '').trim();
-    const { product, offer, confirmTemplate } = resolve(body);
+    const { product, priceCentavos, description, confirmTemplates } = resolve(body);
+
+    // Promo codes are scoped to a single product — when the buyer picks the
+    // combined bundle we refuse the code (clearer than silently dropping it).
+    if (product === 'both' && promoCode) {
+      return NextResponse.json(
+        { error: 'Promo codes only apply to a single upgrade — uncheck one to use the code.' },
+        { status: 400 },
+      );
+    }
 
     if (body.standalone === true) {
-      return handleStandalone(req, body, promoCode, product, offer, confirmTemplate);
+      return handleStandalone(req, body, promoCode, product, priceCentavos, description, confirmTemplates);
     }
 
     const mainOrder = (body.orderId || '').trim();
@@ -92,7 +124,8 @@ export async function POST(req: Request) {
     const base = siteUrl(req);
 
     // Promo (optional) — priced against the picked offer; redeemed atomically.
-    let amountCentavos = offer.priceCentavos;
+    // 'both' product short-circuits above so this branch never runs for bundles.
+    let amountCentavos = priceCentavos;
     let promoApplied: string | null = null;
     if (promoCode) {
       const promo = await findPromoCode(promoCode);
@@ -105,7 +138,7 @@ export async function POST(req: Request) {
       if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
         return NextResponse.json({ error: 'This promo code has been fully claimed.' }, { status: 409 });
       }
-      const discount = computeDiscountCentavos(promo, offer.priceCentavos);
+      const discount = computeDiscountCentavos(promo, priceCentavos);
       const redeemed = await redeemPromoCode(promo.code);
       if (!redeemed) {
         return NextResponse.json(
@@ -113,7 +146,7 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
-      amountCentavos = Math.max(0, offer.priceCentavos - discount);
+      amountCentavos = Math.max(0, priceCentavos - discount);
       promoApplied = redeemed.code;
     }
 
@@ -134,9 +167,11 @@ export async function POST(req: Request) {
       try {
         const webinar = await getWebinarInfo();
         const vars = { ...(await templateVarsForSignup(parent, webinar)), amount: 'PHP 0' };
-        await sendEmail({ to: parent.email, templateId: confirmTemplate, vars }).catch(() => null);
-        if (parent.phone) {
-          await sendSms({ to: parent.phone, templateId: confirmTemplate, vars }).catch(() => null);
+        for (const tpl of confirmTemplates) {
+          await sendEmail({ to: parent.email, templateId: tpl, vars }).catch(() => null);
+          if (parent.phone) {
+            await sendSms({ to: parent.phone, templateId: tpl, vars }).catch(() => null);
+          }
         }
       } catch {
         /* confirmation is best-effort — never block the free upgrade */
@@ -147,7 +182,7 @@ export async function POST(req: Request) {
     const invoice = await createInvoice({
       externalId,
       amount: amountCentavos / 100,
-      description: promoApplied ? `${offer.name} (promo ${promoApplied})` : offer.name,
+      description: promoApplied ? `${description} (promo ${promoApplied})` : description,
       payerEmail: parent.email,
       successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,
       failureRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=failed`,
@@ -173,8 +208,9 @@ async function handleStandalone(
   body: Body,
   promoCode: string,
   product: OtoProduct,
-  offer: (typeof OFFER)['oto'] | (typeof OFFER)['oto2'],
-  confirmTemplate: string,
+  basePriceCentavos: number,
+  description: string,
+  confirmTemplates: readonly string[],
 ) {
   const name = (body.name || '').trim();
   const email = (body.email || '').trim().toLowerCase();
@@ -187,7 +223,8 @@ async function handleStandalone(
   const base = siteUrl(req);
 
   // Promo: validate + redeem ATOMICALLY (same as every other money route).
-  let amountCentavos = offer.priceCentavos;
+  // 'both' product short-circuits earlier in POST so this branch never runs for bundles.
+  let amountCentavos = basePriceCentavos;
   let promoApplied: string | null = null;
   if (promoCode) {
     const promo = await findPromoCode(promoCode);
@@ -200,7 +237,7 @@ async function handleStandalone(
     if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
       return NextResponse.json({ error: 'This promo code has been fully claimed.' }, { status: 409 });
     }
-    const discount = computeDiscountCentavos(promo, offer.priceCentavos);
+    const discount = computeDiscountCentavos(promo, basePriceCentavos);
     const redeemed = await redeemPromoCode(promo.code);
     if (!redeemed) {
       return NextResponse.json(
@@ -208,7 +245,7 @@ async function handleStandalone(
         { status: 409 },
       );
     }
-    amountCentavos = Math.max(0, offer.priceCentavos - discount);
+    amountCentavos = Math.max(0, basePriceCentavos - discount);
     promoApplied = redeemed.code;
   }
 
@@ -244,8 +281,10 @@ async function handleStandalone(
     try {
       const webinar = await getWebinarInfo();
       const vars = { ...(await templateVarsForSignup(signup, webinar)), amount: 'PHP 0' };
-      await sendEmail({ to: email, templateId: confirmTemplate, vars }).catch(() => null);
-      if (phone) await sendSms({ to: phone, templateId: confirmTemplate, vars }).catch(() => null);
+      for (const tpl of confirmTemplates) {
+        await sendEmail({ to: email, templateId: tpl, vars }).catch(() => null);
+        if (phone) await sendSms({ to: phone, templateId: tpl, vars }).catch(() => null);
+      }
     } catch {
       /* best-effort */
     }
@@ -275,7 +314,7 @@ async function handleStandalone(
   const invoice = await createInvoice({
     externalId,
     amount: amountCentavos / 100,
-    description: promoApplied ? `${offer.name} (promo ${promoApplied})` : offer.name,
+    description: promoApplied ? `${description} (promo ${promoApplied})` : description,
     payerEmail: email,
     successRedirectUrl: `${base}/thank-you?order=${externalId}&oto=1`,
     failureRedirectUrl: `${base}/thank-you?order=${externalId}&oto=failed`,

@@ -1,18 +1,19 @@
 /**
- * OTO invoice externalId encoding. The OTO upsell can be either product, so the
- * externalId carries a product marker the webhook reads to send the right
- * confirmation (and attribute the right product to Meta):
+ * OTO invoice externalId encoding. The OTO upsell can be either product OR
+ * both bundled, so the externalId carries a product marker the webhook reads
+ * to send the right confirmation (and attribute the right product to Meta):
  *
  *   BL-OTO-VAULT-<mainOrder>-<ts>   → the ₱999 AI Secrets Builder Vault (oto)
  *   BL-OTO-1ON1-<mainOrder>-<ts>    → the ₱3,997 1:1 Build Session (oto2)
+ *   BL-OTO-BOTH-<mainOrder>-<ts>    → both bundled (oto + oto2) in one invoice
  *   BL-OTO-<mainOrder>-<ts>         → LEGACY (no marker) → treated as the 1:1
  *
  * mainOrder is itself `BL-MAIN-<ts>-<rand>`, so we strip the marker (if any)
  * then drop the trailing OTO timestamp to recover it.
  */
-export type OtoProduct = 'oto' | 'oto2';
+export type OtoProduct = 'oto' | 'oto2' | 'both';
 
-const MARKER: Record<OtoProduct, string> = { oto: 'VAULT', oto2: '1ON1' };
+const MARKER: Record<OtoProduct, string> = { oto: 'VAULT', oto2: '1ON1', both: 'BOTH' };
 
 export function buildOtoExternalId(product: OtoProduct, mainOrder: string): string {
   return `BL-OTO-${MARKER[product]}-${mainOrder}-${Date.now()}`;
@@ -25,6 +26,7 @@ export function buildOtoExternalId(product: OtoProduct, mainOrder: string): stri
  * externalId) instead of handleOtoPaid (which expects a parent BL-MAIN order).
  *
  *   BL-OTOX-1ON1-<ts>-<rand>   → standalone ₱3,997 1:1 Build Session (oto2)
+ *   BL-OTOX-BOTH-<ts>-<rand>   → standalone bundle (oto + oto2) in one invoice
  */
 export function buildStandaloneOtoExternalId(product: OtoProduct): string {
   const rand = Math.random().toString(36).slice(2, 8);
@@ -32,9 +34,11 @@ export function buildStandaloneOtoExternalId(product: OtoProduct): string {
 }
 
 /** Product of a standalone (`BL-OTOX-`) externalId — VAULT = the ₱999 Vault,
- *  otherwise the ₱3,997 1:1. */
+ *  BOTH = the bundle, otherwise the ₱3,997 1:1. */
 export function parseStandaloneOtoProduct(externalId: string): OtoProduct {
-  return externalId.includes('-VAULT-') ? 'oto' : 'oto2';
+  if (externalId.includes('-BOTH-')) return 'both';
+  if (externalId.includes('-VAULT-')) return 'oto';
+  return 'oto2';
 }
 
 export function parseOtoExternalId(externalId: string): {
@@ -45,7 +49,10 @@ export function parseOtoExternalId(externalId: string): {
   // Legacy IDs (and the post-checkout /oto flow before this change) had no
   // marker — those were always the 1:1, so default to 'oto2'.
   let product: OtoProduct = 'oto2';
-  if (stripped.startsWith('VAULT-')) {
+  if (stripped.startsWith('BOTH-')) {
+    product = 'both';
+    stripped = stripped.slice('BOTH-'.length);
+  } else if (stripped.startsWith('VAULT-')) {
     product = 'oto';
     stripped = stripped.slice('VAULT-'.length);
   } else if (stripped.startsWith('1ON1-')) {
