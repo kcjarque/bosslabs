@@ -664,9 +664,7 @@ Your <strong>${tierLabel}</strong> is locked in.</p>
 <p>We'll send the exact venue + schedule + prep checklist a few days before the bootcamp.</p>
 ${balanceLine}
 <p>Get ready to ship.</p>
-<p>— BossLabs AI</p>
-<hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb"/>
-<p style="font-size:14px;line-height:1.5"><strong>🙏 Help us reach more Filipino founders.</strong><br/>Every review pushes BossLabs in front of one more boss who needs to see this. 30 seconds, one sentence, massive impact.<br/><a href="https://www.facebook.com/bosslabsai/" style="display:inline-block;margin-top:8px;padding:10px 18px;background:#00B8E6;color:#06070A;text-decoration:none;border-radius:999px;font-weight:600">Leave us a quick review →</a></p>`;
+<p>— BossLabs AI</p>`;
   await sendEmail({ to: r.email, subject, html }).catch(() => null);
   if (r.phone) {
     const smsTail = isFullyPaid ? `fully paid` : `DP of PHP ${amountPhp.toLocaleString('en-PH')}`;
