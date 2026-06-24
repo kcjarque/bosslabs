@@ -92,7 +92,13 @@ export default async function BootcampPaymentPage({
               match it fast.
             </p>
             <div className="mt-5">
-              <BootcampPayPanel reservationId={r.id} transferNote={r.name} />
+              <BootcampPayPanel
+                reservationId={r.id}
+                transferNote={r.name}
+                downpaymentCentavos={r.amountDueCentavos}
+                totalCentavos={r.totalCentavos}
+                balanceDueCentavos={r.balanceDueCentavos}
+              />
             </div>
           </div>
 

@@ -562,42 +562,54 @@ async function handleBootcampPaid(event: XenditEvent) {
     return NextResponse.json({ ok: true, alreadyPaid: true });
   }
 
+  const amountPhp = event.amount ?? r.amountDueCentavos / 100;
+  const paidCentavos = Math.round(amountPhp * 100);
+  const isFullPayment = paidCentavos >= r.totalCentavos;
+
   await markBootcampReservationPaid(uuid, {
     invoiceId: event.id,
     paidAtIso: new Date().toISOString(),
+    zeroBalance: isFullPayment,
   });
 
-  const amountPhp = event.amount ?? r.amountDueCentavos / 100;
   const tierLabel = tierById(r.tier)?.label ?? r.tier;
   const firstName = r.name.split(/\s+/)[0] || r.name;
+  const remainingBalanceCentavos = isFullPayment ? 0 : r.balanceDueCentavos;
 
-  // Customer confirmation
-  const subject = `Bootcamp seat locked — see you on event day`;
+  // Customer confirmation — different copy when fully paid vs DP-only.
+  const subject = isFullPayment
+    ? `Bootcamp seat fully paid — see you on event day`
+    : `Bootcamp seat locked — see you on event day`;
+  const paidLabel = isFullPayment ? 'payment in full' : 'downpayment';
+  const balanceLine =
+    remainingBalanceCentavos > 0
+      ? `<p>The balance of <strong>₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day — the team will reach out with the easiest way to settle it.</p>`
+      : `<p>You're fully paid — nothing left to settle. Just show up and ship.</p>`;
   const html = `
 <p>Hi ${firstName},</p>
-<p>Confirmed! Your downpayment of <strong>₱${amountPhp.toLocaleString('en-PH')}</strong> cleared.
+<p>Confirmed! Your ${paidLabel} of <strong>₱${amountPhp.toLocaleString('en-PH')}</strong> cleared.
 Your <strong>${tierLabel}</strong> is locked in.</p>
-<p>We'll send the exact venue + schedule + prep checklist a few days before the bootcamp.
-The balance of <strong>₱${(r.balanceDueCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day —
-the team will reach out with the easiest way to settle it.</p>
+<p>We'll send the exact venue + schedule + prep checklist a few days before the bootcamp.</p>
+${balanceLine}
 <p>Get ready to ship.</p>
 <p>— BossLabs AI</p>`;
   await sendEmail({ to: r.email, subject, html }).catch(() => null);
   if (r.phone) {
+    const smsTail = isFullPayment ? `fully paid` : `DP of PHP ${amountPhp.toLocaleString('en-PH')}`;
     await sendSms({
       to: r.phone,
-      body: `Confirmed! AI Founder's Bootcamp DP of PHP ${amountPhp.toLocaleString('en-PH')} cleared. Your ${tierLabel} is locked. We'll send event details soon.`,
+      body: `Confirmed! AI Founder's Bootcamp ${smsTail} cleared. Your ${tierLabel} is locked. We'll send event details soon.`,
     }).catch(() => null);
   }
 
   await sendTelegram(
-    `🎯 <b>AI Founder's Bootcamp — downpayment confirmed!</b>\n\n` +
+    `🎯 <b>AI Founder's Bootcamp — ${isFullPayment ? 'FULLY PAID' : 'downpayment'} confirmed!</b>\n\n` +
       `<b>${esc(r.name)}</b>${r.company ? ` (${esc(r.company)})` : ''}\n` +
       `${esc(r.email)}\n` +
       `📱 ${r.phone ? esc(r.phone) : '—'}\n` +
       `🎟️ ${esc(tierLabel)} — ${r.seats} seat${r.seats === 1 ? '' : 's'}\n` +
-      `💰 DP paid: <b>₱${amountPhp.toLocaleString('en-PH')}</b>\n` +
-      `📋 Balance due: ₱${(r.balanceDueCentavos / 100).toLocaleString('en-PH')}\n` +
+      `💰 Paid: <b>₱${amountPhp.toLocaleString('en-PH')}</b> (${paidLabel})\n` +
+      `📋 Balance due: ₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}\n` +
       `Order: <code>${esc(event.external_id ?? '')}</code>\n` +
       `Xendit invoice: <code>${esc(event.id ?? '')}</code>`,
   );

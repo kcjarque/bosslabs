@@ -13,7 +13,9 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const { id } = (await req.json().catch(() => ({}))) as { id?: string };
+    const body = (await req.json().catch(() => ({}))) as { id?: string; payIn?: 'dp' | 'full' };
+    const id = body.id;
+    const payIn: 'dp' | 'full' = body.payIn === 'full' ? 'full' : 'dp';
     if (!id) return NextResponse.json({ error: 'Missing reservation id.' }, { status: 400 });
 
     const r = await getBootcampReservation(id);
@@ -22,20 +24,21 @@ export async function POST(req: Request) {
     const base = siteUrl(req);
     const doneUrl = `${base}/founders-bootcamp/reserve/${id}/done?paid=card`;
 
-    if (r.status === 'paid') {
+    if (r.status === 'paid' && r.balanceDueCentavos === 0) {
       return NextResponse.json({ redirectUrl: doneUrl, alreadyPaid: true });
     }
 
-    const amountCentavos = r.amountDueCentavos;
+    const amountCentavos = payIn === 'full' ? r.totalCentavos : r.amountDueCentavos;
     if (!amountCentavos || amountCentavos < 100) {
       return NextResponse.json({ error: 'Invalid amount for this reservation.' }, { status: 400 });
     }
 
     const tierLabel = tierById(r.tier)?.label ?? r.tier;
+    const label = payIn === 'full' ? 'full payment' : 'downpayment';
     const invoice = await createInvoice({
       externalId: `BL-BOOTCAMP-${id}-${Date.now()}`,
       amount: amountCentavos / 100,
-      description: `AI Founder's Bootcamp — ${tierLabel} downpayment (${r.name})`,
+      description: `AI Founder's Bootcamp — ${tierLabel} ${label} (${r.name})`,
       payerEmail: r.email,
       successRedirectUrl: doneUrl,
       failureRedirectUrl: `${base}/founders-bootcamp/reserve/${id}?status=failed`,

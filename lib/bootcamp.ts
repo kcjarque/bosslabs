@@ -334,17 +334,16 @@ export async function markBootcampReservationProof(id: string): Promise<void> {
 
 export async function markBootcampReservationPaid(
   id: string,
-  opts: { invoiceId?: string | null; paidAtIso?: string } = {},
+  opts: { invoiceId?: string | null; paidAtIso?: string; zeroBalance?: boolean } = {},
 ): Promise<void> {
   if (!isSupabaseConfigured()) return;
-  await getSupabase()
-    .from('bootcamp_reservations')
-    .update({
-      status: 'paid',
-      paid_at: opts.paidAtIso ?? new Date().toISOString(),
-      xendit_invoice_id: opts.invoiceId ?? null,
-    })
-    .eq('id', id);
+  const update: Record<string, unknown> = {
+    status: 'paid',
+    paid_at: opts.paidAtIso ?? new Date().toISOString(),
+    xendit_invoice_id: opts.invoiceId ?? null,
+  };
+  if (opts.zeroBalance) update.balance_due_centavos = 0;
+  await getSupabase().from('bootcamp_reservations').update(update).eq('id', id);
 }
 
 export async function listBootcampReservations(): Promise<BootcampReservation[]> {
