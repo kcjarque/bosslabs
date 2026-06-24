@@ -57,6 +57,10 @@ export function OtoOfferCard({ orderId }: { orderId: string }) {
   function toggle(p: Product) {
     setApplied(null);
     setPromoError(null);
+    // Clear the input too — otherwise toggling 'both' on then off leaves a
+    // pre-filled code with no applied banner, misleading the buyer that the
+    // discount is still active when it isn't.
+    setPromoInput('');
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(p)) {

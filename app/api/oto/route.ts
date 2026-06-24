@@ -48,11 +48,15 @@ type Body = {
 
 /** Resolve the picked product → price, description, confirmation templates.
  *  For 'both' we synthesize a combined "offer" for invoice purposes; the
- *  webhook sends both per-product confirmation emails on clear. */
-function resolve(body: Body) {
-  let product: OtoProduct = 'oto2';
-  if (body.product === 'oto') product = 'oto';
-  else if (body.product === 'both') product = 'both';
+ *  webhook sends both per-product confirmation emails on clear.
+ *  Throws when product is missing/unknown so a case typo never silently
+ *  charges the wrong upsell. The POST handler catches and 400s. */
+function resolve(body: Body): { product: OtoProduct; priceCentavos: number; description: string; confirmTemplates: readonly string[] } {
+  const raw = body.product;
+  if (raw !== 'oto' && raw !== 'oto2' && raw !== 'both') {
+    throw new Error(`Invalid product "${String(raw)}". Expected 'oto' | 'oto2' | 'both'.`);
+  }
+  const product: OtoProduct = raw;
 
   if (product === 'both') {
     const priceCentavos = OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos;
@@ -86,7 +90,14 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const promoCode = (body.promoCode || '').trim();
-    const { product, priceCentavos, description, confirmTemplates } = resolve(body);
+    let resolved;
+    try {
+      resolved = resolve(body);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid product';
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const { product, priceCentavos, description, confirmTemplates } = resolved;
 
     // Promo codes are scoped to a single product — when the buyer picks the
     // combined bundle we refuse the code (clearer than silently dropping it).

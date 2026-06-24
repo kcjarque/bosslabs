@@ -2,28 +2,24 @@ import { listBootcampCards } from '@/lib/bootcamp-crm';
 import {
   BOOTCAMP_TOTAL_SEATS,
   bootcampSeatsRemaining,
-  getLatestBootcampCode,
-  listBootcampCodes,
   listBootcampReservations,
   BOOTCAMP_TIERS,
 } from '@/lib/bootcamp';
 import { BootcampCrmBoard } from '@/components/admin/BootcampCrmBoard';
-import { BootcampCodeManager } from '@/components/admin/BootcampCodeManager';
 import { formatPHP } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BootcampAdminPage() {
-  const [cards, seatsLeft, latestCode, codes, reservations] = await Promise.all([
+  const [cards, seatsLeft, reservations] = await Promise.all([
     listBootcampCards(),
     bootcampSeatsRemaining(),
-    getLatestBootcampCode(),
-    listBootcampCodes(),
     listBootcampReservations(),
   ]);
 
   const taken = BOOTCAMP_TOTAL_SEATS - seatsLeft;
-  const paidReservations = reservations.filter((r) => r.status === 'paid');
+  // Fully paid = card cleared AND balance is zero (vs. DP-only which is still status='paid').
+  const paidReservations = reservations.filter((r) => r.status === 'paid' && r.balanceDueCentavos === 0);
   const totalDpCollected = reservations
     .filter((r) => r.status !== 'reserved')
     .reduce((sum, r) => sum + r.amountDueCentavos, 0);
@@ -56,17 +52,6 @@ export default async function BootcampAdminPage() {
         <Stat label="Reservations" value={String(reservations.length)} />
         <Stat label="Fully paid" value={String(paidReservations.length)} />
         <Stat label="DP collected" value={formatPHP(totalDpCollected)} subline={`Total contract: ${formatPHP(totalContractValue)}`} />
-      </section>
-
-      {/* Discount code manager */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-3">
-          <h2 className="text-base font-semibold text-slate-900">Webinar discount code</h2>
-          <p className="mt-0.5 text-[13px] text-slate-500">
-            Set the global code that unlocks the ₱25,000 single-seat tier. Expires automatically.
-          </p>
-        </div>
-        <BootcampCodeManager latest={latestCode} all={codes} />
       </section>
 
       {/* Pricing tiers reference */}

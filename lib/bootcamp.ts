@@ -65,111 +65,6 @@ export function tierById(id: BootcampTier | string | null | undefined): Bootcamp
   return BOOTCAMP_TIERS.find((t) => t.id === id) ?? null;
 }
 
-export type BootcampCode = {
-  id: string;
-  code: string;
-  perSeatCentavos: number;
-  startsAt: string;
-  expiresAt: string;
-  isActive: boolean;
-  note: string;
-  createdAt: string;
-};
-
-type BootcampCodeRow = {
-  id: string;
-  code: string;
-  per_seat_centavos: number;
-  starts_at: string;
-  expires_at: string;
-  is_active: boolean;
-  note: string;
-  created_at: string;
-};
-function rowToCode(r: BootcampCodeRow): BootcampCode {
-  return {
-    id: r.id,
-    code: r.code,
-    perSeatCentavos: r.per_seat_centavos,
-    startsAt: r.starts_at,
-    expiresAt: r.expires_at,
-    isActive: r.is_active,
-    note: r.note,
-    createdAt: r.created_at,
-  };
-}
-
-/** The current active code (case-insensitive on the input). Returns null if
- *  no code matches OR the code is expired / disabled. */
-export async function findActiveBootcampCode(input: string): Promise<BootcampCode | null> {
-  if (!isSupabaseConfigured() || !input.trim()) return null;
-  const { data, error } = await getSupabase()
-    .from('bootcamp_discount_codes')
-    .select('*')
-    .ilike('code', input.trim())
-    .eq('is_active', true)
-    .lte('starts_at', new Date().toISOString())
-    .gte('expires_at', new Date().toISOString())
-    .maybeSingle();
-  if (error) return null;
-  return data ? rowToCode(data as BootcampCodeRow) : null;
-}
-
-/** Latest active code (for admin panel display). */
-export async function getLatestBootcampCode(): Promise<BootcampCode | null> {
-  if (!isSupabaseConfigured()) return null;
-  const { data, error } = await getSupabase()
-    .from('bootcamp_discount_codes')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) return null;
-  return data ? rowToCode(data as BootcampCodeRow) : null;
-}
-
-export async function listBootcampCodes(): Promise<BootcampCode[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
-    .from('bootcamp_discount_codes')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) return [];
-  return (data as BootcampCodeRow[]).map(rowToCode);
-}
-
-export async function createBootcampCode(input: {
-  code: string;
-  perSeatCentavos: number;
-  expiresAt: string;
-  note?: string;
-}): Promise<BootcampCode> {
-  if (!isSupabaseConfigured()) throw new Error('Supabase is not configured');
-  // Disable any prior active codes so the "active" code is unambiguous.
-  await getSupabase()
-    .from('bootcamp_discount_codes')
-    .update({ is_active: false })
-    .eq('is_active', true);
-  const { data, error } = await getSupabase()
-    .from('bootcamp_discount_codes')
-    .insert({
-      code: input.code.trim(),
-      per_seat_centavos: input.perSeatCentavos,
-      expires_at: input.expiresAt,
-      note: input.note ?? '',
-      is_active: true,
-    })
-    .select('*')
-    .single();
-  if (error) throw new Error(`createBootcampCode: ${error.message}`);
-  return rowToCode(data as BootcampCodeRow);
-}
-
-export async function deactivateBootcampCode(id: string): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  await getSupabase().from('bootcamp_discount_codes').update({ is_active: false }).eq('id', id);
-}
-
 export async function bootcampSeatsRemaining(): Promise<number> {
   if (!isSupabaseConfigured()) return BOOTCAMP_TOTAL_SEATS;
   const { data, error } = await getSupabase().rpc('bootcamp_seats_remaining');
@@ -211,6 +106,10 @@ export type BootcampReservation = BootcampReservationInput & {
   proofSubmittedAt: string | null;
   paidAt: string | null;
   xenditInvoiceId: string | null;
+  /** Every xendit invoice id that has already been applied to this
+   *  reservation. Lets the webhook accept a 2nd (balance) payment while
+   *  staying idempotent against Xendit's normal retries. */
+  processedInvoiceIds: string[];
 };
 
 type BootcampReservationRow = {
@@ -235,6 +134,7 @@ type BootcampReservationRow = {
   proof_submitted_at: string | null;
   paid_at: string | null;
   xendit_invoice_id: string | null;
+  processed_invoice_ids: string[] | null;
 };
 
 function rowToReservation(r: BootcampReservationRow): BootcampReservation {
@@ -261,6 +161,7 @@ function rowToReservation(r: BootcampReservationRow): BootcampReservation {
     proofSubmittedAt: r.proof_submitted_at,
     paidAt: r.paid_at,
     xenditInvoiceId: r.xendit_invoice_id,
+    processedInvoiceIds: r.processed_invoice_ids ?? [],
   };
 }
 
@@ -316,18 +217,67 @@ export async function markBootcampReservationProof(id: string): Promise<void> {
     .eq('id', id);
 }
 
-export async function markBootcampReservationPaid(
+export type ApplyPaymentResult =
+  | { alreadyProcessed: true }
+  | {
+      alreadyProcessed: false;
+      wasFirstPayment: boolean;
+      paidCentavos: number;
+      newBalanceCentavos: number;
+      fullyPaid: boolean;
+    };
+
+/**
+ * Apply a cleared Xendit payment to the reservation. Idempotent per invoice id:
+ *  - If `invoiceId` is already in `processed_invoice_ids`, returns
+ *    `{alreadyProcessed: true}` and writes nothing — Xendit's normal webhook
+ *    retries don't double-count.
+ *  - Otherwise: decrements `balance_due_centavos` by the paid amount, appends
+ *    the invoice id to the processed list, flips status='paid' on the first
+ *    successful payment, and returns the new balance + whether the reservation
+ *    is now fully paid (balance==0).
+ *
+ * Replaces the previous markBootcampReservationPaid helper which keyed
+ * idempotency on `status==='paid'`. That broke 2-stage flows: after the DP
+ * cleared, the balance payment's webhook was silently dropped.
+ */
+export async function applyBootcampPayment(
   id: string,
-  opts: { invoiceId?: string | null; paidAtIso?: string; zeroBalance?: boolean } = {},
-): Promise<void> {
-  if (!isSupabaseConfigured()) return;
+  paidCentavos: number,
+  opts: { invoiceId?: string | null; paidAtIso?: string } = {},
+): Promise<ApplyPaymentResult> {
+  if (!isSupabaseConfigured()) return { alreadyProcessed: true };
+  const sb = getSupabase();
+  const { data: row, error: readErr } = await sb
+    .from('bootcamp_reservations')
+    .select('balance_due_centavos, status, paid_at, processed_invoice_ids')
+    .eq('id', id)
+    .single();
+  if (readErr || !row) throw new Error(`applyBootcampPayment read: ${readErr?.message ?? 'not found'}`);
+
+  const invoiceId = opts.invoiceId ?? '';
+  const processed = (row.processed_invoice_ids as string[] | null) ?? [];
+  if (invoiceId && processed.includes(invoiceId)) {
+    return { alreadyProcessed: true };
+  }
+
+  const wasFirstPayment = row.status !== 'paid';
+  const newBalance = Math.max(0, (row.balance_due_centavos as number) - paidCentavos);
+  const fullyPaid = newBalance === 0;
+
   const update: Record<string, unknown> = {
     status: 'paid',
-    paid_at: opts.paidAtIso ?? new Date().toISOString(),
-    xendit_invoice_id: opts.invoiceId ?? null,
+    balance_due_centavos: newBalance,
+    xendit_invoice_id: invoiceId || row.processed_invoice_ids?.[0] || null,
+    processed_invoice_ids: invoiceId ? [...processed, invoiceId] : processed,
   };
-  if (opts.zeroBalance) update.balance_due_centavos = 0;
-  await getSupabase().from('bootcamp_reservations').update(update).eq('id', id);
+  // Stamp paid_at only on first payment so it represents the seat-locked moment.
+  if (wasFirstPayment) update.paid_at = opts.paidAtIso ?? new Date().toISOString();
+
+  const { error: writeErr } = await sb.from('bootcamp_reservations').update(update).eq('id', id);
+  if (writeErr) throw new Error(`applyBootcampPayment write: ${writeErr.message}`);
+
+  return { alreadyProcessed: false, wasFirstPayment, paidCentavos, newBalanceCentavos: newBalance, fullyPaid };
 }
 
 export async function listBootcampReservations(): Promise<BootcampReservation[]> {

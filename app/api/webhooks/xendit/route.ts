@@ -33,7 +33,7 @@ import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers'
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-external';
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
-import { getBootcampReservation, markBootcampReservationPaid, tierById } from '@/lib/bootcamp';
+import { applyBootcampPayment, getBootcampReservation, tierById } from '@/lib/bootcamp';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -305,19 +305,29 @@ async function handleOtoPaid(event: XenditEvent) {
     ...baseVars,
     amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
   };
-  let otoEmailRes = { ok: false, id: undefined as string | undefined };
-  for (const tpl of templates) {
-    const res = await sendEmail({ to: signup.email, templateId: tpl, vars: otoVars });
-    if (res.ok) otoEmailRes = { ok: true, id: res.id };
-  }
-  let otoSmsRes: { ok: boolean; id?: string } | null = null;
+  // Send EVERY template — for 'both' that's two emails (one per product). Track
+  // each result so a partial failure (1st ok, 2nd fail) doesn't silently report
+  // success. ok=true only when ALL succeeded.
+  const emailResults = await Promise.all(
+    templates.map((tpl) => sendEmail({ to: signup.email, templateId: tpl, vars: otoVars })),
+  );
+  const emailIds = emailResults.flatMap((r) => (r.ok && r.id ? [r.id] : []));
+  const emailErrors = emailResults
+    .map((r, i) => (!r.ok ? `${templates[i]}: ${r.error}` : ''))
+    .filter(Boolean);
+  const allEmailsOk = emailResults.every((r) => r.ok);
+  if (!allEmailsOk) console.warn('[xendit-webhook] OTO email partial failure', { templates, emailErrors });
+
+  let smsResults: Awaited<ReturnType<typeof sendSms>>[] = [];
   if (signup.phone) {
-    for (const tpl of templates) {
-      const res = await sendSms({ to: signup.phone, templateId: tpl, vars: otoVars });
-      if (res.ok) otoSmsRes = { ok: true, id: res.id };
-      else if (!otoSmsRes) otoSmsRes = { ok: false };
-    }
+    smsResults = await Promise.all(
+      templates.map((tpl) => sendSms({ to: signup.phone!, templateId: tpl, vars: otoVars })),
+    );
+    const smsErrors = smsResults.map((r, i) => (!r.ok ? `${templates[i]}: ${r.error}` : '')).filter(Boolean);
+    if (smsErrors.length) console.warn('[xendit-webhook] OTO sms partial failure', { templates, smsErrors });
   }
+  const smsIds = smsResults.flatMap((r) => (r.ok && r.id ? [r.id] : []));
+  const allSmsOk = !signup.phone || smsResults.every((r) => r.ok);
 
   await updateSignup(signup.id, {
     bumped: true,
@@ -327,10 +337,14 @@ async function handleOtoPaid(event: XenditEvent) {
       otoInvoiceId: event.id,
       otoExternalId: event.external_id,
       otoAmount: event.amount,
-      otoConfirmationStatus: otoEmailRes.ok ? 'sent' : 'failed',
-      ...(otoEmailRes.ok ? { otoConfirmationMessageId: otoEmailRes.id } : {}),
-      ...(otoSmsRes
-        ? { otoConfirmationSmsOk: otoSmsRes.ok, otoConfirmationSmsId: otoSmsRes.ok ? otoSmsRes.id : null }
+      otoConfirmationStatus: allEmailsOk ? 'sent' : 'failed_partial',
+      otoConfirmationMessageIds: emailIds,
+      ...(emailErrors.length ? { otoConfirmationEmailErrors: emailErrors } : {}),
+      ...(signup.phone
+        ? {
+            otoConfirmationSmsOk: allSmsOk,
+            otoConfirmationSmsIds: smsIds,
+          }
         : {}),
     },
   });
@@ -430,19 +444,29 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     ...(await templateVarsForSignup(signup, webinar)),
     amount: `PHP ${amountPhp.toLocaleString('en-PH')}`,
   };
-  let emailRes: { ok: boolean; id?: string } = { ok: false };
-  for (const tpl of templates) {
-    const r = await sendEmail({ to: signup.email, templateId: tpl, vars: otoVars });
-    if (r.ok) emailRes = { ok: true, id: r.id };
-  }
-  let smsRes: { ok: boolean; id?: string } | null = null;
+  // Send EVERY template — for 'both' that's two emails (one per product). Track
+  // each result so a partial failure (1st ok, 2nd fail) doesn't silently report
+  // success. ok=true only when ALL succeeded.
+  const emailResults = await Promise.all(
+    templates.map((tpl) => sendEmail({ to: signup.email, templateId: tpl, vars: otoVars })),
+  );
+  const emailIds = emailResults.flatMap((r) => (r.ok && r.id ? [r.id] : []));
+  const emailErrors = emailResults
+    .map((r, i) => (!r.ok ? `${templates[i]}: ${r.error}` : ''))
+    .filter(Boolean);
+  const allEmailsOk = emailResults.every((r) => r.ok);
+  if (!allEmailsOk) console.warn('[xendit-webhook] standalone OTO email partial failure', { templates, emailErrors });
+
+  let smsResults: Awaited<ReturnType<typeof sendSms>>[] = [];
   if (signup.phone) {
-    for (const tpl of templates) {
-      const r = await sendSms({ to: signup.phone, templateId: tpl, vars: otoVars });
-      if (r.ok) smsRes = { ok: true, id: r.id };
-      else if (!smsRes) smsRes = { ok: false };
-    }
+    smsResults = await Promise.all(
+      templates.map((tpl) => sendSms({ to: signup.phone!, templateId: tpl, vars: otoVars })),
+    );
+    const smsErrors = smsResults.map((r, i) => (!r.ok ? `${templates[i]}: ${r.error}` : '')).filter(Boolean);
+    if (smsErrors.length) console.warn('[xendit-webhook] standalone OTO sms partial failure', { templates, smsErrors });
   }
+  const smsIds = smsResults.flatMap((r) => (r.ok && r.id ? [r.id] : []));
+  const allSmsOk = !signup.phone || smsResults.every((r) => r.ok);
 
   // NOTE: the promo was already redeemed atomically at invoice-create in
   // /api/oto (same as every other money route) — do NOT redeem again here.
@@ -459,10 +483,14 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
       otoConfirmed: new Date().toISOString(),
       otoInvoiceId: event.id,
       otoExternalId: externalId,
-      otoConfirmationStatus: emailRes.ok ? 'sent' : 'failed',
-      ...(emailRes.ok ? { otoConfirmationMessageId: emailRes.id } : {}),
-      ...(smsRes
-        ? { otoConfirmationSmsOk: smsRes.ok, otoConfirmationSmsId: smsRes.ok ? smsRes.id : null }
+      otoConfirmationStatus: allEmailsOk ? 'sent' : 'failed_partial',
+      otoConfirmationMessageIds: emailIds,
+      ...(emailErrors.length ? { otoConfirmationEmailErrors: emailErrors } : {}),
+      ...(signup.phone
+        ? {
+            otoConfirmationSmsOk: allSmsOk,
+            otoConfirmationSmsIds: smsIds,
+          }
         : {}),
     },
   });
@@ -593,29 +621,38 @@ async function handleBootcampPaid(event: XenditEvent) {
     console.warn('[xendit-webhook] no bootcamp reservation matched', uuid);
     return NextResponse.json({ ok: true, matched: false });
   }
-  if (r.status === 'paid') {
-    return NextResponse.json({ ok: true, alreadyPaid: true });
-  }
 
-  const amountPhp = event.amount ?? r.amountDueCentavos / 100;
-  const paidCentavos = Math.round(amountPhp * 100);
-  const isFullPayment = paidCentavos >= r.totalCentavos;
+  // The amount fallback when Xendit omits it depends on whether this is the
+  // first payment (DP expected) or a later one (balance expected). Without a
+  // reliable event.amount we can't infer which — fall back to the smaller of
+  // the two and log so on-call can recover. In practice Xendit always sends
+  // amount on PAID, so this fallback is defensive only.
+  const fallbackCentavos = r.status === 'paid' ? r.balanceDueCentavos : r.amountDueCentavos;
+  const paidCentavos =
+    event.amount != null
+      ? Math.round(event.amount * 100)
+      : (console.warn('[xendit-webhook] BOOTCAMP missing event.amount, using fallback', { uuid, fallbackCentavos }), fallbackCentavos);
 
-  await markBootcampReservationPaid(uuid, {
+  const result = await applyBootcampPayment(uuid, paidCentavos, {
     invoiceId: event.id,
     paidAtIso: new Date().toISOString(),
-    zeroBalance: isFullPayment,
   });
 
+  if (result.alreadyProcessed) {
+    return NextResponse.json({ ok: true, alreadyProcessed: true });
+  }
+
+  const amountPhp = paidCentavos / 100;
+  const isFullyPaid = result.fullyPaid;
   const tierLabel = tierById(r.tier)?.label ?? r.tier;
   const firstName = r.name.split(/\s+/)[0] || r.name;
-  const remainingBalanceCentavos = isFullPayment ? 0 : r.balanceDueCentavos;
+  const remainingBalanceCentavos = result.newBalanceCentavos;
 
   // Customer confirmation — different copy when fully paid vs DP-only.
-  const subject = isFullPayment
+  const subject = isFullyPaid
     ? `Bootcamp seat fully paid — see you on event day`
     : `Bootcamp seat locked — see you on event day`;
-  const paidLabel = isFullPayment ? 'payment in full' : 'downpayment';
+  const paidLabel = isFullyPaid ? 'payment in full' : 'downpayment';
   const balanceLine =
     remainingBalanceCentavos > 0
       ? `<p>The balance of <strong>₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day — the team will reach out with the easiest way to settle it. <em>The downpayment portion is non-refundable.</em></p>`
@@ -630,7 +667,7 @@ ${balanceLine}
 <p>— BossLabs AI</p>`;
   await sendEmail({ to: r.email, subject, html }).catch(() => null);
   if (r.phone) {
-    const smsTail = isFullPayment ? `fully paid` : `DP of PHP ${amountPhp.toLocaleString('en-PH')}`;
+    const smsTail = isFullyPaid ? `fully paid` : `DP of PHP ${amountPhp.toLocaleString('en-PH')}`;
     await sendSms({
       to: r.phone,
       body: `Confirmed! AI Founder's Bootcamp ${smsTail} cleared. Your ${tierLabel} is locked. We'll send event details soon.`,
@@ -638,7 +675,7 @@ ${balanceLine}
   }
 
   await sendTelegram(
-    `🎯 <b>AI Founder's Bootcamp — ${isFullPayment ? 'FULLY PAID' : 'downpayment'} confirmed!</b>\n\n` +
+    `🎯 <b>AI Founder's Bootcamp — ${isFullyPaid ? 'FULLY PAID' : 'downpayment'} confirmed!</b>\n\n` +
       `<b>${esc(r.name)}</b>${r.company ? ` (${esc(r.company)})` : ''}\n` +
       `${esc(r.email)}\n` +
       `📱 ${r.phone ? esc(r.phone) : '—'}\n` +

@@ -38,6 +38,26 @@ export async function POST(req: Request) {
     const r = await getBootcampReservation(id);
     if (!r) return NextResponse.json({ error: 'Reservation not found.' }, { status: 404 });
 
+    // If the card payment already cleared, don't overwrite status='paid' →
+    // 'proof_submitted' (would regress the funnel) and don't re-send the
+    // verification email. Telegram still notifies in case the team wants to
+    // double-check the buyer attached the wrong receipt.
+    if (r.status === 'paid') {
+      const tierLabel0 = tierById(r.tier)?.label ?? r.tier;
+      const bytes0 = await file.arrayBuffer();
+      const filename0 = (file as File).name || 'bootcamp-proof.jpg';
+      await sendTelegramPhoto(
+        bytes0,
+        filename0,
+        [
+          `🎯 <b>Bootcamp proof received AFTER paid</b> — ${esc(r.name)}`,
+          `${esc(tierLabel0)} · already PAID via card`,
+          `(no status change, no extra email — verify if this matters)`,
+        ].join('\n'),
+      ).catch(() => null);
+      return NextResponse.json({ ok: true, alreadyPaid: true });
+    }
+
     const tierLabel = tierById(r.tier)?.label ?? r.tier;
     const bytes = await file.arrayBuffer();
     const filename = (file as File).name || 'bootcamp-proof.jpg';

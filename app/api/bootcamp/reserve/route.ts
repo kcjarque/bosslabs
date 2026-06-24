@@ -38,7 +38,6 @@ export async function POST(req: Request) {
     const phone = String(b.phone ?? '').trim();
     const company = String(b.company ?? '').trim();
     const tier = String(b.tier ?? '').trim() as BootcampTier;
-    const discountCodeInput = String(b.discountCode ?? '').trim();
     const buildIdea = String(b.buildIdea ?? '').trim();
     const heardFrom = String(b.heardFrom ?? '').trim();
     const paymentMethod = b.paymentMethod as BootcampMethod | undefined;
@@ -62,8 +61,6 @@ export async function POST(req: Request) {
     const tierDef = tierById(tier);
     if (!tierDef) return NextResponse.json({ error: 'Pick a ticket tier.' }, { status: 400 });
     const perSeatCentavos = tierDef.perSeatCentavos;
-    // discountCodeInput is captured for back-compat audit; no tier currently uses it.
-    const storedDiscountCode = discountCodeInput;
 
     // Group tier: ensure at least (seats - 1) other members provided so the
     // roster is complete enough to onboard. We don't strictly validate emails
@@ -114,7 +111,6 @@ export async function POST(req: Request) {
         groupMembers: trimmedMembers,
         buildIdea,
         heardFrom,
-        discountCode: storedDiscountCode,
         paymentMethod,
       });
     } catch (err) {
@@ -140,7 +136,6 @@ export async function POST(req: Request) {
       `📱 ${esc(phone)}`,
       `🎟️ ${esc(tierLabel)} — ${seats} seat${seats === 1 ? '' : 's'} @ ${phpPlain(perSeatCentavos)}`,
       `💰 Total: ${phpPlain(totalCentavos)} — DP due: ${phpPlain(amountDueCentavos)}`,
-      storedDiscountCode ? `🎁 Code: <code>${esc(storedDiscountCode)}</code>` : '',
       trimmedMembers.length
         ? `👥 Group: ${trimmedMembers.map((m) => esc(m.name)).join(', ')}`
         : '',

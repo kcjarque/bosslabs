@@ -77,11 +77,6 @@ export default async function BootcampPaymentPage({
                 before bootcamp day
               </div>
             )}
-            {r.discountCode && (
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/[0.07] px-3 py-1 text-[11px] font-semibold text-emerald-200">
-                Code applied: <code className="font-mono">{r.discountCode}</code>
-              </div>
-            )}
           </div>
 
           {/* Pay options */}
