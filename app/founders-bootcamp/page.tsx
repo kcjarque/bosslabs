@@ -227,6 +227,8 @@ function Hero({ seatsLeft, seatsTaken }: { seatsLeft: number; seatsTaken: number
 
               <p className="mt-4 px-2 text-center text-[12px] leading-relaxed text-ink-400">
                 Lock your seat with a ₱10,000 downpayment. Balance settles before bootcamp day.
+                <br />
+                <span className="font-medium text-amber-300/90">Downpayment is non-refundable.</span>
               </p>
             </div>
           </div>
@@ -423,6 +425,9 @@ function Pricing() {
                   <div className="text-[11px] text-ink-400">Reserve with</div>
                   <div className="mt-1 text-base font-semibold text-white tabular-nums">
                     {formatPHP(tier.downpaymentCentavos)} downpayment
+                  </div>
+                  <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.16em] text-amber-300/80">
+                    Non-refundable
                   </div>
                 </div>
 

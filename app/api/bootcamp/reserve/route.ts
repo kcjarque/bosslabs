@@ -179,6 +179,7 @@ export async function POST(req: Request) {
 You can pay by credit card or bank transfer from your reservation page:</p>
 <p><a href="https://bosslabs.live/founders-bootcamp/reserve/${r.id}" style="display:inline-block;padding:12px 20px;background:#00B8E6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Complete reservation</a></p>
 <p>Once we see the downpayment we'll send your seat confirmation + bootcamp details.</p>
+<p style="color:#b45309;font-size:13px"><strong>Heads up:</strong> the downpayment is non-refundable — only pay once you're committed to showing up.</p>
 <p>— BossLabs AI</p>`;
     await sendEmail({ to: email, subject, html }).catch(() => null);
     if (phone) {

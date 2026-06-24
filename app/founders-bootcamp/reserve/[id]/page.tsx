@@ -64,7 +64,10 @@ export default async function BootcampPaymentPage({
             <div className="mt-2 font-serif text-[56px] leading-none tracking-tight text-white tabular-nums">
               {formatPHP(r.amountDueCentavos)}
             </div>
-            <div className="mt-2 text-[13.5px] text-ink-300">
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/[0.07] px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+              Non-refundable
+            </div>
+            <div className="mt-3 text-[13.5px] text-ink-300">
               {tierLabel} · {r.seats} seat{r.seats === 1 ? '' : 's'} @ {formatPHP(r.perSeatCentavos)}
             </div>
             {r.balanceDueCentavos > 0 && (

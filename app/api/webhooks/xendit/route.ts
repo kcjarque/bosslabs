@@ -583,7 +583,7 @@ async function handleBootcampPaid(event: XenditEvent) {
   const paidLabel = isFullPayment ? 'payment in full' : 'downpayment';
   const balanceLine =
     remainingBalanceCentavos > 0
-      ? `<p>The balance of <strong>₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day — the team will reach out with the easiest way to settle it.</p>`
+      ? `<p>The balance of <strong>₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day — the team will reach out with the easiest way to settle it. <em>The downpayment portion is non-refundable.</em></p>`
       : `<p>You're fully paid — nothing left to settle. Just show up and ship.</p>`;
   const html = `
 <p>Hi ${firstName},</p>

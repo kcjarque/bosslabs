@@ -195,6 +195,7 @@ export function BootcampReserveFlow({
                 <p className="mt-3 text-[12.5px] leading-[1.5] text-ink-200">{t.tagline}</p>
                 <div className="mt-3 border-t border-white/[0.06] pt-3 text-[12px] text-ink-300">
                   Downpayment <span className="font-semibold text-white">{formatPHP(t.downpaymentCentavos)}</span>
+                  <span className="ml-1 text-amber-300/80">· non-refundable</span>
                 </div>
               </button>
             );
@@ -329,6 +330,9 @@ export function BootcampReserveFlow({
               <div className="text-[11px] uppercase tracking-[0.18em] text-ink-400">Downpayment due</div>
               <div className="mt-1 font-serif text-3xl text-white tabular-nums">
                 {formatPHP(selected.downpaymentCentavos)}
+                <span className="ml-2 align-middle text-[10.5px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+                  Non-refundable
+                </span>
               </div>
               <div className="text-[12px] text-ink-400">
                 Total {formatPHP(selected.totalCentavos)} · balance {formatPHP(selected.totalCentavos - selected.downpaymentCentavos)} due before bootcamp

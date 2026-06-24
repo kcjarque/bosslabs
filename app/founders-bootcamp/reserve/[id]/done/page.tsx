@@ -92,6 +92,9 @@ export default async function DonePage({
             </p>
             <p>Need to reach us? Reply to the confirmation email and we'll handle it.</p>
           </div>
+          <p className="mt-6 text-[11.5px] uppercase tracking-[0.18em] text-amber-300/80">
+            Downpayment is non-refundable
+          </p>
 
           <div className="mt-10">
             <Link

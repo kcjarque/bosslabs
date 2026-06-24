@@ -47,8 +47,8 @@ export function BootcampPayPanel({
             amount={downpaymentCentavos}
             note={
               balanceDueCentavos > 0
-                ? `Balance ${fmtPHP(balanceDueCentavos)} due before bootcamp`
-                : 'Lock your seat now'
+                ? `Balance ${fmtPHP(balanceDueCentavos)} due before bootcamp · downpayment is non-refundable`
+                : 'Lock your seat now · non-refundable'
             }
           />
           <ChoiceCard
