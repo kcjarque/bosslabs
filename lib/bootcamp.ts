@@ -1,11 +1,10 @@
 /**
- * AI Founder's Bootcamp — pricing, discount codes, reservations, ticket cap.
+ * AI Founder's Bootcamp — pricing, reservations, ticket cap.
  *
  * Pricing tiers (per-seat ₱):
- *   single        →  35,000 (regular)
- *   single_promo  →  25,000 (with active webinar code)
- *   group3        →  22,000 × 3 seats = 66,000 total
- *   group5        →  20,000 × 5 seats = 100,000 total
+ *   single  →  25,000
+ *   group3  →  22,000 × 3 seats = 66,000 total
+ *   group5  →  20,000 × 5 seats = 100,000 total
  * Downpayment-to-reserve = ₱10,000 × seats. Balance due before bootcamp day.
  * Hard cap: 80 seats — enforced both in this lib and by the DB trigger.
  */
@@ -14,7 +13,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 export const BOOTCAMP_TOTAL_SEATS = 80;
 export const BOOTCAMP_DOWNPAYMENT_PER_SEAT_CENTAVOS = 10_000_00; // ₱10,000
 
-export type BootcampTier = 'single' | 'single_promo' | 'group3' | 'group5';
+export type BootcampTier = 'single' | 'group3' | 'group5';
 export type BootcampMethod = 'Credit Card' | 'Bank Transfer';
 export type BootcampStatus = 'reserved' | 'proof_submitted' | 'paid';
 
@@ -25,7 +24,6 @@ export type BootcampTierDef = {
   seats: number;
   totalCentavos: number;
   downpaymentCentavos: number;
-  requiresCode: boolean;
   badge?: string;
   tagline: string;
 };
@@ -33,24 +31,12 @@ export type BootcampTierDef = {
 export const BOOTCAMP_TIERS: BootcampTierDef[] = [
   {
     id: 'single',
-    label: '1 seat — Standard',
-    perSeatCentavos: 35_000_00,
-    seats: 1,
-    totalCentavos: 35_000_00,
-    downpaymentCentavos: BOOTCAMP_DOWNPAYMENT_PER_SEAT_CENTAVOS,
-    requiresCode: false,
-    tagline: 'Solo founder, full investment.',
-  },
-  {
-    id: 'single_promo',
-    label: '1 seat — Webinar attendee',
+    label: '1 seat',
     perSeatCentavos: 25_000_00,
     seats: 1,
     totalCentavos: 25_000_00,
     downpaymentCentavos: BOOTCAMP_DOWNPAYMENT_PER_SEAT_CENTAVOS,
-    requiresCode: true,
-    badge: 'Code required',
-    tagline: '₱10,000 off — code expires 24 hours after the webinar.',
+    tagline: 'Solo founder — your one shot at shipping in 24 hours.',
   },
   {
     id: 'group3',
@@ -59,8 +45,7 @@ export const BOOTCAMP_TIERS: BootcampTierDef[] = [
     seats: 3,
     totalCentavos: 66_000_00,
     downpaymentCentavos: BOOTCAMP_DOWNPAYMENT_PER_SEAT_CENTAVOS * 3,
-    requiresCode: false,
-    badge: 'Save ₱39,000',
+    badge: 'Save ₱9,000',
     tagline: 'Bring two co-founders or your operating team.',
   },
   {
@@ -70,8 +55,7 @@ export const BOOTCAMP_TIERS: BootcampTierDef[] = [
     seats: 5,
     totalCentavos: 100_000_00,
     downpaymentCentavos: BOOTCAMP_DOWNPAYMENT_PER_SEAT_CENTAVOS * 5,
-    requiresCode: false,
-    badge: 'Save ₱75,000',
+    badge: 'Save ₱25,000',
     tagline: 'Whole team. Whole stack. Built in 24 hours.',
   },
 ];

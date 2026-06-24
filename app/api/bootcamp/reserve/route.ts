@@ -11,7 +11,6 @@ import {
   BOOTCAMP_TIERS,
   bootcampSeatsRemaining,
   createBootcampReservation,
-  findActiveBootcampCode,
   tierById,
   type BootcampGroupMember,
   type BootcampMethod,
@@ -62,27 +61,9 @@ export async function POST(req: Request) {
 
     const tierDef = tierById(tier);
     if (!tierDef) return NextResponse.json({ error: 'Pick a ticket tier.' }, { status: 400 });
-
-    // Promo tier requires an active code. Locks price at code's per_seat rate.
-    let perSeatCentavos = tierDef.perSeatCentavos;
-    let storedDiscountCode = '';
-    if (tierDef.requiresCode) {
-      if (!discountCodeInput) {
-        return NextResponse.json(
-          { error: 'This tier needs the webinar discount code.' },
-          { status: 400 },
-        );
-      }
-      const code = await findActiveBootcampCode(discountCodeInput);
-      if (!code) {
-        return NextResponse.json(
-          { error: 'That code is invalid or has expired.' },
-          { status: 400 },
-        );
-      }
-      perSeatCentavos = code.perSeatCentavos;
-      storedDiscountCode = code.code;
-    }
+    const perSeatCentavos = tierDef.perSeatCentavos;
+    // discountCodeInput is captured for back-compat audit; no tier currently uses it.
+    const storedDiscountCode = discountCodeInput;
 
     // Group tier: ensure at least (seats - 1) other members provided so the
     // roster is complete enough to onboard. We don't strictly validate emails

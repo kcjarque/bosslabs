@@ -27,10 +27,9 @@ export function BootcampReserveFlow({
 }) {
   const router = useRouter();
 
-  // Default to the promo tier if it's available, else first tier the user can fit.
+  // Default to the preset tier if present + available, else the first that fits.
   const initialTier =
     (tiers.find((t) => t.id === presetTier && t.seats <= seatsLeft)?.id ??
-      tiers.find((t) => t.id === 'single_promo' && t.seats <= seatsLeft)?.id ??
       tiers.find((t) => t.seats <= seatsLeft)?.id ??
       tiers[0].id) as BootcampTier;
 
@@ -43,10 +42,6 @@ export function BootcampReserveFlow({
   const [company, setCompany] = useState('');
   const [buildIdea, setBuildIdea] = useState('');
   const [heardFrom, setHeardFrom] = useState('');
-  const [discountCode, setDiscountCode] = useState('');
-  const [codeStatus, setCodeStatus] = useState<
-    { state: 'idle' } | { state: 'checking' } | { state: 'ok'; expiresAt: string } | { state: 'bad'; reason: string }
-  >({ state: 'idle' });
   const [members, setMembers] = useState<GroupMember[]>([]);
 
   // Adjust members array when tier changes (need seats - 1 additional members)
@@ -60,36 +55,8 @@ export function BootcampReserveFlow({
     });
   }, [selected.seats]);
 
-  // Reset code status when tier changes away from promo
-  useEffect(() => {
-    if (!selected.requiresCode) setCodeStatus({ state: 'idle' });
-  }, [selected.requiresCode]);
-
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function checkCode() {
-    if (!discountCode.trim()) {
-      setCodeStatus({ state: 'bad', reason: 'Enter your webinar code.' });
-      return;
-    }
-    setCodeStatus({ state: 'checking' });
-    try {
-      const res = await fetch('/api/bootcamp/check-code', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: discountCode.trim() }),
-      });
-      const json = (await res.json()) as { ok: boolean; reason?: string; expiresAt?: string };
-      if (!json.ok) {
-        setCodeStatus({ state: 'bad', reason: json.reason || 'Invalid code.' });
-      } else {
-        setCodeStatus({ state: 'ok', expiresAt: json.expiresAt ?? '' });
-      }
-    } catch {
-      setCodeStatus({ state: 'bad', reason: 'Could not verify the code. Try again.' });
-    }
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,10 +68,6 @@ export function BootcampReserveFlow({
     }
     if (selected.seats > seatsLeft) {
       setError(`Only ${seatsLeft} seat${seatsLeft === 1 ? '' : 's'} left — pick a smaller tier.`);
-      return;
-    }
-    if (selected.requiresCode && codeStatus.state !== 'ok') {
-      setError('Verify your webinar code first.');
       return;
     }
     if (selected.seats > 1) {
@@ -128,7 +91,6 @@ export function BootcampReserveFlow({
           tier,
           buildIdea: buildIdea.trim(),
           heardFrom: heardFrom.trim(),
-          discountCode: selected.requiresCode ? discountCode.trim() : '',
           groupMembers: members.filter((m) => m.name.trim()),
         }),
       });
@@ -202,50 +164,6 @@ export function BootcampReserveFlow({
           })}
         </div>
       </section>
-
-      {/* Code field if promo */}
-      {selected.requiresCode && (
-        <section>
-          <h2 className="mb-3 font-serif text-2xl text-white">Webinar discount code</h2>
-          <div className="rounded-2xl border border-cyan-400/25 bg-cyan-500/[0.04] p-5">
-            <p className="text-[13.5px] leading-[1.55] text-ink-200">
-              Punched in during the webinar. Drops your seat from{' '}
-              <span className="line-through decoration-rose-400/60">₱35,000</span>{' '}
-              <span className="font-semibold text-white">{formatPHP(selected.perSeatCentavos)}</span>
-              . The code expires 24 hours after the webinar.
-            </p>
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <input
-                type="text"
-                value={discountCode}
-                onChange={(e) => {
-                  setDiscountCode(e.target.value.toUpperCase());
-                  setCodeStatus({ state: 'idle' });
-                }}
-                placeholder="WEBINAR-CODE"
-                className={`${inputCls} font-mono tracking-[0.18em]`}
-                autoCapitalize="characters"
-              />
-              <button
-                type="button"
-                onClick={checkCode}
-                disabled={codeStatus.state === 'checking'}
-                className="rounded-xl border border-cyan-400/40 bg-cyan-500/[0.12] px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/70 hover:bg-cyan-500/[0.18] disabled:opacity-50"
-              >
-                {codeStatus.state === 'checking' ? 'Checking…' : codeStatus.state === 'ok' ? 'Verified ✓' : 'Verify code'}
-              </button>
-            </div>
-            {codeStatus.state === 'bad' && (
-              <p className="mt-3 text-[13px] text-rose-300">{codeStatus.reason}</p>
-            )}
-            {codeStatus.state === 'ok' && (
-              <p className="mt-3 text-[13px] text-emerald-300">
-                Code locked in — your seat is {formatPHP(selected.perSeatCentavos)}.
-              </p>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* Group members if group tier */}
       {selected.seats > 1 && (

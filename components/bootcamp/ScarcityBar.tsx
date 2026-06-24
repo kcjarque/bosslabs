@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { BootcampReserveButton } from '@/components/bootcamp/BootcampReserveButton';
+import { BOOTCAMP_TIERS } from '@/lib/bootcamp';
 
 export function ScarcityBar({
   seatsLeft,
@@ -50,12 +51,13 @@ export function ScarcityBar({
           </div>
         </div>
         {seatsLeft > 0 && (
-          <Link
-            href="/founders-bootcamp/reserve"
-            className="rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(0,150,200,0.65)] transition hover:from-cyan-400 hover:to-indigo-400 active:translate-y-[1px] sm:px-5 sm:text-[13px]"
-          >
-            Reserve →
-          </Link>
+          <BootcampReserveButton
+            tiers={BOOTCAMP_TIERS}
+            seatsLeft={seatsLeft}
+            variant="primary"
+            label="Reserve →"
+            className="!px-4 !py-2 !text-[12.5px] sm:!px-5 sm:!text-[13px]"
+          />
         )}
       </div>
     </div>

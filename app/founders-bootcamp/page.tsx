@@ -2,9 +2,15 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
-import { BOOTCAMP_TIERS, bootcampSeatsRemaining, BOOTCAMP_TOTAL_SEATS } from '@/lib/bootcamp';
+import {
+  BOOTCAMP_TIERS,
+  bootcampSeatsRemaining,
+  BOOTCAMP_TOTAL_SEATS,
+  type BootcampTierDef,
+} from '@/lib/bootcamp';
 import { formatPHP } from '@/lib/config';
 import { ScarcityBar } from '@/components/bootcamp/ScarcityBar';
+import { BootcampReserveButton } from '@/components/bootcamp/BootcampReserveButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +58,7 @@ export default async function FoundersBootcampPage() {
         <ForYou />
         <Methodology />
         <WalkOutWith />
-        <Pricing />
+        <Pricing seatsLeft={seatsLeft} />
         <TheTruth />
         <FinalCta seatsLeft={seatsLeft} />
       </main>
@@ -94,12 +100,7 @@ function Header() {
         <Link href="/" className="opacity-90 transition hover:opacity-100">
           <Logo />
         </Link>
-        <Link
-          href="/founders-bootcamp/reserve"
-          className="hidden rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/85 transition hover:border-cyan-400/50 hover:bg-cyan-500/[0.08] hover:text-white sm:inline-flex"
-        >
-          Reserve a seat
-        </Link>
+        {/* Header CTA is a placeholder; primary CTAs live in Hero / Pricing / FinalCta. */}
       </div>
     </header>
   );
@@ -137,15 +138,12 @@ function Hero({ seatsLeft, seatsTaken }: { seatsLeft: number; seatsTaken: number
 
             {/* Primary CTA */}
             <div className="mt-9 flex flex-wrap items-center gap-4">
-              <Link
-                href="/founders-bootcamp/reserve"
-                className="group inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 px-7 py-4 text-base font-semibold text-white shadow-[0_18px_44px_-12px_rgba(0,150,200,0.7)] transition hover:from-cyan-400 hover:to-indigo-400 active:translate-y-[1px]"
-              >
-                Reserve a seat — ₱10,000 DP
+              <BootcampReserveButton tiers={BOOTCAMP_TIERS} seatsLeft={seatsLeft} variant="primary">
+                Reserve a seat — register first
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="transition group-hover:translate-x-1">
                   <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </Link>
+              </BootcampReserveButton>
               <a
                 href="#tiers"
                 className="text-sm font-medium text-cyan-300/90 underline-offset-4 transition hover:text-cyan-200 hover:underline"
@@ -158,8 +156,8 @@ function Hero({ seatsLeft, seatsTaken }: { seatsLeft: number; seatsTaken: number
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-300">
               <div>
                 Investment{' '}
-                <span className="font-semibold text-white">{formatPHP(35_000_00)}</span>{' '}
-                <span className="text-ink-400">/ {formatPHP(25_000_00)} for webinar grads</span>
+                <span className="font-semibold text-white">{formatPHP(25_000_00)}</span>{' '}
+                <span className="text-ink-400">/ seat</span>
               </div>
               <div className="text-ink-400">Corporate trio {formatPHP(22_000_00)} · squad of 5 {formatPHP(20_000_00)}</div>
             </div>
@@ -217,12 +215,14 @@ function Hero({ seatsLeft, seatsTaken }: { seatsLeft: number; seatsTaken: number
                   </div>
                 </div>
 
-                <Link
-                  href="/founders-bootcamp/reserve"
-                  className="mt-7 flex items-center justify-center rounded-full border border-cyan-400/40 bg-cyan-500/[0.08] px-5 py-3 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/70 hover:bg-cyan-500/[0.14]"
-                >
-                  Reserve a seat →
-                </Link>
+                <div className="mt-7">
+                  <BootcampReserveButton
+                    tiers={BOOTCAMP_TIERS}
+                    seatsLeft={seatsLeft}
+                    variant="soft"
+                    label="Reserve a seat →"
+                  />
+                </div>
               </div>
 
               <p className="mt-4 px-2 text-center text-[12px] leading-relaxed text-ink-400">
@@ -362,9 +362,9 @@ function WalkOutWith() {
 }
 
 /* --------------------------------------------------------------------- */
-/* Pricing — 4 tiers                                                     */
+/* Pricing — 3 tiers (single + 2 corporate)                              */
 /* --------------------------------------------------------------------- */
-function Pricing() {
+function Pricing({ seatsLeft }: { seatsLeft: number }) {
   return (
     <section id="tiers" className="relative scroll-mt-24 border-t border-white/[0.04] py-24">
       <div className="mx-auto max-w-6xl px-6">
@@ -376,77 +376,74 @@ function Pricing() {
             Pick how you'll show up.
           </h2>
           <p className="mt-4 text-[15px] leading-[1.65] text-ink-300">
-            Solo investment is ₱35,000. The webinar code unlocks ₱25,000 for 24 hours only.
-            Bring your team and the per-seat drops even further.
+            Solo founders, founders bringing a co-pilot, founders bringing a team. Bring more, save more per seat.
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {BOOTCAMP_TIERS.map((tier) => {
-            const featured = tier.id === 'single_promo';
-            return (
-              <Link
-                key={tier.id}
-                href={`/founders-bootcamp/reserve?tier=${tier.id}`}
-                className={`group relative flex flex-col rounded-3xl border p-6 transition ${
-                  featured
-                    ? 'border-cyan-400/40 bg-gradient-to-b from-cyan-500/[0.08] to-transparent shadow-[0_28px_80px_-30px_rgba(0,184,230,0.45)] hover:border-cyan-300/70'
-                    : 'border-white/[0.07] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
-                }`}
-              >
-                {tier.badge && (
-                  <div
-                    className={`absolute -top-2.5 right-5 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                      featured
-                        ? 'border-cyan-400/60 bg-cyan-500/15 text-cyan-100'
-                        : 'border-amber-400/40 bg-amber-500/[0.08] text-amber-200'
-                    }`}
-                  >
-                    {tier.badge}
-                  </div>
-                )}
-                <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-ink-300">
-                  {tier.label}
-                </div>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <div className="font-serif text-[44px] leading-none text-white tabular-nums">
-                    {formatPHP(tier.perSeatCentavos)}
-                  </div>
-                  <div className="text-[12px] text-ink-400">/ seat</div>
-                </div>
-                {tier.seats > 1 && (
-                  <div className="mt-2 text-[12.5px] text-ink-400">
-                    {tier.seats} seats · total {formatPHP(tier.totalCentavos)}
-                  </div>
-                )}
-                <p className="mt-4 text-[14px] leading-[1.55] text-ink-200">{tier.tagline}</p>
-
-                <div className="mt-auto pt-6">
-                  <div className="text-[11px] text-ink-400">Reserve with</div>
-                  <div className="mt-1 text-base font-semibold text-white tabular-nums">
-                    {formatPHP(tier.downpaymentCentavos)} downpayment
-                  </div>
-                  <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.16em] text-amber-300/80">
-                    Non-refundable
-                  </div>
-                </div>
-
-                <div
-                  className={`mt-5 flex items-center justify-between rounded-full px-4 py-2.5 text-[13px] font-semibold transition ${
-                    featured
-                      ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-white'
-                      : 'bg-white/[0.05] text-white group-hover:bg-white/[0.1]'
-                  }`}
-                >
-                  <span>Reserve this tier</span>
-                  <span>→</span>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {BOOTCAMP_TIERS.map((tier) => (
+            <TierCard key={tier.id} tier={tier} tiers={BOOTCAMP_TIERS} seatsLeft={seatsLeft} />
+          ))}
         </div>
       </div>
     </section>
+  );
+}
+
+function TierCard({
+  tier,
+  tiers,
+  seatsLeft,
+}: {
+  tier: BootcampTierDef;
+  tiers: BootcampTierDef[];
+  seatsLeft: number;
+}) {
+  const featured = tier.id === 'single';
+  return (
+    <div
+      className={`group relative flex flex-col rounded-3xl border p-6 transition ${
+        featured
+          ? 'border-cyan-400/40 bg-gradient-to-b from-cyan-500/[0.08] to-transparent shadow-[0_28px_80px_-30px_rgba(0,184,230,0.45)] hover:border-cyan-300/70'
+          : 'border-white/[0.07] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+      }`}
+    >
+      {tier.badge && (
+        <div className="absolute -top-2.5 right-5 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/[0.08] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+          {tier.badge}
+        </div>
+      )}
+      <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-ink-300">{tier.label}</div>
+      <div className="mt-4 flex items-baseline gap-2">
+        <div className="font-serif text-[44px] leading-none text-white tabular-nums">{formatPHP(tier.perSeatCentavos)}</div>
+        <div className="text-[12px] text-ink-400">/ seat</div>
+      </div>
+      {tier.seats > 1 && (
+        <div className="mt-2 text-[12.5px] text-ink-400">
+          {tier.seats} seats · total {formatPHP(tier.totalCentavos)}
+        </div>
+      )}
+      <p className="mt-4 text-[14px] leading-[1.55] text-ink-200">{tier.tagline}</p>
+
+      <div className="mt-auto pt-6">
+        <div className="text-[11px] text-ink-400">Reserve with</div>
+        <div className="mt-1 text-base font-semibold text-white tabular-nums">
+          {formatPHP(tier.downpaymentCentavos)} downpayment
+        </div>
+        <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.16em] text-amber-300/80">Non-refundable</div>
+      </div>
+
+      <BootcampReserveButton
+        tiers={tiers}
+        seatsLeft={seatsLeft}
+        presetTier={tier.id}
+        variant="tierFooter"
+        featured={featured}
+      >
+        <span>Reserve this tier</span>
+        <span>→</span>
+      </BootcampReserveButton>
+    </div>
   );
 }
 
@@ -503,12 +500,9 @@ function FinalCta({ seatsLeft }: { seatsLeft: number }) {
                 Lock your seat with a ₱10,000 downpayment. Card or bank — your call. Balance settles before event day.
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-                <Link
-                  href="/founders-bootcamp/reserve"
-                  className="inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 px-8 py-4 text-base font-semibold text-white shadow-[0_18px_44px_-12px_rgba(0,150,200,0.7)] transition hover:from-cyan-400 hover:to-indigo-400 active:translate-y-[1px]"
-                >
+                <BootcampReserveButton tiers={BOOTCAMP_TIERS} seatsLeft={seatsLeft} variant="primary">
                   Reserve your seat →
-                </Link>
+                </BootcampReserveButton>
                 <a
                   href="#tiers"
                   className="text-sm font-medium text-cyan-300/90 underline-offset-4 transition hover:text-cyan-200 hover:underline"
