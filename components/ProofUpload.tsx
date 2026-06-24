@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function ProofUpload({ id }: { id: string }) {
+export function ProofUpload({ id, mode = 'retreat' }: { id: string; mode?: 'retreat' | 'bootcamp' }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -37,10 +37,12 @@ export function ProofUpload({ id }: { id: string }) {
       const fd = new FormData();
       fd.append('id', id);
       fd.append('file', file);
-      const res = await fetch('/api/retreat/proof', { method: 'POST', body: fd });
+      const endpoint = mode === 'bootcamp' ? '/api/bootcamp/proof' : '/api/retreat/proof';
+      const res = await fetch(endpoint, { method: 'POST', body: fd });
       const json = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error || 'Upload failed.');
-      router.push(`/vibecode-retreat/reserve/${id}/done`);
+      const doneBase = mode === 'bootcamp' ? '/founders-bootcamp/reserve' : '/vibecode-retreat/reserve';
+      router.push(`${doneBase}/${id}/done`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
       setSubmitting(false);

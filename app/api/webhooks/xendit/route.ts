@@ -33,6 +33,7 @@ import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers'
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-external';
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
+import { getBootcampReservation, markBootcampReservationPaid, tierById } from '@/lib/bootcamp';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -82,6 +83,9 @@ export async function POST(req: Request) {
   }
   if (event.external_id.startsWith('BL-RETREAT-')) {
     return handleRetreatPaid(event);
+  }
+  if (event.external_id.startsWith('BL-BOOTCAMP-')) {
+    return handleBootcampPaid(event);
   }
   if (event.external_id.startsWith('BL-MAIN-')) {
     return handleMainPaid(event);
@@ -534,4 +538,69 @@ async function handleRetreatPaid(event: XenditEvent) {
   );
 
   return NextResponse.json({ ok: true, retreat: true });
+}
+
+/* --------------------------------------------------------------------- */
+/* BOOTCAMP reservation — card downpayment for AI Founder's Bootcamp     */
+/* --------------------------------------------------------------------- */
+async function handleBootcampPaid(event: XenditEvent) {
+  // externalId pattern: BL-BOOTCAMP-<uuid>-<ts>.
+  const uuid = event.external_id!.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+  )?.[0];
+  if (!uuid) {
+    console.warn('[xendit-webhook] bootcamp externalId has no uuid', event.external_id);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+
+  const r = await getBootcampReservation(uuid);
+  if (!r) {
+    console.warn('[xendit-webhook] no bootcamp reservation matched', uuid);
+    return NextResponse.json({ ok: true, matched: false });
+  }
+  if (r.status === 'paid') {
+    return NextResponse.json({ ok: true, alreadyPaid: true });
+  }
+
+  await markBootcampReservationPaid(uuid, {
+    invoiceId: event.id,
+    paidAtIso: new Date().toISOString(),
+  });
+
+  const amountPhp = event.amount ?? r.amountDueCentavos / 100;
+  const tierLabel = tierById(r.tier)?.label ?? r.tier;
+  const firstName = r.name.split(/\s+/)[0] || r.name;
+
+  // Customer confirmation
+  const subject = `Bootcamp seat locked — see you on event day`;
+  const html = `
+<p>Hi ${firstName},</p>
+<p>Confirmed! Your downpayment of <strong>₱${amountPhp.toLocaleString('en-PH')}</strong> cleared.
+Your <strong>${tierLabel}</strong> is locked in.</p>
+<p>We'll send the exact venue + schedule + prep checklist a few days before the bootcamp.
+The balance of <strong>₱${(r.balanceDueCentavos / 100).toLocaleString('en-PH')}</strong> is due before event day —
+the team will reach out with the easiest way to settle it.</p>
+<p>Get ready to ship.</p>
+<p>— BossLabs AI</p>`;
+  await sendEmail({ to: r.email, subject, html }).catch(() => null);
+  if (r.phone) {
+    await sendSms({
+      to: r.phone,
+      body: `Confirmed! AI Founder's Bootcamp DP of PHP ${amountPhp.toLocaleString('en-PH')} cleared. Your ${tierLabel} is locked. We'll send event details soon.`,
+    }).catch(() => null);
+  }
+
+  await sendTelegram(
+    `🎯 <b>AI Founder's Bootcamp — downpayment confirmed!</b>\n\n` +
+      `<b>${esc(r.name)}</b>${r.company ? ` (${esc(r.company)})` : ''}\n` +
+      `${esc(r.email)}\n` +
+      `📱 ${r.phone ? esc(r.phone) : '—'}\n` +
+      `🎟️ ${esc(tierLabel)} — ${r.seats} seat${r.seats === 1 ? '' : 's'}\n` +
+      `💰 DP paid: <b>₱${amountPhp.toLocaleString('en-PH')}</b>\n` +
+      `📋 Balance due: ₱${(r.balanceDueCentavos / 100).toLocaleString('en-PH')}\n` +
+      `Order: <code>${esc(event.external_id ?? '')}</code>\n` +
+      `Xendit invoice: <code>${esc(event.id ?? '')}</code>`,
+  );
+
+  return NextResponse.json({ ok: true, bootcamp: true });
 }

@@ -55,6 +55,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
     items: [
       { href: '/admin/pending-payments', label: 'Pending payments', icon: 'pending' },
       { href: '/admin/crm', label: 'CRM', icon: 'crm' },
+      { href: '/admin/bootcamp', label: 'Bootcamp', icon: 'crm' },
       { href: '/admin/recordings', label: 'Recordings', icon: 'recordings' },
       { href: '/admin/capi-status', label: 'CAPI status', icon: 'capi' },
     ],
