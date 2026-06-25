@@ -43,6 +43,14 @@ type Affected = {
   firstName: string;
   externalId: string;
   reason: 'otox-vault' | 'oto-vault' | 'main-bumped';
+  /** Total amount paid in centavos. Surfaced for dryRun analysis so the caller
+   *  can disambiguate Vault-vs-1:1 buyers on the legacy `bumped` column
+   *  (which was set for ANY bump, not just Vault). */
+  amountCentavos?: number;
+  /** Set when this signup also has OTO-confirmed metadata, with the picked
+   *  product. 'oto'/'both' → Vault was definitely in the order. 'oto2' →
+   *  1:1 only via OTO. Undefined → no OTO follow-up. */
+  otoProduct?: string;
 };
 
 function isVaultStuck(s: Signup): Affected | null {
@@ -50,13 +58,15 @@ function isVaultStuck(s: Signup): Affected | null {
   const meta = (s.metadata ?? {}) as Record<string, unknown>;
   if (meta.hubAccount) return null; // already provisioned
   const ext = String(meta.externalId ?? '');
-  const otoProduct = meta.otoProduct;
-  const otoConfirmed = meta.otoConfirmed === true;
+  const otoProduct = typeof meta.otoProduct === 'string' ? meta.otoProduct : undefined;
+  const otoConfirmed = !!meta.otoConfirmed; // stored as ISO string, so any truthy = confirmed
   const base = {
     signupId: s.id,
     email: s.email,
     firstName: s.firstName || s.email.split('@')[0],
     externalId: ext,
+    amountCentavos: s.amountCentavos ?? 0,
+    otoProduct,
   };
   if (ext.startsWith('BL-OTOX-VAULT-')) {
     // Standalone Vault. Paid path = otoConfirmed; free-promo path = amount 0.
@@ -69,6 +79,14 @@ function isVaultStuck(s: Signup): Affected | null {
     return { ...base, reason: 'oto-vault' };
   }
   if (ext.startsWith('BL-MAIN-') && s.bumped === true && (s.amountCentavos ?? 0) > 0) {
+    // CAVEAT: signup.bumped is set true for ANY bump (Vault OR 1:1, see
+    // /api/checkout/route.ts:69), so a bumped=true row alone doesn't prove
+    // they bought Vault. Caller should inspect amountCentavos + otoProduct
+    // before mass-emailing. Webinar ₱999 + Vault ₱999 = ₱1,998 floor.
+    if (otoProduct === 'oto2' && !ext.startsWith('BL-OTOX-VAULT-')) {
+      // OTO follow-up was explicitly 1:1 only → not a Vault buyer.
+      return null;
+    }
     return { ...base, reason: 'main-bumped' };
   }
   return null;
