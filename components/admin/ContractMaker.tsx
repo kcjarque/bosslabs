@@ -17,6 +17,9 @@ const labelCls = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider 
 
 export function ContractMaker() {
   const [data, setData] = useState<ContractFormData>(DEFAULT_CONTRACT_FORM);
+  // Mobile tab — desktop shows both panes side-by-side; small screens swap
+  // between "Edit" and "Preview" so the preview is readable at full width.
+  const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit');
 
   const pickOption = (id: ContractFormData['optionId']) => {
     const opt = findOption(id);
@@ -73,9 +76,31 @@ export function ContractMaker() {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[420px,1fr]">
+      {/* Mobile tab switcher — visible <lg. Side-by-side on lg+. */}
+      <div className="contract-no-print -mt-2 flex gap-1 rounded-full bg-slate-200/70 p-1 text-[12.5px] font-semibold lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileView('edit')}
+          className={`flex-1 rounded-full px-3 py-1.5 transition ${
+            mobileView === 'edit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+          }`}
+        >
+          ✏️ Edit
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileView('preview')}
+          className={`flex-1 rounded-full px-3 py-1.5 transition ${
+            mobileView === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+          }`}
+        >
+          📄 Preview
+        </button>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px),1fr]">
         {/* FORM */}
-        <form className="contract-no-print space-y-5">
+        <form className={`contract-no-print space-y-5 ${mobileView === 'edit' ? '' : 'hidden lg:block'}`}>
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-base font-semibold text-slate-900">Client</h2>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -256,11 +281,13 @@ export function ContractMaker() {
         </form>
 
         {/* PREVIEW */}
-        <section>
+        <section className={mobileView === 'preview' ? '' : 'hidden lg:block'}>
           <div className="contract-no-print mb-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-500">
-            <span>Live preview · this is exactly what the PDF will look like</span>
-            <span>{data.optionId === 'A' ? 'Option A' : data.optionId === 'B' ? 'Option B' : 'Option C'}</span>
+            <span className="truncate">Live preview · what the PDF will look like</span>
+            <span>Option {data.optionId}</span>
           </div>
+          {/* Scrollable frame on small screens so the 210mm page stays readable
+              without forcing the whole admin chrome to grow horizontally. */}
           <div className="contract-page-frame">
             <div className="contract-page">
               <ContractDocument data={data} />
@@ -270,35 +297,57 @@ export function ContractMaker() {
       </div>
 
       {/* Print-friendly CSS — only the contract page is visible when printing,
-          rendered at exact A4/Letter size with 1in margins. */}
+          rendered at exact A4 with 18mm/16mm margins. On screen, the 210mm
+          page is shown inside a scrollable frame so it stays readable on
+          phones without resizing everything. */}
       <style jsx global>{`
         .contract-page-frame {
           background: #e5e7eb;
-          padding: 16px;
+          padding: 14px;
           border-radius: 12px;
+          overflow-x: auto;             /* horizontal scroll on phones */
+          -webkit-overflow-scrolling: touch;
+          max-width: 100%;
         }
         .contract-page {
           background: white;
           color: black;
           width: 210mm;
           min-height: 297mm;
-          padding: 22mm 20mm;
+          padding: 18mm 16mm;
           margin: 0 auto;
           box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.18);
-          font-family: 'Times New Roman', Georgia, serif;
+          font-family: 'Georgia', 'Times New Roman', 'Cambria', serif;
+        }
+        /* Scale the page down on narrow viewports so it actually fits the
+           screen without horizontal scrolling. Uses CSS zoom (supported
+           on Chrome / Safari / Edge / Firefox 126+) — affects layout
+           height correctly, unlike transform: scale(). */
+        @media (max-width: 900px) {
+          .contract-page { zoom: 0.72; }
+        }
+        @media (max-width: 640px) {
+          .contract-page { zoom: 0.5; }
+          .contract-page-frame { padding: 8px; }
         }
         @media print {
           @page { size: A4; margin: 18mm 16mm; }
           html, body { background: white !important; }
           .contract-no-print { display: none !important; }
           .admin-shell aside, .admin-shell header { display: none !important; }
-          .contract-page-frame { background: none !important; padding: 0 !important; border: 0 !important; }
+          .contract-page-frame {
+            background: none !important;
+            padding: 0 !important;
+            border: 0 !important;
+            overflow: visible !important;
+          }
           .contract-page {
             width: auto !important;
             min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
+            zoom: 1 !important;
           }
         }
       `}</style>

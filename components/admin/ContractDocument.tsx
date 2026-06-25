@@ -11,6 +11,12 @@
  */
 import type { ContractFormData, ContractLineItem } from '@/lib/contract-defaults';
 import { findOption } from '@/lib/contract-defaults';
+import { Mark } from '@/components/Mark';
+
+// Inline serif stack — overrides Tailwind's font-serif (which maps to
+// Instrument Serif, a display face whose bold weight looks like Arial Black
+// in print). Georgia is a reading serif, universally installed, prints clean.
+const SERIF = "'Georgia', 'Times New Roman', 'Cambria', serif";
 
 function fmtPHP(centavos: number): string {
   return `PHP ${(centavos / 100).toLocaleString('en-PH')}`;
@@ -52,11 +58,44 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
   const venue = data.governingVenue.trim() || '__________________';
 
   return (
-    <article className="contract-doc font-serif text-[12.5px] leading-[1.55] text-black">
-      <header className="mb-6 text-center">
-        <h1 className="font-serif text-[19px] font-bold tracking-tight">WEB DEVELOPMENT &amp; SERVICES AGREEMENT</h1>
-        <div className="mt-1 text-[12px] italic">(Hypercustomized Platform Build, Management, and Hosting)</div>
+    <article className="contract-doc text-[12px] leading-[1.55] text-black" style={{ fontFamily: SERIF }}>
+      {/* Letterhead — Mark + wordmark + provider contact block + cyan accent bar */}
+      <header className="contract-letterhead mb-6">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <Mark size={44} onLight />
+            <div className="leading-tight">
+              <div className="text-[18px] font-bold tracking-tight text-[#06070A]">
+                BOSSLABS <span className="text-[#00B8E6]">AI</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                Command Centers for Filipino Businesses
+              </div>
+            </div>
+          </div>
+          <div className="text-right text-[10px] leading-[1.45] text-gray-600">
+            <div className="font-semibold text-[#06070A]">Lead Empire OPC</div>
+            <div>3rd Flr. J&amp;M Ramos Bldg., Gen. Yengco St.</div>
+            <div>Brgy. Poblacion IV-A, Imus, Cavite</div>
+            <div>hello@bosslabs.live · bosslabs.live</div>
+          </div>
+        </div>
+        <div className="mt-3 h-[3px] w-full rounded-full bg-gradient-to-r from-[#00B8E6] via-[#00B8E6] to-transparent" />
       </header>
+
+      {/* Document title */}
+      <div className="mb-7 text-center">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gray-500">Agreement</div>
+        <h1
+          className="mt-1 text-[20px] font-bold tracking-tight text-[#06070A]"
+          style={{ fontFamily: SERIF, letterSpacing: '0.01em' }}
+        >
+          WEB DEVELOPMENT &amp; SERVICES AGREEMENT
+        </h1>
+        <div className="mt-1 text-[11.5px] italic text-gray-700" style={{ fontFamily: SERIF }}>
+          (Hypercustomized Platform Build, Management, and Hosting)
+        </div>
+      </div>
 
       <p>
         This Web Development &amp; Services Agreement (the &ldquo;Agreement&rdquo;) is entered into on{' '}
@@ -81,7 +120,7 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
         the &ldquo;Parties.&rdquo;
       </p>
 
-      <h2 className="mt-5 text-[14px] font-bold">Recitals</h2>
+      <h2 className="mt-5 text-[13.5px] font-bold uppercase tracking-[0.02em]" style={{ fontFamily: SERIF }}>Recitals</h2>
       <p className="mt-1">
         <strong>WHEREAS</strong>, the Provider is engaged in the business of bespoke software and web
         application development for small and medium enterprises;
@@ -607,7 +646,7 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
 
       {/* Signatures */}
       <section className="break-inside-avoid mt-8">
-        <h2 className="text-[14px] font-bold">Signatures</h2>
+        <h2 className="text-[13.5px] font-bold uppercase tracking-[0.02em]" style={{ fontFamily: SERIF }}>Signatures</h2>
         <p className="mt-2">
           IN WITNESS WHEREOF, the Parties have caused this Agreement to be signed on the date first
           written above.
@@ -641,9 +680,11 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
 
 function Section({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="break-inside-avoid mt-5">
-      <h2 className="text-[14px] font-bold">{n}. {title}</h2>
-      <div className="mt-1 space-y-2">{children}</div>
+    <section className="break-inside-avoid mt-5" style={{ fontFamily: SERIF }}>
+      <h2 className="text-[13.5px] font-bold uppercase tracking-[0.02em]" style={{ fontFamily: SERIF }}>
+        {n}. {title}
+      </h2>
+      <div className="mt-1.5 space-y-2">{children}</div>
     </section>
   );
 }
