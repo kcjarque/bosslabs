@@ -11,7 +11,6 @@
  */
 import type { ContractFormData, ContractLineItem } from '@/lib/contract-defaults';
 import { findOption } from '@/lib/contract-defaults';
-import { Mark } from '@/components/Mark';
 
 // Inline serif stack — overrides Tailwind's font-serif (which maps to
 // Instrument Serif, a display face whose bold weight looks like Arial Black
@@ -59,21 +58,22 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
 
   return (
     <article className="contract-doc text-[12px] leading-[1.55] text-black" style={{ fontFamily: SERIF }}>
-      {/* Letterhead — Mark + wordmark + provider contact block + cyan accent bar */}
+      {/* Letterhead — wordmark + provider contact block + cyan accent bar.
+          Intentionally NO icon mark here: at large size on white it visually
+          competes with the wordmark and reads as inverted vs the "BOSSLABS [AI]"
+          left=black / right=cyan reading direction. Clean wordmark is more
+          appropriate for a legal document anyway. */}
       <header className="contract-letterhead mb-6">
         <div className="flex items-start justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <Mark size={44} onLight />
-            <div className="leading-tight">
-              <div className="text-[18px] font-bold tracking-tight text-[#06070A]">
-                BOSSLABS <span className="text-[#00B8E6]">AI</span>
-              </div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
-                Command Centers for Filipino Businesses
-              </div>
+          <div className="leading-tight">
+            <div className="text-[22px] font-extrabold tracking-tight text-[#06070A]" style={{ fontFamily: SERIF, letterSpacing: '0.01em' }}>
+              BOSSLABS <span className="text-[#00B8E6]">AI</span>
+            </div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-[0.22em] text-gray-500">
+              Command Centers for Filipino Businesses
             </div>
           </div>
-          <div className="text-right text-[10px] leading-[1.45] text-gray-600">
+          <div className="text-right text-[10px] leading-[1.5] text-gray-600">
             <div className="font-semibold text-[#06070A]">Lead Empire OPC</div>
             <div>3rd Flr. J&amp;M Ramos Bldg., Gen. Yengco St.</div>
             <div>Brgy. Poblacion IV-A, Imus, Cavite</div>
