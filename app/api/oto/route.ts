@@ -187,15 +187,19 @@ export async function POST(req: Request) {
       } catch {
         /* confirmation is best-effort — never block the free upgrade */
       }
-      return NextResponse.json({ redirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`, free: true });
+      // Vault buyers (product='oto' or 'both') land on the Vault-specific
+      // thank-you page so they see their Hub credentials immediately.
+      const successPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
+      return NextResponse.json({ redirectUrl: `${base}${successPath}?order=${mainOrder}&oto=1`, free: true });
     }
 
+    const successPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
     const invoice = await createInvoice({
       externalId,
       amount: amountCentavos / 100,
       description: promoApplied ? `${description} (promo ${promoApplied})` : description,
       payerEmail: parent.email,
-      successRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=1`,
+      successRedirectUrl: `${base}${successPath}?order=${mainOrder}&oto=1`,
       failureRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=failed`,
       customer: {
         givenNames: parent.firstName,
@@ -299,7 +303,9 @@ async function handleStandalone(
     } catch {
       /* best-effort */
     }
-    return NextResponse.json({ redirectUrl: `${base}/thank-you?order=${externalId}&oto=1`, free: true });
+    // Vault buyers (standalone, free via 100%-off promo) → Vault thank-you.
+    const standaloneFreePath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
+    return NextResponse.json({ redirectUrl: `${base}${standaloneFreePath}?order=${externalId}&oto=1`, free: true });
   }
 
   // Persist the lead row up front (keyed by externalId) so the webhook can
@@ -322,12 +328,14 @@ async function handleStandalone(
     },
   });
 
+  // Vault buyers (standalone OTOX) → Vault thank-you with Hub credentials.
+  const standaloneSuccessPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
   const invoice = await createInvoice({
     externalId,
     amount: amountCentavos / 100,
     description: promoApplied ? `${description} (promo ${promoApplied})` : description,
     payerEmail: email,
-    successRedirectUrl: `${base}/thank-you?order=${externalId}&oto=1`,
+    successRedirectUrl: `${base}${standaloneSuccessPath}?order=${externalId}&oto=1`,
     failureRedirectUrl: `${base}/thank-you?order=${externalId}&oto=failed`,
     customer: {
       givenNames: name,

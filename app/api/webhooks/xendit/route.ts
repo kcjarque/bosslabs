@@ -34,6 +34,41 @@ import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-external';
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
 import { applyBootcampPayment, getBootcampReservation, tierById } from '@/lib/bootcamp';
+import { provisionHubAccount } from '@/lib/hub-provision';
+
+/**
+ * Provision a BossLabs Hub account for a Vault buyer + save credentials on
+ * the signup metadata for the thank-you page to read. Awaited so the page
+ * has the creds ready when the redirect lands. Failures are logged but
+ * never fail the payment flow.
+ */
+async function provisionVaultBuyerHub(signup: {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  metadata?: unknown;
+}): Promise<void> {
+  // Skip if we already provisioned this buyer (webhook retries are common).
+  const existing = (signup.metadata as { hubAccount?: { email: string } } | undefined)?.hubAccount;
+  if (existing) return;
+
+  const fullName = [signup.firstName, signup.lastName].filter(Boolean).join(' ').trim();
+  const result = await provisionHubAccount({ email: signup.email, fullName });
+  if (!result?.ok) return; // helper already logged
+  await updateSignup(signup.id, {
+    metadata: {
+      ...(signup.metadata as Record<string, unknown> | undefined),
+      hubAccount: {
+        email: result.email,
+        password: result.password ?? null, // null when existed=true (re-fire)
+        userId: result.userId,
+        provisionedAt: new Date().toISOString(),
+        existed: result.existed,
+      },
+    },
+  });
+}
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
@@ -130,6 +165,19 @@ async function handleMainPaid(event: XenditEvent) {
     paidAmount: event.amount,
   };
   await updateSignup(signup.id, { status: 'paid', metadata: paidMeta });
+
+  // Vault bumped at checkout (₱999 main + ₱999 Vault in one invoice) →
+  // provision a Hub account immediately so the thank-you page can show
+  // username + password.
+  if (Boolean(signup.bumped)) {
+    await provisionVaultBuyerHub({
+      id: signup.id,
+      email: signup.email,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      metadata: paidMeta,
+    });
+  }
 
   // Affiliate commission — if this buyer was referred, record the payout
   // (idempotent; computed on the total paid incl. any OTO bump).
@@ -292,6 +340,18 @@ async function handleOtoPaid(event: XenditEvent) {
     (otoProduct === 'oto' ? OFFER.oto.priceCentavos : OFFER.oto2.priceCentavos);
   const amountPhp = event.amount ?? fallbackCentavos / 100;
 
+  // Vault buyer (product='oto' or 'both') → provision a Hub account NOW so
+  // the thank-you redirect can show username + password.
+  if (otoProduct === 'oto' || otoProduct === 'both') {
+    await provisionVaultBuyerHub({
+      id: signup.id,
+      email: signup.email,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      metadata: signup.metadata,
+    });
+  }
+
   // Product-specific confirmation email + SMS (Vault = instant access, 1:1 =
   // we'll schedule). For 'both' send BOTH templates so the buyer gets
   // delivery details for each product. `amount` is GSM-7-safe.
@@ -434,6 +494,17 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     product === 'both' ? OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos :
     (product === 'oto' ? OFFER.oto.priceCentavos : OFFER.oto2.priceCentavos);
   const amountPhp = event.amount ?? fallbackCentavos / 100;
+
+  // Vault buyer (product='oto' or 'both') → provision Hub account NOW.
+  if (product === 'oto' || product === 'both') {
+    await provisionVaultBuyerHub({
+      id: signup.id,
+      email: signup.email,
+      firstName: signup.firstName,
+      lastName: signup.lastName,
+      metadata: signup.metadata,
+    });
+  }
 
   const templates =
     product === 'both'

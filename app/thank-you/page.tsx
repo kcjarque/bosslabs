@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
 import { OnboardingForm } from '@/components/OnboardingForm';
 import { PurchasePixel } from '@/components/PurchasePixel';
 import { getWebinarInfo } from '@/lib/webinar';
+import { findSignupByExternalId } from '@/lib/db';
 import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 
 // resolvePurchaseAmount lives in lib/purchase-amount.ts — the same helper
@@ -20,6 +22,11 @@ export default async function ThankYouPage({
   // Standalone 1:1 buyers (bought via a shared /oto link) have no webinar seat —
   // show a 1:1-specific confirmation, not the webinar/Zoom/onboarding content.
   const standalone = (searchParams.order ?? '').startsWith('BL-OTOX-');
+  // If the buyer also has a Vault (bumped main, or any OTO with vault), surface
+  // their Hub credentials banner — clicks through to /thank-you/vault for the
+  // username + password.
+  const signup = searchParams.order ? await findSignupByExternalId(searchParams.order) : null;
+  const hasHubAccount = !!(signup?.metadata as { hubAccount?: unknown } | undefined)?.hubAccount;
   return (
     <>
       <PurchasePixel
@@ -42,6 +49,24 @@ export default async function ThankYouPage({
 
       <main className="container-tight py-12 sm:py-20">
         <div className="mx-auto max-w-3xl">
+          {hasHubAccount && (
+            <Link
+              href={`/thank-you/vault?order=${encodeURIComponent(searchParams.order ?? '')}`}
+              className="mb-8 block rounded-2xl border border-cyan-400/40 bg-gradient-to-r from-cyan-500/[0.10] to-indigo-500/[0.08] p-4 transition hover:border-cyan-300/70 sm:p-5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-cyan-300">
+                    Hub access unlocked
+                  </div>
+                  <div className="mt-1 text-[14.5px] font-semibold text-white">
+                    Your AI Secrets Builder Vault is ready — see your Hub login here →
+                  </div>
+                </div>
+                <span className="flex-none text-2xl text-cyan-300">→</span>
+              </div>
+            </Link>
+          )}
           {searchParams.oto === 'failed' && (
             <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center text-[13px] text-amber-100 sm:text-[14px]">
               {standalone ? (
