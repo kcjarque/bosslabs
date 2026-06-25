@@ -56,6 +56,11 @@ async function provisionVaultBuyerHub(signup: {
   const fullName = [signup.firstName, signup.lastName].filter(Boolean).join(' ').trim();
   const result = await provisionHubAccount({ email: signup.email, fullName });
   if (!result?.ok) return; // helper already logged
+  // existed=true means the user already had an auth account upstream — the
+  // password is NOT returned (only present on first create). If we wrote
+  // metadata now we'd clobber a real password from the original webhook fire
+  // with `null`. Skip the write; the original credentials remain.
+  if (result.existed) return;
   await updateSignup(signup.id, {
     metadata: {
       ...(signup.metadata as Record<string, unknown> | undefined),

@@ -10,22 +10,30 @@ type HubAccount = {
 };
 
 /**
- * Shows the buyer's BossLabs Hub credentials. Three states:
- *   1. Has password (first-time provisioning) → show username + password with
- *      copy buttons + a primary CTA to log in
- *   2. Has username but no password (webhook re-fire / already provisioned) →
- *      show username + tell them to check the original email
- *   3. No hubAccount yet (webhook still racing — rare) → show pending state
- *      with their checkout email and tell them to check inbox in 1-2 min
+ * Shows the buyer's BossLabs Hub credentials. Four states:
+ *   1. Has password + tokenValid → show username + password with copy buttons +
+ *      primary CTA to log in (first-time provisioning, fresh redirect from /oto)
+ *   2. Has password but tokenValid=false (URL leak / bookmark without ?t=) →
+ *      show username only, tell them to use "Forgot password" on the Hub
+ *   3. Has username but no password (webhook re-fire / already provisioned) →
+ *      show username + tell them to check the original email or reset
+ *   4. No hubAccount yet (webhook still racing — rare) → pending state with
+ *      their checkout email
+ *
+ * `tokenValid` is the result of HMAC-verifying ?t= against the order id on the
+ * server. Without it, anyone with the order id could fetch the password — the
+ * page server-renders, so checking on the server is the only honest gate.
  */
 export function VaultCredentialsCard({
   hub,
   buyerEmail,
+  tokenValid,
 }: {
   hub?: HubAccount;
   buyerEmail: string;
+  tokenValid?: boolean;
 }) {
-  // State 3 — webhook hasn't fired yet (very rare; only if the user reached
+  // State 4 — webhook hasn't fired yet (very rare; only if the user reached
   // the thank-you page faster than the webhook processed).
   if (!hub) {
     return (
@@ -42,10 +50,12 @@ export function VaultCredentialsCard({
     );
   }
 
-  return <CredentialsReady hub={hub} />;
+  // States 1–3 below. CredentialsReady masks the password when tokenValid is
+  // false so a leaked or guessed order id alone never exposes credentials.
+  return <CredentialsReady hub={hub} tokenValid={tokenValid !== false} />;
 }
 
-function CredentialsReady({ hub }: { hub: HubAccount }) {
+function CredentialsReady({ hub, tokenValid }: { hub: HubAccount; tokenValid: boolean }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState<'email' | 'password' | null>(null);
 
@@ -59,7 +69,10 @@ function CredentialsReady({ hub }: { hub: HubAccount }) {
     }
   };
 
-  const reFire = hub.password == null;
+  // Treat any non-token visit the same as a re-fire: hide the password and
+  // route the buyer to password reset. The password may exist in the DB, but
+  // the page must not render it without a valid token.
+  const reFire = hub.password == null || !tokenValid;
 
   return (
     <div className="rounded-3xl border border-cyan-400/40 bg-gradient-to-b from-cyan-500/[0.10] via-white/[0.02] to-transparent p-6 shadow-[0_28px_80px_-30px_rgba(0,184,230,0.45)]">
@@ -73,9 +86,18 @@ function CredentialsReady({ hub }: { hub: HubAccount }) {
         {/* Password */}
         {reFire ? (
           <div className="rounded-xl border border-amber-400/30 bg-amber-500/[0.05] p-3 text-[13px] leading-[1.55] text-amber-100">
-            <strong className="text-amber-50">We already created this account.</strong> Your password
-            was sent to <span className="font-semibold">{hub.email}</span> the first time you bought.
-            Check that inbox — or reset it from the Hub login page.
+            <strong className="text-amber-50">For your security, the password is shown only on the
+            success page right after checkout.</strong> Open the Hub at{' '}
+            <a
+              href="https://bosslabs-hub.vercel.app/login"
+              className="font-semibold underline underline-offset-2"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              bosslabs-hub.vercel.app/login
+            </a>{' '}
+            and use <em>Forgot password</em> with <span className="font-semibold">{hub.email}</span> —
+            we&rsquo;ll email a reset link.
           </div>
         ) : (
           <CredentialRow

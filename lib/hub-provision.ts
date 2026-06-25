@@ -47,7 +47,14 @@ export async function provisionHubAccount(input: {
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok || json.ok !== true) {
-      console.error('[hub-provision] upstream non-ok', { status: res.status, json });
+      // Redact the body: never log password — if upstream returns an unexpected
+      // shape with creds in it, we still don't want them in Vercel function logs.
+      console.error('[hub-provision] upstream non-ok', {
+        status: res.status,
+        ok: json.ok ?? null,
+        existed: json.existed ?? null,
+        error: typeof json.error === 'string' ? json.error : null,
+      });
       return null;
     }
     return {

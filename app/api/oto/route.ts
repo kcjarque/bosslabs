@@ -32,6 +32,19 @@ import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { siteUrl } from '@/lib/site';
+import { signVaultOrder } from '@/lib/vault-token';
+
+/**
+ * Build the success redirect URL for an OTO purchase. Vault buyers (product
+ * 'oto' or 'both') land on /thank-you/vault, which renders the Hub password.
+ * That URL carries an HMAC token of the order id so a leaked or guessed
+ * order id alone can't expose the password.
+ */
+function buildOtoSuccessUrl(base: string, order: string, isVault: boolean): string {
+  if (!isVault) return `${base}/thank-you?order=${order}&oto=1`;
+  const t = signVaultOrder(order);
+  return `${base}/thank-you/vault?order=${order}&oto=1${t ? `&t=${t}` : ''}`;
+}
 
 export const runtime = 'nodejs';
 
@@ -188,18 +201,19 @@ export async function POST(req: Request) {
         /* confirmation is best-effort — never block the free upgrade */
       }
       // Vault buyers (product='oto' or 'both') land on the Vault-specific
-      // thank-you page so they see their Hub credentials immediately.
-      const successPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
-      return NextResponse.json({ redirectUrl: `${base}${successPath}?order=${mainOrder}&oto=1`, free: true });
+      // thank-you page so they see their Hub credentials immediately. The
+      // URL is HMAC-signed so the password isn't fetchable by order-id alone.
+      const isVault = product === 'oto' || product === 'both';
+      return NextResponse.json({ redirectUrl: buildOtoSuccessUrl(base, mainOrder, isVault), free: true });
     }
 
-    const successPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
+    const isVault = product === 'oto' || product === 'both';
     const invoice = await createInvoice({
       externalId,
       amount: amountCentavos / 100,
       description: promoApplied ? `${description} (promo ${promoApplied})` : description,
       payerEmail: parent.email,
-      successRedirectUrl: `${base}${successPath}?order=${mainOrder}&oto=1`,
+      successRedirectUrl: buildOtoSuccessUrl(base, mainOrder, isVault),
       failureRedirectUrl: `${base}/thank-you?order=${mainOrder}&oto=failed`,
       customer: {
         givenNames: parent.firstName,
@@ -303,9 +317,10 @@ async function handleStandalone(
     } catch {
       /* best-effort */
     }
-    // Vault buyers (standalone, free via 100%-off promo) → Vault thank-you.
-    const standaloneFreePath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
-    return NextResponse.json({ redirectUrl: `${base}${standaloneFreePath}?order=${externalId}&oto=1`, free: true });
+    // Vault buyers (standalone, free via 100%-off promo) → Vault thank-you,
+    // HMAC-gated for password reveal.
+    const isVault = product === 'oto' || product === 'both';
+    return NextResponse.json({ redirectUrl: buildOtoSuccessUrl(base, externalId, isVault), free: true });
   }
 
   // Persist the lead row up front (keyed by externalId) so the webhook can
@@ -328,14 +343,14 @@ async function handleStandalone(
     },
   });
 
-  // Vault buyers (standalone OTOX) → Vault thank-you with Hub credentials.
-  const standaloneSuccessPath = product === 'oto' || product === 'both' ? '/thank-you/vault' : '/thank-you';
+  // Vault buyers (standalone OTOX) → Vault thank-you with HMAC-signed password reveal.
+  const isVault = product === 'oto' || product === 'both';
   const invoice = await createInvoice({
     externalId,
     amount: amountCentavos / 100,
     description: promoApplied ? `${description} (promo ${promoApplied})` : description,
     payerEmail: email,
-    successRedirectUrl: `${base}${standaloneSuccessPath}?order=${externalId}&oto=1`,
+    successRedirectUrl: buildOtoSuccessUrl(base, externalId, isVault),
     failureRedirectUrl: `${base}/thank-you?order=${externalId}&oto=failed`,
     customer: {
       givenNames: name,
