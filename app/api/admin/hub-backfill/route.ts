@@ -172,7 +172,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ dryRun: true, count: affected.length, affected });
   }
 
-  const base = siteUrl();
+  const base = siteUrl(req);
   const provisioned: Array<Affected & { newPassword: boolean; emailSent: boolean; emailError?: string }> = [];
   let firstSuccess: { html: string; subject: string; firstName: string; hubEmail: string; hubPassword: string } | null = null;
 
