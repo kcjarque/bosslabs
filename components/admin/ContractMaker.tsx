@@ -49,7 +49,7 @@ export function ContractMaker() {
   }, [data.lineItems]);
 
   return (
-    <div className="space-y-6">
+    <div className="contract-maker-root space-y-6">
       {/* Action bar */}
       <div className="contract-no-print sticky top-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#F5F7FB]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div>
@@ -171,25 +171,35 @@ export function ContractMaker() {
             <p className="mb-3 text-[12px] text-slate-500">
               Picking an option resets the line items to that option&apos;s defaults. Edit/remove freely after.
             </p>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2">
               {CONTRACT_OPTIONS.map((opt) => {
                 const active = data.optionId === opt.id;
+                // Tight names so 3 cards fit horizontally on a narrow form
+                // column without wrapping into 3 lines.
+                const tight =
+                  opt.id === 'A' ? 'Standard' :
+                  opt.id === 'B' ? 'Hardened' :
+                  'Hardened + VAPT';
+                const eta =
+                  opt.id === 'A' ? '~30 days' :
+                  opt.id === 'B' ? '1–2 mo' :
+                  '4–6 mo';
                 return (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={() => pickOption(opt.id)}
-                    className={`rounded-xl border p-3 text-left transition ${
+                    className={`flex flex-col rounded-xl border p-2.5 text-left transition ${
                       active
                         ? 'border-cyan-400 bg-cyan-50 shadow-[0_0_0_3px_rgba(34,211,238,0.2)]'
                         : 'border-slate-200 bg-white hover:border-slate-400'
                     }`}
                   >
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       Option {opt.id}
                     </div>
-                    <div className="mt-0.5 text-sm font-semibold text-slate-900">{opt.name.replace(/^Option [A-C] — /, '')}</div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">{opt.targetTimeline}</div>
+                    <div className="mt-0.5 text-[13px] font-semibold leading-tight text-slate-900">{tight}</div>
+                    <div className="mt-0.5 text-[10.5px] text-slate-500">{eta}</div>
                   </button>
                 );
               })}
@@ -208,29 +218,52 @@ export function ContractMaker() {
               </button>
             </div>
             <div className="space-y-3">
-              {data.lineItems.map((li) => (
+              {data.lineItems.map((li, idx) => (
                 <div key={li.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="grid gap-2 sm:grid-cols-[1fr,140px,110px,28px]">
+                  {/* Row 1: # · label · remove. Label gets full width so long
+                      deliverable names don't get clipped by the amount/kind cells. */}
+                  <div className="flex items-center gap-2">
+                    <span className="flex-none rounded-md bg-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 tabular-nums">
+                      #{idx + 1}
+                    </span>
+                    <label className="sr-only" htmlFor={`li-label-${li.id}`}>Item label</label>
                     <input
+                      id={`li-label-${li.id}`}
                       type="text"
                       value={li.label}
                       onChange={(e) => updateLineItem(li.id, { label: e.target.value })}
                       className={inputCls}
                       placeholder="Deliverable / item label"
                     />
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={(li.amountCentavos / 100).toString()}
-                      onChange={(e) =>
-                        updateLineItem(li.id, {
-                          amountCentavos: Math.max(0, Math.round(parseFloat(e.target.value || '0') * 100)),
-                        })
-                      }
-                      className={`${inputCls} text-right tabular-nums`}
-                      placeholder="₱ amount"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLineItem(li.id)}
+                      aria-label={`Remove ${li.label || 'line item'}`}
+                      className="flex-none rounded-md p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 5l14 14M19 5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* Row 2: amount + kind side by side, full width split. */}
+                  <div className="mt-2 grid gap-2 grid-cols-[1fr,120px]">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12.5px] font-semibold text-slate-400">₱</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={100}
+                        value={(li.amountCentavos / 100).toString()}
+                        onChange={(e) =>
+                          updateLineItem(li.id, {
+                            amountCentavos: Math.max(0, Math.round(parseFloat(e.target.value || '0') * 100)),
+                          })
+                        }
+                        className={`${inputCls} pl-6 text-right tabular-nums`}
+                        placeholder="0"
+                      />
+                    </div>
                     <select
                       value={li.kind}
                       onChange={(e) => updateLineItem(li.id, { kind: e.target.value as ContractLineItem['kind'] })}
@@ -239,20 +272,13 @@ export function ContractMaker() {
                       <option value="oneTime">One-time</option>
                       <option value="monthly">Monthly</option>
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => removeLineItem(li.id)}
-                      aria-label="Remove line item"
-                      className="rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                    >
-                      ✕
-                    </button>
                   </div>
+                  {/* Row 3: full-width note */}
                   <input
                     type="text"
                     value={li.note ?? ''}
                     onChange={(e) => updateLineItem(li.id, { note: e.target.value })}
-                    className={`${inputCls} mt-2 text-[12px]`}
+                    className={`${inputCls} mt-2 text-[12.5px]`}
                     placeholder="Payment note (optional) — e.g. 50% on signing, 50% on delivery"
                   />
                 </div>
@@ -301,6 +327,16 @@ export function ContractMaker() {
           page is shown inside a scrollable frame so it stays readable on
           phones without resizing everything. */}
       <style jsx global>{`
+        /* Arial across the whole Contract Maker — form UI AND the printed
+           contract document. User asked for basic, universal fonts; Arial
+           is installed on every device and prints cleanly. */
+        .contract-maker-root,
+        .contract-maker-root input,
+        .contract-maker-root select,
+        .contract-maker-root textarea,
+        .contract-maker-root button {
+          font-family: Arial, Helvetica, sans-serif !important;
+        }
         .contract-page-frame {
           background: #e5e7eb;
           padding: 14px;
@@ -317,7 +353,12 @@ export function ContractMaker() {
           padding: 18mm 16mm;
           margin: 0 auto;
           box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.18);
-          font-family: 'Georgia', 'Times New Roman', 'Cambria', serif;
+          /* Arial overrides the serif stack inside ContractDocument so the
+             printed page matches what the user sees in the form preview. */
+          font-family: Arial, Helvetica, sans-serif !important;
+        }
+        .contract-page * {
+          font-family: Arial, Helvetica, sans-serif !important;
         }
         /* Scale the page down on narrow viewports so it actually fits the
            screen without horizontal scrolling. Uses CSS zoom (supported
