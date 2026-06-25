@@ -163,6 +163,18 @@ export const STUDENT_BUILDS = [
     img: '/bescost-ops.png',
     url: 'https://bescost-ops.vercel.app/',
   },
+  {
+    name: 'Meaningful Travels',
+    tag: 'PH heritage tours — booking, guide field console & feedback',
+    img: '/meaningful-travels.png',
+    url: 'https://meaningful-travels.vercel.app/',
+  },
+  {
+    name: 'Anaya',
+    tag: 'At-home massage booking — therapists arrive at your door',
+    img: '/anaya-ops.png',
+    url: 'https://anaya-ops.vercel.app/',
+  },
 ];
 
 /* --------------------------------------------------------------------- */
