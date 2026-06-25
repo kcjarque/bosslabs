@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { requireAdmin } from '@/lib/admin-auth';
+import { getAdminSession, requireAdmin } from '@/lib/admin-auth';
+import { DeleteCustomerButton } from '@/components/admin/DeleteCustomerButton';
 import {
   getSignupById,
   getEvents,
@@ -239,6 +240,10 @@ export default async function CustomerProfilePage({
   params: { id: string };
 }) {
   requireAdmin();
+  // Delete button is admin-only (not staff) — staff can VIEW customers but
+  // not nuke them; deletion cascades into commissions + comms history.
+  const session = getAdminSession();
+  const canDelete = session?.role === 'admin';
 
   const [
     customer,
@@ -318,9 +323,18 @@ export default async function CustomerProfilePage({
         <Link href="/admin/customers" className="text-xs text-slate-500 hover:underline">
           ← All customers
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          {customer.firstName} {customer.lastName ?? ''}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            {customer.firstName} {customer.lastName ?? ''}
+          </h1>
+          {canDelete && (
+            <DeleteCustomerButton
+              signupId={customer.id}
+              customerEmail={customer.email}
+              customerName={`${customer.firstName} ${customer.lastName ?? ''}`.trim()}
+            />
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
           <a href={`mailto:${customer.email}`} className="hover:underline">
             {customer.email}
@@ -350,6 +364,8 @@ export default async function CustomerProfilePage({
           )}
         </div>
       </header>
+
+      {/* Inline danger panel — only renders when the button is armed. */}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Profile card (left) */}

@@ -1,8 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireAdmin } from '@/lib/admin-auth';
+import { redirect } from 'next/navigation';
+import { getAdminSession, requireAdmin } from '@/lib/admin-auth';
 import {
+  deleteSignup,
   deleteSignups,
   getSignupById,
   setSignupRemarks,
@@ -74,6 +76,28 @@ export async function bulkDeleteAction(
   const count = await deleteSignups(signupIds);
   revalidatePath('/admin/customers');
   return { count };
+}
+
+/**
+ * Single-customer delete from the profile page. **Admin role only** —
+ * staff (delegated logins) are explicitly refused even if they can see
+ * the customers section, because deletion cascades into sequence_sends +
+ * page_views + commission ledgers with no undo.
+ *
+ * Redirects to /admin/customers on success so the user doesn't sit on a
+ * 404 page after their row vanished.
+ */
+export async function deleteCustomerAction(signupId: string): Promise<void> {
+  const session = getAdminSession();
+  if (!session) throw new Error('Not signed in.');
+  if (session.role !== 'admin') {
+    throw new Error('Admin role required — staff cannot delete customers.');
+  }
+  if (!signupId) throw new Error('Missing signup id.');
+  const ok = await deleteSignup(signupId);
+  if (!ok) throw new Error('Delete returned no rows — already gone?');
+  revalidatePath('/admin/customers');
+  redirect('/admin/customers');
 }
 
 /**
