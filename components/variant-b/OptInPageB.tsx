@@ -246,7 +246,7 @@ function Manifesto() {
 
       {/* the receipts — the pull-quote's promise, delivered immediately:
           real student systems built in past sessions, still live right now */}
-      <div className="mx-auto mt-10 grid max-w-5xl gap-5 md:grid-cols-2">
+      <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {STUDENT_BUILDS.map((b, i) => (
           <Reveal key={b.name} delay={i * 100}>
             <a
