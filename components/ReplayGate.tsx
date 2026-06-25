@@ -20,14 +20,14 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * the client ticks the countdown down + flips to the closed state at zero.
  */
 export function ReplayGate({
-  youtubeId,
+  vimeoId,
   closesAtIso,
   endLabel,
   initiallyClosed,
   retreatUrl,
   forceClosed = false,
 }: {
-  youtubeId: string;
+  vimeoId: string;
   closesAtIso: string;
   endLabel: string;
   initiallyClosed: boolean;
@@ -138,9 +138,9 @@ export function ReplayGate({
       >
         <iframe
           className="absolute inset-0 h-full w-full"
-          src={`https://www.youtube.com/embed/${youtubeId}`}
+          src={`https://player.vimeo.com/video/${vimeoId}`}
           title="AI Vibe Coding 101 — Replay"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
           allowFullScreen
         />
       </div>

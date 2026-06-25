@@ -16,7 +16,8 @@ export const metadata: Metadata = {
 };
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
-const REPLAY_YOUTUBE_ID = 'oqzfUJQV0Do';
+// Vimeo URL pattern: https://vimeo.com/<id> → embed at player.vimeo.com/video/<id>.
+const REPLAY_VIMEO_ID = '1204563355';
 const APP_URL = 'https://anaya-ops.vercel.app/';
 // Screenshot of the app we built live this session (drop the file in /public).
 const APP_SCREENSHOT = '/anaya-ops.png';
@@ -81,7 +82,7 @@ export default function ReplayPage({
         {/* Replay video — gated by a real 7-day countdown */}
         <div className="mt-10">
           <ReplayGate
-            youtubeId={REPLAY_YOUTUBE_ID}
+            vimeoId={REPLAY_VIMEO_ID}
             closesAtIso={REPLAY_CLOSES_AT}
             endLabel={endLabel}
             initiallyClosed={initiallyClosed}
