@@ -337,13 +337,18 @@ export function ContractMaker() {
         .contract-maker-root button {
           font-family: Arial, Helvetica, sans-serif !important;
         }
+        /* Frame is a horizontal-scroll container. The contract page is
+           fixed at 210mm; if the column is narrower (mobile or with
+           browser zoom on), the frame scrolls horizontally instead of
+           clipping the right edge. The previous CSS-zoom approach
+           stacked unpredictably with browser zoom and clipped pages. */
         .contract-page-frame {
           background: #e5e7eb;
           padding: 14px;
           border-radius: 12px;
-          overflow-x: auto;             /* horizontal scroll on phones */
-          -webkit-overflow-scrolling: touch;
           max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
         .contract-page {
           background: white;
@@ -359,17 +364,6 @@ export function ContractMaker() {
         }
         .contract-page * {
           font-family: Arial, Helvetica, sans-serif !important;
-        }
-        /* Scale the page down on narrow viewports so it actually fits the
-           screen without horizontal scrolling. Uses CSS zoom (supported
-           on Chrome / Safari / Edge / Firefox 126+) — affects layout
-           height correctly, unlike transform: scale(). */
-        @media (max-width: 900px) {
-          .contract-page { zoom: 0.72; }
-        }
-        @media (max-width: 640px) {
-          .contract-page { zoom: 0.5; }
-          .contract-page-frame { padding: 8px; }
         }
         @media print {
           @page { size: A4; margin: 18mm 16mm; }

@@ -77,7 +77,7 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
             <div className="font-semibold text-[#06070A]">Lead Empire OPC</div>
             <div>3rd Flr. J&amp;M Ramos Bldg., Gen. Yengco St.</div>
             <div>Brgy. Poblacion IV-A, Imus, Cavite</div>
-            <div>hello@bosslabs.live · bosslabs.live</div>
+            <div>admin@bosslabsai.com · bosslabs.live</div>
           </div>
         </div>
         <div className="mt-3 h-[3px] w-full rounded-full bg-gradient-to-r from-[#00B8E6] via-[#00B8E6] to-transparent" />
