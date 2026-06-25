@@ -4,7 +4,9 @@ import { CrmBoard } from '@/components/CrmBoard';
 import { DfyBoard } from '@/components/DfyBoard';
 import { RetreatCrmBoard } from '@/components/RetreatCrmBoard';
 import { VipBoard } from '@/components/VipBoard';
+import { BootcampCrmBoard } from '@/components/admin/BootcampCrmBoard';
 import { PageHeader } from '@/components/admin/PageHeader';
+import { listBootcampCards } from '@/lib/bootcamp-crm';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'CRM · BOSSLABS AI' };
@@ -34,11 +36,21 @@ const TABS = [
     subtitle:
       'Your VIP watchlist — people worth tracking for future projects. Tag them, jot why, and keep their contact one tap away.',
   },
+  {
+    key: 'bootcamp',
+    label: 'Bootcamp',
+    subtitle:
+      "AI Founder's Bootcamp pipeline — reservations, paid seats, attended, lost leads. Drag across stages, edit headcount, jot notes.",
+  },
 ] as const;
 
-export default function CrmPage({ searchParams }: { searchParams: { board?: string } }) {
+export default async function CrmPage({ searchParams }: { searchParams: { board?: string } }) {
   requireAdmin();
   const active = TABS.find((t) => t.key === searchParams.board) ?? TABS[0];
+  // Bootcamp board is server-rendered with its initial cards (matches the
+  // /admin/bootcamp pattern). Only fetched when its tab is active so the
+  // other tabs don't pay the Supabase round-trip.
+  const bootcampCards = active.key === 'bootcamp' ? await listBootcampCards() : [];
 
   return (
     <div>
@@ -69,6 +81,7 @@ export default function CrmPage({ searchParams }: { searchParams: { board?: stri
       {active.key === 'dfy' && <DfyBoard />}
       {active.key === 'retreat' && <RetreatCrmBoard />}
       {active.key === 'vip' && <VipBoard />}
+      {active.key === 'bootcamp' && <BootcampCrmBoard initialCards={bootcampCards} />}
     </div>
   );
 }
