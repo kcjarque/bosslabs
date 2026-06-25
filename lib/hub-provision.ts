@@ -27,6 +27,9 @@ export type HubProvisionResult = {
 export async function provisionHubAccount(input: {
   email: string;
   fullName?: string;
+  /** When true and the user already exists upstream, rotate their password
+   *  and return the new one. Used by the backfill flow. */
+  forceReset?: boolean;
 }): Promise<HubProvisionResult | null> {
   const base = process.env.HUB_BASE_URL;
   const token = process.env.HUB_PROVISION_TOKEN;
@@ -41,7 +44,11 @@ export async function provisionHubAccount(input: {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ email: input.email, fullName: input.fullName ?? '' }),
+      body: JSON.stringify({
+        email: input.email,
+        fullName: input.fullName ?? '',
+        ...(input.forceReset ? { forceReset: true } : {}),
+      }),
       // 12s timeout — Supabase auth admin create can stall under load.
       signal: AbortSignal.timeout(12_000),
     });
