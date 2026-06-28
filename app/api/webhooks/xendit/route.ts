@@ -35,6 +35,7 @@ import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-externa
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
 import { applyBootcampPayment, getBootcampReservation, tierById } from '@/lib/bootcamp';
 import { provisionHubAccount } from '@/lib/hub-provision';
+import { sendHubCredentialsEmail } from '@/lib/hub-credentials-email';
 
 /**
  * Provision a BossLabs Hub account for a Vault buyer + save credentials on
@@ -49,30 +50,56 @@ async function provisionVaultBuyerHub(signup: {
   lastName?: string | null;
   metadata?: unknown;
 }): Promise<void> {
-  // Skip if we already provisioned this buyer (webhook retries are common).
-  const existing = (signup.metadata as { hubAccount?: { email: string } } | undefined)?.hubAccount;
+  // Skip if we already have hubAccount in metadata (proper record exists).
+  const existing = (signup.metadata as { hubAccount?: { email: string; password?: string | null } } | undefined)?.hubAccount;
   if (existing) return;
 
   const fullName = [signup.firstName, signup.lastName].filter(Boolean).join(' ').trim();
-  const result = await provisionHubAccount({ email: signup.email, fullName });
+  let result = await provisionHubAccount({ email: signup.email, fullName });
   if (!result?.ok) return; // helper already logged
-  // existed=true means the user already had an auth account upstream — the
-  // password is NOT returned (only present on first create). If we wrote
-  // metadata now we'd clobber a real password from the original webhook fire
-  // with `null`. Skip the write; the original credentials remain.
-  if (result.existed) return;
+
+  // ORPHAN RECOVERY: Hub user exists but our signup metadata has no
+  // hubAccount. The first webhook fire's createUser succeeded at Hub but
+  // the metadata write didn't persist (function timeout / DB transient).
+  // Force-reset to mint a fresh password we can deliver, then write metadata.
+  // Without this branch the buyer is permanently stuck — webhook idempotency
+  // would never retry, and existed:true would never produce a new password.
+  if (result.existed) {
+    const reset = await provisionHubAccount({
+      email: signup.email,
+      fullName,
+      forceReset: true,
+    });
+    if (!reset?.ok || !reset.password) return;
+    result = reset;
+  }
+
   await updateSignup(signup.id, {
     metadata: {
       ...(signup.metadata as Record<string, unknown> | undefined),
       hubAccount: {
         email: result.email,
-        password: result.password ?? null, // null when existed=true (re-fire)
+        password: result.password ?? null,
         userId: result.userId,
         provisionedAt: new Date().toISOString(),
         existed: result.existed,
       },
     },
   });
+
+  // Auto-send credentials email so new Vault buyers don't depend on the
+  // /thank-you/vault page being open. Best-effort; failures are logged but
+  // don't block the webhook (buyer can also see creds on the success page,
+  // and the admin backfill endpoint can re-send on demand).
+  if (result.password) {
+    void sendHubCredentialsEmail({
+      firstName: signup.firstName || signup.email.split('@')[0],
+      email: signup.email,
+      hubPassword: result.password,
+    }).then((res) => {
+      if (!res.ok) console.warn('[hub-provision] auto-email failed', res.error);
+    });
+  }
 }
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -156,8 +183,20 @@ async function handleMainPaid(event: XenditEvent) {
     };
   };
 
-  // Idempotency: if already processed, bail without re-sending.
+  // Idempotency: if already processed, bail without re-sending. BUT still
+  // retry Vault Hub provisioning — it's idempotent on its own and the first
+  // fire could have left the buyer in an orphan state (Hub user created but
+  // signup metadata missing the hubAccount marker).
   if (signup.status === 'paid' && meta.confirmationSent) {
+    if (Boolean(signup.bumped)) {
+      await provisionVaultBuyerHub({
+        id: signup.id,
+        email: signup.email,
+        firstName: signup.firstName,
+        lastName: signup.lastName,
+        metadata: signup.metadata,
+      });
+    }
     return NextResponse.json({ ok: true, alreadyPaid: true });
   }
 
@@ -335,8 +374,19 @@ async function handleOtoPaid(event: XenditEvent) {
     };
   };
 
-  // Idempotency for the OTO leg.
+  // Idempotency for the OTO leg. Still retry Vault Hub provisioning in case
+  // the first fire orphaned the buyer (Hub user created, metadata write
+  // failed). Helper is itself idempotent.
   if (meta.otoConfirmed) {
+    if (otoProduct === 'oto' || otoProduct === 'both') {
+      await provisionVaultBuyerHub({
+        id: signup.id,
+        email: signup.email,
+        firstName: signup.firstName,
+        lastName: signup.lastName,
+        metadata: signup.metadata,
+      });
+    }
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
 
@@ -485,13 +535,25 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     };
   };
 
-  // Idempotency — a retried webhook bails here.
+  // Parse the product first so the idempotency path below can also retry
+  // Vault Hub provisioning (it needs `product` to decide whether this row
+  // should have a Hub account).
+  const product = parseStandaloneOtoProduct(externalId);
+
+  // Idempotency — a retried webhook bails here. Still retry Vault Hub
+  // provisioning in case the first fire orphaned the buyer.
   if (meta.otoConfirmed) {
+    if (product === 'oto' || product === 'both') {
+      await provisionVaultBuyerHub({
+        id: signup.id,
+        email: signup.email,
+        firstName: signup.firstName,
+        lastName: signup.lastName,
+        metadata: signup.metadata,
+      });
+    }
     return NextResponse.json({ ok: true, alreadyOto: true });
   }
-
-  // Which product this standalone purchase was for (VAULT / 1ON1 / BOTH in the id).
-  const product = parseStandaloneOtoProduct(externalId);
   const productLabel =
     product === 'both' ? `${OFFER.oto2.name} + ${OFFER.oto.name}` :
     (product === 'oto' ? OFFER.oto : OFFER.oto2).name;
