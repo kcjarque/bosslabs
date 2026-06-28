@@ -117,6 +117,29 @@ const FUNNELS = [
       ],
     },
   },
+  {
+    slug: 'founders-bootcamp',
+    name: "AI Founder's Bootcamp",
+    kind: 'event',
+    active: true,
+    config: {
+      tagline: 'Walk in with an idea. Walk out with a launched app.',
+      subtitle: '24-Hour Build-or-Refund Bootcamp',
+      capacity: 80,
+      standardPriceCentavos: 25_000_00, // ₱25,000 (single seat default)
+      depositCentavos: 10_000_00, // ₱10,000 per-seat downpayment
+      paymentMethods: ['Bank transfer', 'Maya'],
+      publicUrl: 'https://www.bosslabs.live/founders-bootcamp',
+      // Tier breakdown for the funnel detail page. Source of truth for
+      // checkout pricing lives in lib/bootcamp.ts (BOOTCAMP_TIERS) — keep
+      // these two in sync when you change prices.
+      tiers: [
+        { id: 'single', label: '1 seat', perSeatCentavos: 25_000_00, seats: 1, totalCentavos: 25_000_00 },
+        { id: 'group3', label: '3 seats — Corporate trio', perSeatCentavos: 22_000_00, seats: 3, totalCentavos: 66_000_00, badge: 'Save ₱9,000' },
+        { id: 'group5', label: '5 seats — Corporate squad', perSeatCentavos: 20_000_00, seats: 5, totalCentavos: 100_000_00, badge: 'Save ₱25,000' },
+      ],
+    },
+  },
 ];
 
 async function main() {
