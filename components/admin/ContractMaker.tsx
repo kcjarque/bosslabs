@@ -306,8 +306,10 @@ export function ContractMaker() {
           </section>
         </form>
 
-        {/* PREVIEW */}
-        <section className={mobileView === 'preview' ? '' : 'hidden lg:block'}>
+        {/* PREVIEW — the `contract-preview-section` class lets the print CSS
+            force-show this even when mobileView==='edit' (`hidden` is applied);
+            otherwise tapping Print on the Edit tab on mobile produces a blank PDF. */}
+        <section className={`contract-preview-section ${mobileView === 'preview' ? '' : 'hidden lg:block'}`}>
           <div className="contract-no-print mb-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-500">
             <span className="truncate">Live preview · what the PDF will look like</span>
             <span>Option {data.optionId}</span>
@@ -370,6 +372,11 @@ export function ContractMaker() {
           html, body { background: white !important; }
           .contract-no-print { display: none !important; }
           .admin-shell aside, .admin-shell header { display: none !important; }
+          /* Override Tailwind's .hidden on the preview section so the
+             contract document prints even when the user tapped Print from
+             the mobile Edit tab. Without this, the section stays
+             display:none during print → blank PDF. */
+          .contract-preview-section { display: block !important; }
           .contract-page-frame {
             background: none !important;
             padding: 0 !important;
