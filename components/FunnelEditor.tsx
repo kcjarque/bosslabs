@@ -174,7 +174,7 @@ export function FunnelEditor({
           <Field label="Deposit to secure slot">
             <input className="input" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
           </Field>
-          <Field label="Balance due date" hint="e.g. June 19">
+          <Field label="Balance due date" hint="e.g. July 24">
             <input className="input" value={balanceDue} onChange={(e) => setBalanceDue(e.target.value)} />
           </Field>
           <Field label="Extra person add-on">
