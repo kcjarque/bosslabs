@@ -69,15 +69,23 @@ export function CountdownBar({
   if (!target) return null;
 
   return (
-    <div className="border-b border-danger-700/60 bg-gradient-to-r from-danger-700/30 via-danger-600/20 to-danger-700/30">
-      <div className="container-tight flex flex-col items-center justify-between gap-2 py-2.5 text-center sm:flex-row sm:text-left">
-        <div className="flex items-center gap-2.5 text-[11px] uppercase tracking-[0.22em] text-danger-200">
-          <span className="pulse-dot" />
-          <span>WARNING · {message}</span>
+    <div className="relative border-b border-danger-400/70 bg-gradient-to-r from-danger-600 via-danger-500 to-danger-600 shadow-[0_2px_24px_-2px_rgba(220,38,38,0.55)]">
+      {/* Subtle moving highlight so the bar feels alive without strobing. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 animate-[pulseBar_3.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent"
+      />
+      <div className="container-tight relative flex flex-col items-center justify-between gap-2 py-3 text-center sm:flex-row sm:gap-4 sm:py-2.5 sm:text-left">
+        <div className="flex items-center gap-2.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-white sm:text-[13px]">
+          <span aria-hidden className="text-[15px] leading-none drop-shadow-[0_0_4px_rgba(255,210,210,0.6)] sm:text-[16px]">⚠️</span>
+          <span>
+            <span className="text-white">WARNING ·</span>{' '}
+            <span className="text-white">{message}</span>
+          </span>
         </div>
         <div
           suppressHydrationWarning
-          className="flex items-center gap-2 font-serif text-sm tracking-tight text-white sm:text-base"
+          className="flex items-center gap-2 font-serif text-base font-semibold tracking-tight text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.18)] sm:gap-2.5 sm:text-lg"
         >
           <Cell n={mounted ? days : 0} label="D" />
           <Sep />
@@ -88,6 +96,12 @@ export function CountdownBar({
           <Cell n={mounted ? secs : 0} label="S" />
         </div>
       </div>
+      <style jsx>{`
+        @keyframes pulseBar {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -146,14 +160,14 @@ export function CountdownMini({ startsAtIso }: { startsAtIso?: string }) {
 function Cell({ n, label }: { n: number; label: string }) {
   return (
     <span className="inline-flex items-baseline gap-1 tabular-nums">
-      <span className="font-serif text-base text-white sm:text-lg">{pad(n)}</span>
-      <span className="text-[10px] uppercase tracking-[0.22em] text-danger-200">{label}</span>
+      <span className="font-serif text-base font-semibold text-white sm:text-lg">{pad(n)}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">{label}</span>
     </span>
   );
 }
 
 function Sep() {
-  return <span className="text-danger-300/60">·</span>;
+  return <span className="text-white/55">·</span>;
 }
 
 function BigCell({ n, label }: { n: number; label: string }) {
