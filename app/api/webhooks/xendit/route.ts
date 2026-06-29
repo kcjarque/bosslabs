@@ -43,20 +43,32 @@ import { sendHubCredentialsEmail } from '@/lib/hub-credentials-email';
  * has the creds ready when the redirect lands. Failures are logged but
  * never fail the payment flow.
  */
+/** Shape of the hubAccount field we write into signup.metadata. Returned by
+ *  provisionVaultBuyerHub so callers can merge it into their in-memory
+ *  paidMeta variable — preventing subsequent updateSignup calls (email
+ *  confirmation status, SMS status, etc.) from clobbering it. */
+type HubAccountMeta = {
+  email: string;
+  password: string | null;
+  userId: string | undefined;
+  provisionedAt: string;
+  existed: boolean;
+};
+
 async function provisionVaultBuyerHub(signup: {
   id: string;
   email: string;
   firstName?: string | null;
   lastName?: string | null;
   metadata?: unknown;
-}): Promise<void> {
+}): Promise<HubAccountMeta | null> {
   // Skip if we already have hubAccount in metadata (proper record exists).
-  const existing = (signup.metadata as { hubAccount?: { email: string; password?: string | null } } | undefined)?.hubAccount;
-  if (existing) return;
+  const existing = (signup.metadata as { hubAccount?: HubAccountMeta } | undefined)?.hubAccount;
+  if (existing) return existing;
 
   const fullName = [signup.firstName, signup.lastName].filter(Boolean).join(' ').trim();
   let result = await provisionHubAccount({ email: signup.email, fullName });
-  if (!result?.ok) return; // helper already logged
+  if (!result?.ok) return null; // helper already logged
 
   // ORPHAN RECOVERY: Hub user exists but our signup metadata has no
   // hubAccount. The first webhook fire's createUser succeeded at Hub but
@@ -70,20 +82,22 @@ async function provisionVaultBuyerHub(signup: {
       fullName,
       forceReset: true,
     });
-    if (!reset?.ok || !reset.password) return;
+    if (!reset?.ok || !reset.password) return null;
     result = reset;
   }
+
+  const hubAccount: HubAccountMeta = {
+    email: result.email,
+    password: result.password ?? null,
+    userId: result.userId,
+    provisionedAt: new Date().toISOString(),
+    existed: result.existed,
+  };
 
   await updateSignup(signup.id, {
     metadata: {
       ...(signup.metadata as Record<string, unknown> | undefined),
-      hubAccount: {
-        email: result.email,
-        password: result.password ?? null,
-        userId: result.userId,
-        provisionedAt: new Date().toISOString(),
-        existed: result.existed,
-      },
+      hubAccount,
     },
   });
 
@@ -100,6 +114,11 @@ async function provisionVaultBuyerHub(signup: {
       if (!res.ok) console.warn('[hub-provision] auto-email failed', res.error);
     });
   }
+
+  // Return so the caller can merge into its in-memory paidMeta — otherwise
+  // a subsequent updateSignup call (email confirmation, SMS status, etc.)
+  // would spread stale paidMeta and overwrite this very hubAccount.
+  return hubAccount;
 }
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
@@ -212,15 +231,18 @@ async function handleMainPaid(event: XenditEvent) {
 
   // Vault bumped at checkout (₱999 main + ₱999 Vault in one invoice) →
   // provision a Hub account immediately so the thank-you page can show
-  // username + password.
+  // username + password. Merge the returned hubAccount into paidMeta so
+  // the post-confirmation updateSignup call below doesn't spread a stale
+  // paidMeta and silently overwrite the hubAccount we just persisted.
   if (Boolean(signup.bumped)) {
-    await provisionVaultBuyerHub({
+    const hubAccount = await provisionVaultBuyerHub({
       id: signup.id,
       email: signup.email,
       firstName: signup.firstName,
       lastName: signup.lastName,
       metadata: paidMeta,
     });
+    if (hubAccount) (paidMeta as Record<string, unknown>).hubAccount = hubAccount;
   }
 
   // Affiliate commission — if this buyer was referred, record the payout
@@ -396,9 +418,13 @@ async function handleOtoPaid(event: XenditEvent) {
   const amountPhp = event.amount ?? fallbackCentavos / 100;
 
   // Vault buyer (product='oto' or 'both') → provision a Hub account NOW so
-  // the thank-you redirect can show username + password.
+  // the thank-you redirect can show username + password. Capture the
+  // returned hubAccount so we can merge it into the final metadata write
+  // below; otherwise that later updateSignup spreads stale signup.metadata
+  // and silently clobbers the hubAccount provision just persisted.
+  let hubAccount: HubAccountMeta | null = null;
   if (otoProduct === 'oto' || otoProduct === 'both') {
-    await provisionVaultBuyerHub({
+    hubAccount = await provisionVaultBuyerHub({
       id: signup.id,
       email: signup.email,
       firstName: signup.firstName,
@@ -448,6 +474,10 @@ async function handleOtoPaid(event: XenditEvent) {
     bumped: true,
     metadata: {
       ...(signup.metadata ?? {}),
+      // Preserve the hubAccount provisionVaultBuyerHub just wrote (above).
+      // Without this spread the final update would overwrite the metadata
+      // column with a stale snapshot that doesn't include hubAccount.
+      ...(hubAccount ? { hubAccount } : {}),
       otoConfirmed: new Date().toISOString(),
       otoInvoiceId: event.id,
       otoExternalId: event.external_id,
@@ -563,8 +593,12 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
   const amountPhp = event.amount ?? fallbackCentavos / 100;
 
   // Vault buyer (product='oto' or 'both') → provision Hub account NOW.
+  // Capture the returned hubAccount so we can merge it into the final
+  // metadata write below — otherwise that update spreads stale
+  // signup.metadata and silently clobbers the hubAccount we just persisted.
+  let hubAccount: HubAccountMeta | null = null;
   if (product === 'oto' || product === 'both') {
-    await provisionVaultBuyerHub({
+    hubAccount = await provisionVaultBuyerHub({
       id: signup.id,
       email: signup.email,
       firstName: signup.firstName,
@@ -618,6 +652,9 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     amountCentavos: Math.round(amountPhp * 100),
     metadata: {
       ...(signup.metadata ?? {}),
+      // Preserve the hubAccount provisionVaultBuyerHub just wrote (above)
+      // — same anti-clobber spread as handleMainPaid / handleOtoPaid.
+      ...(hubAccount ? { hubAccount } : {}),
       otoConfirmed: new Date().toISOString(),
       otoInvoiceId: event.id,
       otoExternalId: externalId,
