@@ -405,4 +405,4 @@ export async function saveRetreatCrmTemplate(template: string): Promise<void> {
 }
 
 const RETREAT_TEMPLATE_DEFAULT =
-  "Hi {{name}}! Saw you're interested in the BOSSLABS VibeCode Retreat 🏝️ — 10 seats only, June 26-27 in Tagaytay. Want me to hold one for you?";
+  "Hi {{name}}! Saw you're interested in the BOSSLABS VibeCode Retreat 🏝️ — 10 seats only, July 31 - August 1 in Tagaytay. Want me to hold one for you?";

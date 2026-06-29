@@ -46,7 +46,8 @@ const FUNNELS = [
       standardPriceCentavos: 6_000_000, // ₱60,000
       payInFullPriceCentavos: 5_000_000, // ₱50,000 if paid in full today
       depositCentavos: 1_000_000, // ₱10,000 to secure the slot
-      balanceDueDate: 'June 19',
+      balanceDueDate: 'July 24',
+      eventDate: 'July 31 – August 1, 2026',
       extraPersonCentavos: 1_500_000, // +₱15,000 extra person
       totalValueCentavos: 55_500_000, // ₱555,000 stack value
       paymentMethods: ['Bank transfer', 'Maya'],
