@@ -52,9 +52,12 @@ import {
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
 
-// Display = Instrument Serif (the control's display face, already loaded
-// globally as font-serif). Single 400 weight — never faux-bolded.
-const display = `font-serif font-normal`;
+// Display = Inter (sans, already loaded globally). Variant C drops the
+// Instrument Serif italic the other variants use because at hero scale
+// long italicized phrases become hard to read — Inter Extra-Bold gives
+// the same poster weight with much better legibility, especially for the
+// English/Taglish mix variant C leans on.
+const display = `font-sans font-extrabold tracking-tight`;
 const mono = `font-[family-name:var(--font-vb-mono)]`;
 
 export function OptInPageC({ webinar }: { webinar: WebinarInfo }) {
@@ -136,9 +139,9 @@ function HeroB2({ webinar }: { webinar: WebinarInfo }) {
 
           <h1 className={`${display} mt-7 text-[36px] leading-[1.06] tracking-[-0.01em] text-white sm:text-[56px] md:text-[66px]`}>
             {HEADLINE.prefix}{' '}
-            <span className="accent-italic">{HEADLINE.outcome}</span>{' '}
+            <span className="text-cyan-300">{HEADLINE.outcome}</span>{' '}
             {HEADLINE.mechanismPrefix} {HEADLINE.mechanism} —{' '}
-            <span className="accent-italic">
+            <span className="text-cyan-300">
               {HEADLINE.objectionPrefix} {HEADLINE.objection}
             </span>
           </h1>
