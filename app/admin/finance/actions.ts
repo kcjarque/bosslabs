@@ -59,6 +59,7 @@ export async function addExpenseAction(fd: FormData) {
     projectItemId: nullable(fd, 'projectItemId'),
     isAbono: Boolean(paidBy),
     paidBy,
+    receiptUrl: nullable(fd, 'receiptUrl'),
   });
   refresh();
 }

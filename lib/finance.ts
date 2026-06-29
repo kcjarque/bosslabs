@@ -70,6 +70,8 @@ export type Expense = {
   isAbono: boolean;
   paidBy: string | null;
   abonoSettled: boolean;
+  /** Public Supabase Storage URL of an attached receipt/screenshot. */
+  receiptUrl: string | null;
 };
 
 /** One open/settled Accounts-Payable line — a stored abono expense OR a
@@ -109,6 +111,8 @@ export type MonthRow = {
   isAbono: boolean; // fronted (reimbursable) expense
   paidBy: string | null; // who fronted it
   abonoSettled: boolean; // reimbursed already
+  /** Receipt/screenshot URL — only present on stored single expenses (recurring rows don't have one). */
+  receiptUrl: string | null;
 };
 
 export type MonthlyConsolidation = {
@@ -487,6 +491,7 @@ export async function listExpenses(filters?: {
     isAbono: Boolean(r.is_abono),
     paidBy: r.paid_by ?? null,
     abonoSettled: Boolean(r.abono_settled),
+    receiptUrl: r.receipt_url ?? null,
   }));
 }
 
@@ -499,6 +504,8 @@ export async function addExpense(input: {
   projectItemId?: string | null;
   isAbono?: boolean;
   paidBy?: string | null;
+  /** Optional public Storage URL of an uploaded receipt/screenshot. */
+  receiptUrl?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const clean = input.description.trim();
@@ -513,6 +520,7 @@ export async function addExpense(input: {
     source: input.projectId ? 'project' : 'single',
     is_abono: Boolean(input.isAbono),
     paid_by: input.paidBy ?? null,
+    receipt_url: input.receiptUrl ?? null,
   });
   if (error) throw new Error(`addExpense: ${error.message}`);
 }
@@ -818,6 +826,7 @@ export async function getMonthlyConsolidation(
       isAbono: e.isAbono,
       paidBy: e.paidBy,
       abonoSettled: e.abonoSettled,
+      receiptUrl: e.receiptUrl,
     });
   }
 
@@ -845,6 +854,7 @@ export async function getMonthlyConsolidation(
         isAbono: r.isAbono,
         paidBy: r.paidBy,
         abonoSettled: Boolean(ov?.abonoSettled),
+        receiptUrl: null, // recurring occurrences don't carry receipts (yet)
       });
     }
   }
@@ -912,6 +922,7 @@ type ExpenseRow = {
   paid_by?: string | null;
   abono_settled?: boolean;
   abono_settled_at?: string | null;
+  receipt_url?: string | null;
 };
 type OverrideRow = {
   recurring_id: string;

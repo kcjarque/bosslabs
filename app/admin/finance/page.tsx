@@ -6,6 +6,7 @@ import { ConfirmButton } from '@/components/finance/ConfirmButton';
 import { EditableAmount } from '@/components/finance/EditableAmount';
 import { EditableText } from '@/components/finance/EditableText';
 import { PaidBySelect } from '@/components/finance/PaidBySelect';
+import { ReceiptUploadField } from '@/components/admin/ReceiptUploadField';
 import {
   getMonthlyConsolidation,
   listCategories,
@@ -140,6 +141,20 @@ export default async function FinanceExpensesPage({
                             Paid by {r.paidBy}{r.abonoSettled ? ' · reimbursed' : ''}
                           </span>
                         )}
+                        {r.receiptUrl && (
+                          <a
+                            href={r.receiptUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:border-cyan-300 hover:text-cyan-700"
+                            title="View attached receipt"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Receipt
+                          </a>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <span
@@ -246,6 +261,7 @@ export default async function FinanceExpensesPage({
               directLabel="— Business paid directly —"
               help="If someone fronted this, pick who — it's added to Accounts Payable until you reimburse them."
             />
+            <ReceiptUploadField />
             <button type="submit" className="btn btn-primary w-full">
               Add expense
             </button>
