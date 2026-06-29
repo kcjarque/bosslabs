@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   CONTRACT_OPTIONS,
   DEFAULT_CONTRACT_FORM,
@@ -11,6 +11,14 @@ import {
 } from '@/lib/contract-defaults';
 import { ContractDocument } from './ContractDocument';
 
+/** Strip filesystem-hostile characters from a string used as a filename
+ *  segment. Keeps letters, digits, dashes, underscores; collapses everything
+ *  else into a single dash. */
+function safeFilenameSegment(s: string, fallback = 'Client'): string {
+  const cleaned = s.normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+  return cleaned.length > 0 ? cleaned.slice(0, 60) : fallback;
+}
+
 const inputCls =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200';
 const labelCls = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-600';
@@ -20,6 +28,48 @@ export function ContractMaker() {
   // Mobile tab — desktop shows both panes side-by-side; small screens swap
   // between "Edit" and "Preview" so the preview is readable at full width.
   const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit');
+  // PDF download state — disables the button + shows progress while
+  // html2pdf renders. Async because html2pdf is dynamically imported (it
+  // touches `window` at module load, would break SSR).
+  const [downloading, setDownloading] = useState(false);
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  async function downloadPdf() {
+    const el = pageRef.current;
+    if (!el || downloading) return;
+    setDownloading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const client = safeFilenameSegment(data.clientCompanyName, 'Client');
+      const filename = `BossLabs-Agreement-${client}-${today}.pdf`;
+      // Dynamic import — html2pdf reads `window` at the top of its module.
+      const html2pdfMod = await import('html2pdf.js');
+      const html2pdf = (html2pdfMod.default ?? html2pdfMod) as (() => {
+        set: (opts: Record<string, unknown>) => { from: (el: HTMLElement) => { save: () => Promise<void> } };
+      });
+      await html2pdf()
+        .set({
+          filename,
+          margin: [12, 10, 12, 10], // mm: top, right, bottom, left
+          image: { type: 'jpeg', quality: 0.96 },
+          // scale: 2 keeps text crisp on retina; useCORS for any remote images
+          // we might reference; backgroundColor white so the dark admin chrome
+          // doesn't bleed into the PDF.
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          // Avoid splitting tables/sections across pages where html2pdf can
+          // detect a clean break; falls back to CSS page-break-* and legacy.
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(el)
+        .save();
+    } catch (err) {
+      console.error('[contract] PDF download failed', err);
+      window.alert('Sorry, the PDF could not be generated. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const pickOption = (id: ContractFormData['optionId']) => {
     const opt = findOption(id);
@@ -68,10 +118,26 @@ export function ContractMaker() {
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            onClick={downloadPdf}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
           >
-            🖨 Print to PDF
+            {downloading ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" className="animate-spin" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+                Generating PDF…
+              </>
+            ) : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Download PDF
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -317,7 +383,7 @@ export function ContractMaker() {
           {/* Scrollable frame on small screens so the 210mm page stays readable
               without forcing the whole admin chrome to grow horizontally. */}
           <div className="contract-page-frame">
-            <div className="contract-page">
+            <div ref={pageRef} className="contract-page">
               <ContractDocument data={data} />
             </div>
           </div>
