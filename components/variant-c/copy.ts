@@ -13,21 +13,29 @@
  * those are things AIBS can't copy.
  */
 
-/* HEADLINE — outcome-first. Same shape as the shared HEADLINE so the hero
-   render code reuses the existing prefix/outcome/mechanism slots without
-   restructuring. */
+/* HEADLINE — outcome-first, ONE cyan accent, qualifier demoted.
+   Audit fix (2026-06-29): the previous shape had ~60% of the headline in
+   cyan italic, flattening hierarchy. New shape: one dominant hook with
+   ONE cyan accent (the concrete number — that's the hero), qualifier
+   moved to a smaller demoted line below, body subhead shortened to a
+   single sentence. */
 export const HEADLINE_C = {
-  prefix: 'Stop hiring devs.',
-  outcome: 'Ship your first AI-built app',
-  outcomeTail: '',
-  mechanismPrefix: 'in',
-  mechanism: '24 hours',
-  objectionPrefix: 'even if you',
-  objection: "have never touched code.",
+  /** White, biggest. */
+  main: 'Ship your first AI-built app',
+  /** Cyan accent — the concrete, scannable specificity. */
+  accent: 'in 24 hours.',
+  /** Medium gray, smaller. The "even if" reassurance. */
+  qualifier: "Stop hiring devs. Even if you've never touched code.",
 };
 
+/** Subhead body — one sentence, scan-friendly. The longer Taglish pitch
+ *  moved into the WhoFor / Manifesto sections below the fold. */
 export const SUBHEADLINE_C =
-  'Walk in with an idea. Walk out with a real, working app you can show your team Monday. Live, 2-hour workshop. Tatlong libong founder na ginawa na — sino susunod?';
+  'Walk in with an idea. Walk out with a working app you ship Monday.';
+
+/** Microcopy under the hero CTA — social proof at the conversion moment. */
+export const CTA_MICROCOPY_C =
+  'Join 3,000+ Filipino founders who already shipped';
 
 /* DELIVERABLE — singular + finishable. Replaces vague "real systems in 24h". */
 export const DELIVERABLE_C = {

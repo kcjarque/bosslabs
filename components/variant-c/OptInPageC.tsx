@@ -42,7 +42,8 @@ import type { WebinarInfo } from '@/lib/webinar';
 import {
   BONUS_ITEMS_C,
   BONUS_TOTAL_C,
-  HEADLINE_C as HEADLINE,
+  CTA_MICROCOPY_C,
+  HEADLINE_C,
   LIVE_APPS_HEADLINE_C,
   LIVE_APPS_SUBLINE_C,
   SUBHEADLINE_C as SUBHEADLINE,
@@ -137,25 +138,38 @@ function HeroB2({ webinar }: { webinar: WebinarInfo }) {
             Live on Zoom · {webinar.date} · {webinar.time} {webinar.timezone}
           </div>
 
-          <h1 className={`${display} mt-7 text-[36px] leading-[1.06] tracking-[-0.01em] text-white sm:text-[56px] md:text-[66px]`}>
-            {HEADLINE.prefix}{' '}
-            <span className="text-cyan-300">{HEADLINE.outcome}</span>{' '}
-            {HEADLINE.mechanismPrefix} {HEADLINE.mechanism} —{' '}
-            <span className="text-cyan-300">
-              {HEADLINE.objectionPrefix} {HEADLINE.objection}
-            </span>
+          {/* Hero hook — ONE cyan accent, white-dominant. Smaller than the
+              shared display preset so the CTA stays above the 1080p fold. */}
+          <h1 className={`${display} mt-7 text-[32px] leading-[1.04] tracking-[-0.015em] text-white sm:text-[44px] md:text-[54px]`}>
+            <span>{HEADLINE_C.main}</span>{' '}
+            <span className="text-cyan-300">{HEADLINE_C.accent}</span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-[15px] leading-relaxed text-ink-100 sm:text-[17px]">
+          {/* Qualifier — demoted: smaller, semibold (not extra-bold),
+              ink-200 (lighter than the headline white). Gives the hierarchy
+              tier the previous version was missing. */}
+          <p className="mx-auto mt-4 max-w-[36ch] font-sans text-[17px] font-semibold leading-[1.35] tracking-tight text-ink-200 sm:text-[20px]">
+            {HEADLINE_C.qualifier}
+          </p>
+
+          {/* Body subhead — single sentence, regular weight, smaller than
+              the qualifier. Three-tier vertical type rhythm: H1 → strong
+              qualifier → body. */}
+          <p className="mx-auto mt-5 max-w-[42ch] text-[14px] leading-[1.55] text-ink-300 sm:text-[15px]">
             {SUBHEADLINE}
           </p>
 
-          <div className="mt-8">
+          <div className="mt-7">
             <CTAButton
               placement="hero"
               sub={
-                <span className={mono}>
-                  GCash · Maya · Cards &nbsp;·&nbsp; 7-day money-back guarantee
+                <span className="flex flex-col items-center gap-1">
+                  <span className="text-[12.5px] font-semibold text-cyan-200/90">
+                    {CTA_MICROCOPY_C}
+                  </span>
+                  <span className={`${mono} text-[11px] text-ink-300`}>
+                    GCash · Maya · Cards &nbsp;·&nbsp; 7-day money-back guarantee
+                  </span>
                 </span>
               }
             >
