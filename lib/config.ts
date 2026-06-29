@@ -454,10 +454,13 @@ export const FACEBOOK_GROUP_URL =
 /* Monitor recipients — every sequence/drip email also gets sent to these so
  * the team can see exactly what registrants receive, for ANY event, without
  * being fake signups (which would pollute paid/abandoned/revenue metrics).
- * One copy per step fire, email only. Override via env (comma-separated). */
-export const MONITOR_EMAILS = (
-  process.env.DRIP_MONITOR_EMAILS || 'kylejarque@gmail.com,michaelbmanago@gmail.com'
-)
+ * One copy per step fire, email only.
+ *
+ * Default empty: most sequences are battle-tested now, and the volume of
+ * "checking" copies became noisy in the founders' inboxes. Re-enable by
+ * setting DRIP_MONITOR_EMAILS=kyle@x.com,mikey@x.com in Vercel env when
+ * monitoring is needed (e.g. when revamping a sequence). */
+export const MONITOR_EMAILS = (process.env.DRIP_MONITOR_EMAILS || '')
   .split(',')
   .map((e) => e.trim())
   .filter(Boolean);
