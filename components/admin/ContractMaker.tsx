@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   CONTRACT_OPTIONS,
@@ -162,6 +163,21 @@ export function ContractMaker({
 
   return (
     <div className="contract-maker-root space-y-6">
+      {/* Tabs */}
+      <div className="contract-no-print -mx-4 border-b border-slate-200 bg-white px-4 sm:-mx-6 sm:px-6">
+        <nav className="flex gap-1 text-[13px]">
+          <Link
+            href="/admin/contracts"
+            className="rounded-t-md border-b-2 border-transparent px-3 py-2.5 font-medium text-slate-500 transition hover:text-slate-900"
+          >
+            All contracts
+          </Link>
+          <span className="rounded-t-md border-b-2 border-cyan-600 px-3 py-2.5 font-semibold text-cyan-700">
+            {contractId ? 'Editor' : 'New contract'}
+          </span>
+        </nav>
+      </div>
+
       {/* Action bar */}
       <div className="contract-no-print sticky top-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#F5F7FB]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div>
