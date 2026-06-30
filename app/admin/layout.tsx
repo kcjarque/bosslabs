@@ -57,6 +57,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { href: '/admin/crm', label: 'CRM', icon: 'crm' },
       { href: '/admin/contracts', label: 'Contracts', icon: 'crm' },
       { href: '/admin/ndas', label: 'NDAs', icon: 'crm' },
+      { href: '/admin/dfy', label: 'DFY Ops', icon: 'crm' },
       { href: '/admin/recordings', label: 'Recordings', icon: 'recordings' },
       { href: '/admin/capi-status', label: 'CAPI status', icon: 'capi' },
     ],
