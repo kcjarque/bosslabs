@@ -314,17 +314,30 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
 
         {/* Optional downpayment clause. When present, the following clauses
             shift one number forward (3.3 → 3.4, etc.) so the section stays
-            sequentially numbered. */}
+            sequentially numbered. Percent vs fixed-amount phrasing is
+            picked by data.downpaymentMode. */}
         {data.requiresDownpayment && (
           <Numbered n="3.3">
-            <strong>Downpayment.</strong> The Client shall remit a non-refundable
-            downpayment equal to {data.downpaymentPercent}% (
-            {numberToWords(data.downpaymentPercent)} percent) of the One-Time Fees within
-            seven (7) days of execution of this Agreement. The remaining{' '}
-            {100 - data.downpaymentPercent}% (
-            {numberToWords(100 - data.downpaymentPercent)} percent) shall become due upon
-            delivery and acceptance of the Platform. The Monthly Retainer commences as
-            provided in the next clause and is not covered by the downpayment.
+            <strong>Downpayment.</strong>{' '}
+            {data.downpaymentMode === 'fixed' ? (
+              <>
+                The Client shall remit a non-refundable downpayment of{' '}
+                <strong>{fmtPHP(data.downpaymentFixedCentavos)}</strong> within seven (7)
+                days of execution of this Agreement. The remainder of the One-Time Fees
+                shall become due upon delivery and acceptance of the Platform.
+              </>
+            ) : (
+              <>
+                The Client shall remit a non-refundable downpayment equal to{' '}
+                {data.downpaymentPercent}% ({numberToWords(data.downpaymentPercent)} percent)
+                of the One-Time Fees within seven (7) days of execution of this Agreement.
+                The remaining {100 - data.downpaymentPercent}% (
+                {numberToWords(100 - data.downpaymentPercent)} percent) shall become due upon
+                delivery and acceptance of the Platform.
+              </>
+            )}{' '}
+            The Monthly Retainer commences as provided in the next clause and is not
+            covered by the downpayment.
           </Numbered>
         )}
         <Numbered n={data.requiresDownpayment ? '3.4' : '3.3'}>

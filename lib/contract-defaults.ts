@@ -168,13 +168,19 @@ export type ContractFormData = {
   /** Governing-law venue (city) for Section 12.7. */
   governingVenue: string;
   /** If true, contract includes a downpayment clause on the One-Time Fees
-   *  (Client pays N% upfront, remainder due on delivery). When false the
-   *  clause is omitted entirely so the One-Time Fees default to "due on
+   *  (Client pays a portion upfront, remainder due on delivery). When false
+   *  the clause is omitted entirely so the One-Time Fees default to "due on
    *  invoice" per the regular payment terms. */
   requiresDownpayment: boolean;
-  /** Downpayment percentage of the One-Time Fees (1-99). Ignored when
+  /** How the downpayment is expressed in the clause — a percentage of the
+   *  One-Time Fees, or a fixed Peso amount. Ignored when
    *  requiresDownpayment is false. */
+  downpaymentMode: 'percent' | 'fixed';
+  /** Downpayment percentage of the One-Time Fees (1-99). Used when
+   *  downpaymentMode === 'percent'. */
   downpaymentPercent: number;
+  /** Fixed downpayment in centavos. Used when downpaymentMode === 'fixed'. */
+  downpaymentFixedCentavos: number;
 };
 
 export const DEFAULT_CONTRACT_FORM: ContractFormData = {
@@ -187,5 +193,7 @@ export const DEFAULT_CONTRACT_FORM: ContractFormData = {
   lineItems: findOption(OPTION_DEFAULT).lineItems.map((li) => ({ ...li })),
   governingVenue: 'Imus, Cavite',
   requiresDownpayment: true,
+  downpaymentMode: 'percent',
   downpaymentPercent: 50,
+  downpaymentFixedCentavos: 25_000_00, // ₱25,000 — typical PH SMB downpayment
 };

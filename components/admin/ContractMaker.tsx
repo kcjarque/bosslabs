@@ -252,24 +252,71 @@ export function ContractMaker() {
                 </span>
               </label>
               {data.requiresDownpayment && (
-                <div className="mt-3 flex items-center gap-2">
-                  <label className="text-[12px] font-medium text-slate-600">Downpayment %</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={data.downpaymentPercent}
-                    onChange={(e) =>
-                      setData({
-                        ...data,
-                        downpaymentPercent: Math.min(99, Math.max(1, Math.round(Number(e.target.value) || 0))),
-                      })
-                    }
-                    className={`${inputCls} w-20`}
-                  />
-                  <span className="text-[12px] text-slate-500">
-                    upfront · {Math.max(1, 100 - data.downpaymentPercent)}% on delivery
-                  </span>
+                <div className="mt-3 space-y-2.5">
+                  {/* Mode picker: percent of one-time fees vs fixed ₱ amount. */}
+                  <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-[12px] font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setData({ ...data, downpaymentMode: 'percent' })}
+                      className={`rounded-md px-3 py-1.5 transition ${
+                        data.downpaymentMode === 'percent'
+                          ? 'bg-cyan-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Percentage
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setData({ ...data, downpaymentMode: 'fixed' })}
+                      className={`rounded-md px-3 py-1.5 transition ${
+                        data.downpaymentMode === 'fixed'
+                          ? 'bg-cyan-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Fixed amount
+                    </button>
+                  </div>
+                  {data.downpaymentMode === 'percent' ? (
+                    <div className="flex items-center gap-2">
+                      <label className="text-[12px] font-medium text-slate-600">Downpayment %</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={data.downpaymentPercent}
+                        onChange={(e) =>
+                          setData({
+                            ...data,
+                            downpaymentPercent: Math.min(99, Math.max(1, Math.round(Number(e.target.value) || 0))),
+                          })
+                        }
+                        className={`${inputCls} w-20`}
+                      />
+                      <span className="text-[12px] text-slate-500">
+                        upfront · {Math.max(1, 100 - data.downpaymentPercent)}% on delivery
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <label className="text-[12px] font-medium text-slate-600">Downpayment ₱</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={Math.round(data.downpaymentFixedCentavos / 100)}
+                        onChange={(e) =>
+                          setData({
+                            ...data,
+                            downpaymentFixedCentavos: Math.max(0, Math.round(Number(e.target.value) || 0)) * 100,
+                          })
+                        }
+                        className={`${inputCls} w-32`}
+                      />
+                      <span className="text-[12px] text-slate-500">upfront · remainder on delivery</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
