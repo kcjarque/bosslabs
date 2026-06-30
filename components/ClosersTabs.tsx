@@ -1,15 +1,19 @@
 import Link from 'next/link';
 
 const TABS = [
-  { href: '/admin/closers', label: 'Assignments' },
-  { href: '/admin/closers/settings', label: 'Settings' },
-];
+  { id: 'assignments', href: '/admin/closers', label: 'Assignments' },
+  { id: 'commissions', href: '/admin/closers/commissions', label: 'Commissions' },
+  { id: 'payouts', href: '/admin/closers/payouts', label: 'Payout History' },
+  { id: 'settings', href: '/admin/closers/settings', label: 'Settings' },
+] as const;
 
-export function ClosersTabs({ active }: { active: 'assignments' | 'settings' }) {
+export type ClosersTabId = (typeof TABS)[number]['id'];
+
+export function ClosersTabs({ active }: { active: ClosersTabId }) {
   return (
     <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
       {TABS.map((t) => {
-        const isActive = (active === 'assignments') === (t.href === '/admin/closers');
+        const isActive = t.id === active;
         return (
           <Link
             key={t.href}

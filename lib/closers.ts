@@ -560,3 +560,227 @@ export async function closeLeadAndRecordCommission(signupId: string): Promise<vo
     console.warn('[closers] closeLeadAndRecordCommission skipped:', err instanceof Error ? err.message : err);
   }
 }
+
+/* ---- Payouts ------------------------------------------------------------ */
+
+export type CloserPayout = {
+  id: string;
+  closerId: string;
+  amountCentavos: number;
+  commissionCount: number;
+  slipUrl: string | null;
+  slipFilename: string | null;
+  note: string | null;
+  status: 'paid' | 'voided';
+  createdBy: string | null;
+  paidAt: string;
+  voidedAt: string | null;
+};
+
+type CloserPayoutRow = {
+  id: string;
+  closer_id: string;
+  amount_centavos: number;
+  commission_count: number;
+  slip_url: string | null;
+  slip_filename: string | null;
+  note: string | null;
+  status: 'paid' | 'voided';
+  created_by: string | null;
+  paid_at: string;
+  voided_at: string | null;
+};
+
+function rowToPayout(r: CloserPayoutRow): CloserPayout {
+  return {
+    id: r.id,
+    closerId: r.closer_id,
+    amountCentavos: Number(r.amount_centavos),
+    commissionCount: r.commission_count,
+    slipUrl: r.slip_url,
+    slipFilename: r.slip_filename,
+    note: r.note,
+    status: r.status,
+    createdBy: r.created_by,
+    paidAt: r.paid_at,
+    voidedAt: r.voided_at,
+  };
+}
+
+/** Aggregate pending commissions grouped by closer. Drives the admin
+ *  Commissions tab — each row is "Closer X has Y commissions totaling ₱Z". */
+export type CloserPendingGroup = {
+  closer: Closer;
+  totalCentavos: number;
+  commissions: CloserCommissionRow[];
+};
+
+export async function listPendingCommissionsByCloser(): Promise<CloserPendingGroup[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const [{ data: closers }, { data: comms }] = await Promise.all([
+    sb.from('closer_accounts').select('*').order('name', { ascending: true }),
+    sb.from('closer_commissions').select('*').eq('status', 'pending'),
+  ]);
+  // Hydrate names from signups in a single query, mirroring listCloserCommissions.
+  const signupIds = ((comms ?? []) as Array<{ signup_id: string }>).map((c) => c.signup_id);
+  let nameMap = new Map<string, string>();
+  if (signupIds.length > 0) {
+    const { data: sigs } = await sb
+      .from('signups')
+      .select('id, first_name, last_name')
+      .in('id', signupIds);
+    nameMap = new Map(
+      ((sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((s) => [
+        s.id,
+        [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || 'Customer',
+      ]),
+    );
+  }
+  const byCloser = new Map<string, CloserCommissionRow[]>();
+  for (const c of (comms ?? []) as Array<{ id: string; closer_id: string; signup_id: string; sale_centavos: number | string; percent: number | string; amount_centavos: number | string; status: string; created_at: string }>) {
+    const row: CloserCommissionRow = {
+      id: c.id,
+      signupId: c.signup_id,
+      name: nameMap.get(c.signup_id) ?? 'Customer',
+      saleCentavos: Number(c.sale_centavos),
+      percent: Number(c.percent),
+      amountCentavos: Number(c.amount_centavos),
+      status: c.status as 'pending' | 'paid' | 'void',
+      createdAt: c.created_at,
+    };
+    const list = byCloser.get(c.closer_id) ?? [];
+    list.push(row);
+    byCloser.set(c.closer_id, list);
+  }
+  return ((closers ?? []) as CloserRow[]).map((c) => {
+    const closer = rowToCloser(c);
+    const commissions = (byCloser.get(closer.id) ?? []).sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+    const totalCentavos = commissions.reduce((s, r) => s + r.amountCentavos, 0);
+    return { closer, totalCentavos, commissions };
+  });
+}
+
+/** Create a payout for one closer: tallies the listed pending commissions,
+ *  inserts a payout row, then atomically flips those commissions to
+ *  status='paid' with their payout_id pointed at the new payout. */
+export async function createCloserPayout(input: {
+  closerId: string;
+  slipUrl?: string | null;
+  slipFilename?: string | null;
+  note?: string | null;
+  createdBy?: string | null;
+}): Promise<CloserPayout | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  // Re-pull the closer's currently-pending commissions at write time so a
+  // stale UI doesn't double-pay anything that was just paid by another tab.
+  const { data: pending, error: pendErr } = await sb
+    .from('closer_commissions')
+    .select('id, amount_centavos')
+    .eq('closer_id', input.closerId)
+    .eq('status', 'pending');
+  if (pendErr) throw new Error(`createCloserPayout pending: ${pendErr.message}`);
+  const rows = (pending ?? []) as Array<{ id: string; amount_centavos: number | string }>;
+  if (rows.length === 0) throw new Error('No pending commissions to pay out');
+
+  const total = rows.reduce((s, r) => s + Number(r.amount_centavos), 0);
+  const commissionIds = rows.map((r) => r.id);
+
+  const { data: payoutRow, error: payErr } = await sb
+    .from('closer_payouts')
+    .insert({
+      closer_id: input.closerId,
+      amount_centavos: total,
+      commission_count: rows.length,
+      slip_url: input.slipUrl ?? null,
+      slip_filename: input.slipFilename ?? null,
+      note: input.note ?? null,
+      created_by: input.createdBy ?? null,
+    })
+    .select('*')
+    .single();
+  if (payErr || !payoutRow) throw new Error(`createCloserPayout insert: ${payErr?.message ?? 'unknown'}`);
+
+  const payout = rowToPayout(payoutRow as CloserPayoutRow);
+
+  // Flip those commissions to paid and link them. Single update — Postgres
+  // is atomic per statement, so either all flip or none.
+  const { error: updErr } = await sb
+    .from('closer_commissions')
+    .update({ status: 'paid', payout_id: payout.id })
+    .in('id', commissionIds);
+  if (updErr) throw new Error(`createCloserPayout link: ${updErr.message}`);
+
+  return payout;
+}
+
+/** Mark a payout voided + revert its commissions back to 'pending'. The
+ *  payout row stays for the audit log. */
+export async function voidCloserPayout(payoutId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  // Flip linked commissions back to pending first so a partial failure
+  // can't leave a paid commission orphaned under a voided payout.
+  await sb
+    .from('closer_commissions')
+    .update({ status: 'pending', payout_id: null })
+    .eq('payout_id', payoutId);
+  await sb
+    .from('closer_payouts')
+    .update({ status: 'voided', voided_at: new Date().toISOString() })
+    .eq('id', payoutId);
+}
+
+export type PayoutWithCloser = CloserPayout & { closerName: string; closerUsername: string };
+
+export async function listPayouts(): Promise<PayoutWithCloser[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('closer_payouts')
+    .select('*, closer_accounts!inner(name, username)')
+    .order('paid_at', { ascending: false });
+  if (error) throw new Error(`listPayouts: ${error.message}`);
+  return ((data ?? []) as Array<CloserPayoutRow & { closer_accounts: { name: string; username: string } | null }>).map((r) => ({
+    ...rowToPayout(r),
+    closerName: r.closer_accounts?.name ?? '—',
+    closerUsername: r.closer_accounts?.username ?? '',
+  }));
+}
+
+export async function listCommissionsByPayout(payoutId: string): Promise<CloserCommissionRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('closer_commissions')
+    .select('*')
+    .eq('payout_id', payoutId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`listCommissionsByPayout: ${error.message}`);
+  const rows = (data ?? []) as Array<{ id: string; signup_id: string; sale_centavos: number | string; percent: number | string; amount_centavos: number | string; status: string; created_at: string }>;
+  // Hydrate names
+  let nameMap = new Map<string, string>();
+  if (rows.length > 0) {
+    const { data: sigs } = await sb
+      .from('signups')
+      .select('id, first_name, last_name')
+      .in('id', rows.map((r) => r.signup_id));
+    nameMap = new Map(
+      ((sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((s) => [
+        s.id,
+        [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || 'Customer',
+      ]),
+    );
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    signupId: r.signup_id,
+    name: nameMap.get(r.signup_id) ?? 'Customer',
+    saleCentavos: Number(r.sale_centavos),
+    percent: Number(r.percent),
+    amountCentavos: Number(r.amount_centavos),
+    status: r.status as 'pending' | 'paid' | 'void',
+    createdAt: r.created_at,
+  }));
+}

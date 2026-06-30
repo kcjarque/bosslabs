@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
 import {
   countPageViews,
@@ -18,8 +20,34 @@ import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
 import { RefreshButton } from './ads/RefreshButton';
 import { CustomPeriodPicker } from '@/components/CustomPeriodPicker';
+import { DashboardRefreshButton } from './DashboardRefreshButton';
+import { DashboardSkeleton } from './DashboardSkeleton';
 
 export const dynamic = 'force-dynamic';
+
+/* --------------------------------------------------------------------- */
+/* Cached fetches — wrapped in unstable_cache so a hot reopen of the     */
+/* dashboard hits in-memory cache (under 100ms) instead of re-running    */
+/* every Supabase query. The "Refresh" button at the top busts all of    */
+/* them via revalidateTag('dashboard'). 60s TTL = cards stay current     */
+/* while preventing thundering-herd on hot reloads.                      */
+/* --------------------------------------------------------------------- */
+const CACHE_TTL_SECONDS = 60;
+const CACHE_TAG = 'dashboard';
+const cacheOpts = { revalidate: CACHE_TTL_SECONDS, tags: [CACHE_TAG] };
+
+const cachedGetSignups = unstable_cache(getSignups, ['dashboard:signups'], cacheOpts);
+const cachedGetEmailStats = unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts);
+const cachedGetAdSpend = unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts);
+const cachedGetCloserRecovered = unstable_cache(
+  getCloserRecoveredSignupIds, ['dashboard:closer-recovered'], cacheOpts,
+);
+const cachedCountPageViews = unstable_cache(countPageViews, ['dashboard:page-views'], cacheOpts);
+const cachedGetVisitBuckets = unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], cacheOpts);
+const cachedSumWebinarIncome = unstable_cache(
+  sumWebinarIncomeCentavos, ['dashboard:webinar-income'], cacheOpts,
+);
+const cachedSumDfyIncome = unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts);
 
 /* --------------------------------------------------------------------- */
 /* Analytics helpers                                                     */
@@ -172,12 +200,63 @@ function formatDuration(sec: number | null): string {
   return `${(sec / 86400).toFixed(1)}d`;
 }
 
-export default async function AdminDashboard({
+/* --------------------------------------------------------------------- */
+/* Page outer — instant chrome (header + period picker + refresh button) */
+/* Heavy fetching + render happens in <DashboardBody> inside Suspense so */
+/* the chrome paints immediately on cold loads.                          */
+/* --------------------------------------------------------------------- */
+export default function AdminDashboard({
   searchParams,
 }: {
   searchParams: { dr?: string; from?: string; to?: string };
 }) {
   requireAdmin();
+  const activeRange = resolveDashRange(searchParams?.dr, searchParams?.from, searchParams?.to);
+  return (
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Live view of registrations + delivery channels.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DashboardRefreshButton />
+          <Link href="/admin/customers" className="btn btn-secondary">
+            View all customers →
+          </Link>
+        </div>
+      </header>
+
+      {/* Period filter — pure UI (no data fetch) so it can live outside the
+          Suspense boundary and stay interactive while body data is loading. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
+          Period
+        </span>
+        <DashboardDateFilter activeKey={activeRange?.key ?? 'all'} />
+        <CustomPeriodPicker
+          active={activeRange?.key === 'custom'}
+          from={searchParams?.from}
+          to={searchParams?.to}
+        />
+      </div>
+
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardBody searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function DashboardBody({
+  searchParams,
+}: {
+  searchParams: { dr?: string; from?: string; to?: string };
+}) {
 
   // ── ONE global period (?dr=) drives the KPI cards, funnel, AND chart.
   const now = Date.now();
@@ -212,36 +291,20 @@ export default async function AdminDashboard({
     webinarIncomeAllCentavos,
     dfyIncomeAllCentavos,
   ] = await Promise.all([
-    getSignups(),
-    getSettings(),
-    // Top of funnel = anyone who landed on any public page.
-    countPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
-    // Mid-funnel hint = sessions that made it to /checkout.
-    countPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
-    // Hourly/daily buckets for the visits sparkline.
-    getVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
-    // Same-length previous window, for the dashed comparison line.
-    getVisitBuckets({
-      sinceIso: prevSinceIso,
-      untilIso: funnelSinceIso,
-      bucketMs,
-    }),
-    // Signups a closer claimed + that paid — flagged "recovered" even if same-day.
-    getCloserRecoveredSignupIds(),
-    // Email performance (deliverability / bounce / open / click / recovery).
-    getEmailStats(),
-    // Daily Meta ad spend (backfilled + synced 12:01am) for the ROAS metric.
-    getAdSpendByDay(),
-    // VCR ("Webinar") income — high-ticket retreat cash from the CRM payments
-    // log, period-scoped. Kept OUT of ROAS/daily (those are ₱999 front-end).
-    sumWebinarIncomeCentavos(dashRange?.startMs, rangeEnd),
-    // DFY income — won Done-For-You deals (Onboarding stage), period-scoped.
-    sumDfyIncomeCentavos(dashRange?.startMs, rangeEnd),
-    // All-time back-end income (no period) for total customer LTV. Retreat + DFY
-    // buyers are the same people as our paid leads (verified 100% email overlap),
-    // so this folds into each lead's lifetime value.
-    sumWebinarIncomeCentavos(),
-    sumDfyIncomeCentavos(),
+    // Cached versions — bust on Refresh-button click (revalidateTag('dashboard'))
+    cachedGetSignups(),
+    getSettings(), // light, not cached
+    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
+    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
+    cachedGetVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
+    cachedGetVisitBuckets({ sinceIso: prevSinceIso, untilIso: funnelSinceIso, bucketMs }),
+    cachedGetCloserRecovered(),
+    cachedGetEmailStats(),
+    cachedGetAdSpend(),
+    cachedSumWebinarIncome(dashRange?.startMs, rangeEnd),
+    cachedSumDfyIncome(dashRange?.startMs, rangeEnd),
+    cachedSumWebinarIncome(),
+    cachedSumDfyIncome(),
   ]);
 
   // Average unique sessions per bucket across the previous period — used as
@@ -531,34 +594,7 @@ export default async function AdminDashboard({
   };
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Live view of registrations + delivery channels.
-          </p>
-        </div>
-        <Link href="/admin/customers" className="btn btn-secondary self-start sm:self-auto">
-          View all customers →
-        </Link>
-      </header>
-
-      {/* Date filter — scopes the headline KPI cards below. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-[0.06em] text-slate-500">
-          Period
-        </span>
-        <DashboardDateFilter activeKey={dashRange?.key ?? 'all'} />
-        <CustomPeriodPicker
-          active={dashRange?.key === 'custom'}
-          from={searchParams?.from}
-          to={searchParams?.to}
-        />
-      </div>
-
+    <>
       {/* Revenue + headline metrics — these are the numbers that matter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
@@ -1128,7 +1164,7 @@ export default async function AdminDashboard({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
