@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CONTRACT_OPTIONS,
   DEFAULT_CONTRACT_FORM,
@@ -10,6 +11,7 @@ import {
   type ContractLineItem,
 } from '@/lib/contract-defaults';
 import { ContractDocument } from './ContractDocument';
+import { CustomerLinkPicker, type LinkedCustomer } from './CustomerLinkPicker';
 
 /** Strip filesystem-hostile characters from a string used as a filename
  *  segment. Keeps letters, digits, dashes, underscores; collapses everything
@@ -23,11 +25,65 @@ const inputCls =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200';
 const labelCls = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-600';
 
-export function ContractMaker() {
-  const [data, setData] = useState<ContractFormData>(DEFAULT_CONTRACT_FORM);
+export function ContractMaker({
+  initial,
+  contractId: initialContractId,
+  initialLinked,
+}: {
+  /** Pre-fill the form (for /admin/contracts/[id] edit mode). Defaults
+   *  to the blank DEFAULT_CONTRACT_FORM. */
+  initial?: ContractFormData;
+  /** When set, Save sends PATCH /api/admin/contracts/[id]. When undefined,
+   *  Save sends POST /api/admin/contracts and then router.pushes to the
+   *  new contract's edit URL. */
+  contractId?: string;
+  /** Pre-link a customer (so the "Linked customer" chip is filled on
+   *  edit mode). */
+  initialLinked?: LinkedCustomer | null;
+} = {}) {
+  const router = useRouter();
+  const [data, setData] = useState<ContractFormData>(initial ?? DEFAULT_CONTRACT_FORM);
+  const [contractId, setContractId] = useState<string | null>(initialContractId ?? null);
+  const [linked, setLinked] = useState<LinkedCustomer | null>(initialLinked ?? null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   // Mobile tab — desktop shows both panes side-by-side; small screens swap
   // between "Edit" and "Preview" so the preview is readable at full width.
   const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit');
+
+  async function saveContract() {
+    if (saving) return;
+    if (!data.clientCompanyName.trim()) {
+      window.alert('Add a client company name before saving.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = { ...data, signupId: linked?.signupId ?? null };
+      const url = contractId ? `/api/admin/contracts/${contractId}` : '/api/admin/contracts';
+      const method = contractId ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json().catch(() => ({}))) as { contract?: { id: string }; error?: string };
+      if (!res.ok || !json.contract) {
+        throw new Error(json.error || `Save failed (${res.status})`);
+      }
+      setSavedAt(Date.now());
+      // First save → URL changes from /new → /[id] so refreshes preserve state.
+      if (!contractId) {
+        setContractId(json.contract.id);
+        router.push(`/admin/contracts/${json.contract.id}`);
+      }
+    } catch (err) {
+      console.error('[contract] save failed', err);
+      window.alert(err instanceof Error ? err.message : 'Save failed. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
   // PDF download state — disables the button + shows progress while
   // html2pdf renders. Async because html2pdf is dynamically imported (it
   // touches `window` at module load, would break SSR).
@@ -114,13 +170,43 @@ export function ContractMaker() {
             BossLabs Web Development &amp; Services Agreement — fill the form, preview live, print to PDF.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {savedAt && (
+            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+              Saved
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setData(DEFAULT_CONTRACT_FORM)}
             className="rounded-full border border-slate-300 px-4 py-1.5 text-[13px] font-medium text-slate-700 transition hover:bg-white"
           >
             Reset form
+          </button>
+          <button
+            type="button"
+            onClick={saveContract}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full bg-cyan-600 px-5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-cyan-700 disabled:cursor-wait disabled:opacity-70"
+          >
+            {saving ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" className="animate-spin" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+                Saving…
+              </>
+            ) : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="7 3 7 8 15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {contractId ? 'Save changes' : 'Save contract'}
+              </>
+            )}
           </button>
           <button
             type="button"
@@ -147,6 +233,27 @@ export function ContractMaker() {
           </button>
         </div>
       </div>
+
+      {/* Link to customer — top of the form so it's the first decision. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">Linked customer <span className="text-[12px] font-normal text-slate-400">(optional)</span></h2>
+          {linked && (
+            <a
+              href={`/admin/customers/${linked.signupId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[12px] font-medium text-cyan-700 hover:underline"
+            >
+              Open profile ↗
+            </a>
+          )}
+        </div>
+        <p className="mb-3 text-[12px] text-slate-500">
+          Link this contract to an existing customer so it rolls into their LTV on the customer profile.
+        </p>
+        <CustomerLinkPicker linked={linked} onPick={setLinked} />
+      </section>
 
       {/* Mobile tab switcher — visible <lg. Side-by-side on lg+. */}
       <div className="contract-no-print -mt-2 flex gap-1 rounded-full bg-slate-200/70 p-1 text-[12.5px] font-semibold lg:hidden">

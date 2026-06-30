@@ -17,6 +17,7 @@ import {
   type ListModel,
   type SequenceModel,
 } from '@/lib/db';
+import { listContractsForSignup, projectedAnnualContractValue, type Contract } from '@/lib/contracts';
 import { EventPill } from '@/components/EventPill';
 import { CustomerSendForm } from '@/components/CustomerSendForm';
 import { CustomerSequences } from '@/components/CustomerSequences';
@@ -254,6 +255,7 @@ export default async function CustomerProfilePage({
     sequenceSends,
     emailTemplates,
     smsTemplates,
+    contracts,
   ] = await Promise.all([
     getSignupById(params.id),
     getEvents(),
@@ -263,6 +265,7 @@ export default async function CustomerProfilePage({
     getCustomerSequenceSends(params.id),
     getEmailTemplates(),
     getSmsTemplates(),
+    listContractsForSignup(params.id),
   ]);
   if (!customer) notFound();
 
@@ -511,6 +514,8 @@ export default async function CustomerProfilePage({
             </div>
           </section>
 
+          <ContractsSection contracts={contracts} customerId={params.id} />
+
           <section className="card">
             <div className="flex items-baseline justify-between">
               <h2 className="text-base font-semibold text-slate-900">
@@ -636,6 +641,84 @@ function StatusPill({
     >
       {labels[status]}
     </span>
+  );
+}
+
+function ContractsSection({ contracts, customerId }: { contracts: Contract[]; customerId: string }) {
+  const annualLtv = contracts.reduce((s, c) => s + projectedAnnualContractValue(c), 0);
+  return (
+    <section className="card">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-slate-900">Contracts</h2>
+        <div className="flex items-center gap-3 text-xs">
+          {contracts.length > 0 && (
+            <span className="text-slate-500">
+              Projected annual LTV{' '}
+              <strong className="text-slate-900">
+                ₱{Math.round(annualLtv / 100).toLocaleString()}
+              </strong>
+            </span>
+          )}
+          <Link
+            href={`/admin/contracts/new?signupId=${customerId}`}
+            className="font-medium text-cyan-700 hover:underline"
+          >
+            + New
+          </Link>
+        </div>
+      </div>
+      {contracts.length === 0 ? (
+        <p className="mt-3 text-[13px] text-slate-500">
+          No contracts linked to this customer yet.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {contracts.map((c) => {
+            const annual = projectedAnnualContractValue(c);
+            const statusColor =
+              c.status === 'signed'
+                ? 'bg-emerald-100 text-emerald-700'
+                : c.status === 'sent'
+                  ? 'bg-amber-100 text-amber-700'
+                  : c.status === 'cancelled'
+                    ? 'bg-rose-100 text-rose-700'
+                    : 'bg-slate-100 text-slate-600';
+            return (
+              <li key={c.id}>
+                <Link
+                  href={`/admin/contracts/${c.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:border-cyan-300"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[13px] font-semibold text-slate-900">
+                        {c.clientCompanyName || 'Untitled contract'}
+                      </span>
+                      <span
+                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusColor}`}
+                      >
+                        {c.status}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      One-time ₱{Math.round(c.oneTimeTotalCentavos / 100).toLocaleString()}
+                      {c.monthlyTotalCentavos > 0
+                        ? ` · ${Math.round(c.monthlyTotalCentavos / 100).toLocaleString()}/mo`
+                        : ''}
+                      {' · '}
+                      <span className="text-cyan-700">
+                        ~₱{Math.round(annual / 100).toLocaleString()}/yr
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-slate-400">{c.effectiveDate}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
