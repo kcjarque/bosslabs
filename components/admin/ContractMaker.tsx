@@ -50,12 +50,18 @@ export function ContractMaker() {
       await html2pdf()
         .set({
           filename,
-          margin: [12, 10, 12, 10], // mm: top, right, bottom, left
+          // No outer margin — the .contract-page element is already 210mm
+          // wide (full A4) with its own 18mm/16mm internal padding for the
+          // visual margins. Adding html2pdf margin on top would force the
+          // 210mm-wide canvas into a smaller content area, clipping the
+          // right edge of the letterhead and the body copy.
+          margin: 0,
           image: { type: 'jpeg', quality: 0.96 },
-          // scale: 2 keeps text crisp on retina; useCORS for any remote images
-          // we might reference; backgroundColor white so the dark admin chrome
-          // doesn't bleed into the PDF.
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          // windowWidth pins the canvas viewport to the page's render
+          // width in pixels so html2canvas captures the same layout the
+          // user sees in the preview, not whatever fluid layout the
+          // current scroll position happens to produce.
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           // Avoid splitting tables/sections across pages where html2pdf can
           // detect a clean break; falls back to CSS page-break-* and legacy.
