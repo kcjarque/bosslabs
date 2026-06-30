@@ -36,18 +36,38 @@ const CACHE_TTL_SECONDS = 60;
 const CACHE_TAG = 'dashboard';
 const cacheOpts = { revalidate: CACHE_TTL_SECONDS, tags: [CACHE_TAG] };
 
-const cachedGetSignups = unstable_cache(getSignups, ['dashboard:signups'], cacheOpts);
-const cachedGetEmailStats = unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts);
-const cachedGetAdSpend = unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts);
-const cachedGetCloserRecovered = unstable_cache(
+/* Timing instrumentation — wraps each cached call so the Vercel function log
+ * shows per-fetch wall-clock + a HIT/MISS guess (sub-5ms ≈ in-memory cache
+ * hit; longer ≈ underlying Supabase round-trip). Verify-only: cheap, no PII.
+ * Strip this `timed()` wrapping once the speed numbers look right. */
+function timed<TArgs extends unknown[], TR>(
+  label: string,
+  fn: (...a: TArgs) => Promise<TR>,
+): (...a: TArgs) => Promise<TR> {
+  return async (...a: TArgs) => {
+    const start = performance.now();
+    try {
+      return await fn(...a);
+    } finally {
+      const ms = performance.now() - start;
+      const tag = ms < 5 ? 'HIT ' : 'MISS';
+      console.log(`[dash:${label}] ${tag} ${ms.toFixed(0)}ms`);
+    }
+  };
+}
+
+const cachedGetSignups = timed('signups', unstable_cache(getSignups, ['dashboard:signups'], cacheOpts));
+const cachedGetEmailStats = timed('email-stats', unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts));
+const cachedGetAdSpend = timed('ad-spend', unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts));
+const cachedGetCloserRecovered = timed('closer-recovered', unstable_cache(
   getCloserRecoveredSignupIds, ['dashboard:closer-recovered'], cacheOpts,
-);
-const cachedCountPageViews = unstable_cache(countPageViews, ['dashboard:page-views'], cacheOpts);
-const cachedGetVisitBuckets = unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], cacheOpts);
-const cachedSumWebinarIncome = unstable_cache(
+));
+const cachedCountPageViews = timed('page-views', unstable_cache(countPageViews, ['dashboard:page-views'], cacheOpts));
+const cachedGetVisitBuckets = timed('visit-buckets', unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], cacheOpts));
+const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
   sumWebinarIncomeCentavos, ['dashboard:webinar-income'], cacheOpts,
-);
-const cachedSumDfyIncome = unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts);
+));
+const cachedSumDfyIncome = timed('dfy-income', unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts));
 
 /* --------------------------------------------------------------------- */
 /* Analytics helpers                                                     */
@@ -290,22 +310,28 @@ async function DashboardBody({
     dfyIncomeCentavos,
     webinarIncomeAllCentavos,
     dfyIncomeAllCentavos,
-  ] = await Promise.all([
-    // Cached versions — bust on Refresh-button click (revalidateTag('dashboard'))
-    cachedGetSignups(),
-    getSettings(), // light, not cached
-    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
-    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
-    cachedGetVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
-    cachedGetVisitBuckets({ sinceIso: prevSinceIso, untilIso: funnelSinceIso, bucketMs }),
-    cachedGetCloserRecovered(),
-    cachedGetEmailStats(),
-    cachedGetAdSpend(),
-    cachedSumWebinarIncome(dashRange?.startMs, rangeEnd),
-    cachedSumDfyIncome(dashRange?.startMs, rangeEnd),
-    cachedSumWebinarIncome(),
-    cachedSumDfyIncome(),
-  ]);
+  ] = await (async () => {
+    const _allStart = performance.now();
+    console.log(`[dash] body fetch start · period=${dashRange?.key ?? 'all'}`);
+    const result = await Promise.all([
+      // Cached versions — bust on Refresh-button click (revalidateTag('dashboard'))
+      cachedGetSignups(),
+      getSettings(), // light, not cached
+      cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
+      cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
+      cachedGetVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
+      cachedGetVisitBuckets({ sinceIso: prevSinceIso, untilIso: funnelSinceIso, bucketMs }),
+      cachedGetCloserRecovered(),
+      cachedGetEmailStats(),
+      cachedGetAdSpend(),
+      cachedSumWebinarIncome(dashRange?.startMs, rangeEnd),
+      cachedSumDfyIncome(dashRange?.startMs, rangeEnd),
+      cachedSumWebinarIncome(),
+      cachedSumDfyIncome(),
+    ]);
+    console.log(`[dash] body fetch done in ${(performance.now() - _allStart).toFixed(0)}ms`);
+    return result;
+  })();
 
   // Average unique sessions per bucket across the previous period — used as
   // the flat "previous day's avg" baseline shown next to the chart.
