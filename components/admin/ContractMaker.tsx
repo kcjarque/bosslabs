@@ -230,6 +230,49 @@ export function ContractMaker() {
                 />
               </div>
             </div>
+
+            {/* Downpayment toggle — controls whether the contract document
+                emits a downpayment clause on the One-Time Fees. Off = client
+                pays the full one-time amount on first invoice per §3.4. */}
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={data.requiresDownpayment}
+                  onChange={(e) => setData({ ...data, requiresDownpayment: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-400 text-cyan-600 focus:ring-cyan-400"
+                />
+                <span className="flex-1">
+                  <span className="text-[13px] font-semibold text-slate-800">
+                    Require a downpayment on One-Time Fees
+                  </span>
+                  <span className="mt-0.5 block text-[11.5px] text-slate-500">
+                    Adds a clause: Client pays N% on signing, remainder due on delivery. Uncheck if you want full payment due on invoice.
+                  </span>
+                </span>
+              </label>
+              {data.requiresDownpayment && (
+                <div className="mt-3 flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-slate-600">Downpayment %</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={data.downpaymentPercent}
+                    onChange={(e) =>
+                      setData({
+                        ...data,
+                        downpaymentPercent: Math.min(99, Math.max(1, Math.round(Number(e.target.value) || 0))),
+                      })
+                    }
+                    className={`${inputCls} w-20`}
+                  />
+                  <span className="text-[12px] text-slate-500">
+                    upfront · {Math.max(1, 100 - data.downpaymentPercent)}% on delivery
+                  </span>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

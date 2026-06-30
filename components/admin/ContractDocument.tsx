@@ -43,6 +43,22 @@ function lineItemRow(li: ContractLineItem): { label: string; value: string; note
   };
 }
 
+/** Spell out an integer 1-100 in lowercase English words. Used by the
+ *  downpayment clause: "50% (fifty percent)". Falls back to digits-as-string
+ *  for out-of-range values so the contract still renders something legible. */
+function numberToWords(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n > 100) return String(n);
+  const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+  const teens = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  if (n === 100) return 'one hundred';
+  if (n < 10) return ones[n];
+  if (n < 20) return teens[n - 10];
+  const t = Math.floor(n / 10);
+  const o = n % 10;
+  return o === 0 ? tens[t] : `${tens[t]}-${ones[o]}`;
+}
+
 export function ContractDocument({ data }: { data: ContractFormData }) {
   const option = findOption(data.optionId);
   const oneTimes = data.lineItems.filter((li) => li.kind === 'oneTime');
@@ -296,23 +312,38 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
           </tbody>
         </table>
 
-        <Numbered n="3.3">
+        {/* Optional downpayment clause. When present, the following clauses
+            shift one number forward (3.3 → 3.4, etc.) so the section stays
+            sequentially numbered. */}
+        {data.requiresDownpayment && (
+          <Numbered n="3.3">
+            <strong>Downpayment.</strong> The Client shall remit a non-refundable
+            downpayment equal to {data.downpaymentPercent}% (
+            {numberToWords(data.downpaymentPercent)} percent) of the One-Time Fees within
+            seven (7) days of execution of this Agreement. The remaining{' '}
+            {100 - data.downpaymentPercent}% (
+            {numberToWords(100 - data.downpaymentPercent)} percent) shall become due upon
+            delivery and acceptance of the Platform. The Monthly Retainer commences as
+            provided in the next clause and is not covered by the downpayment.
+          </Numbered>
+        )}
+        <Numbered n={data.requiresDownpayment ? '3.4' : '3.3'}>
           All amounts are stated in Philippine Pesos (PHP) and are inclusive of value-added tax (VAT)
           where applicable. No additional VAT shall be charged on top of the stated amounts. The Provider
           shall issue the appropriate official receipt or invoice for all payments received.
         </Numbered>
-        <Numbered n="3.4">
+        <Numbered n={data.requiresDownpayment ? '3.5' : '3.4'}>
           Monthly Retainer fees are billed monthly in advance and due within seven (7) days of invoice.
           The first monthly cycle commences on the day of the implementation (kick-off) meeting, unless
           otherwise agreed in writing.
         </Numbered>
-        <Numbered n="3.5">
+        <Numbered n={data.requiresDownpayment ? '3.6' : '3.5'}>
           Late payments may accrue interest at one percent (1%) per month on the overdue amount. The
           Provider may suspend services, including hosting and platform access, after written notice if
           any undisputed amount remains unpaid for more than fifteen (15) days. The Provider shall restore
           services promptly upon settlement.
         </Numbered>
-        <Numbered n="3.6">
+        <Numbered n={data.requiresDownpayment ? '3.7' : '3.6'}>
           Optional services after discontinuation of the Retainer (ad-hoc support per call and Upgrades as
           defined in Section 1) are charged as set out in Section 8 and are engaged only at the
           Client&rsquo;s request.

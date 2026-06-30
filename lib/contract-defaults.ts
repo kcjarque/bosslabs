@@ -167,6 +167,14 @@ export type ContractFormData = {
   lineItems: ContractLineItem[];
   /** Governing-law venue (city) for Section 12.7. */
   governingVenue: string;
+  /** If true, contract includes a downpayment clause on the One-Time Fees
+   *  (Client pays N% upfront, remainder due on delivery). When false the
+   *  clause is omitted entirely so the One-Time Fees default to "due on
+   *  invoice" per the regular payment terms. */
+  requiresDownpayment: boolean;
+  /** Downpayment percentage of the One-Time Fees (1-99). Ignored when
+   *  requiresDownpayment is false. */
+  downpaymentPercent: number;
 };
 
 export const DEFAULT_CONTRACT_FORM: ContractFormData = {
@@ -178,4 +186,6 @@ export const DEFAULT_CONTRACT_FORM: ContractFormData = {
   optionId: OPTION_DEFAULT,
   lineItems: findOption(OPTION_DEFAULT).lineItems.map((li) => ({ ...li })),
   governingVenue: 'Imus, Cavite',
+  requiresDownpayment: true,
+  downpaymentPercent: 50,
 };
