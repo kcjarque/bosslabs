@@ -59,8 +59,13 @@ function timed<TArgs extends unknown[], TR>(
 const cachedGetSignups = timed('signups', unstable_cache(getSignups, ['dashboard:signups'], cacheOpts));
 const cachedGetEmailStats = timed('email-stats', unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts));
 const cachedGetAdSpend = timed('ad-spend', unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts));
-const cachedGetCloserRecovered = timed('closer-recovered', unstable_cache(
-  getCloserRecoveredSignupIds, ['dashboard:closer-recovered'], cacheOpts,
+/* IMPORTANT: unstable_cache JSON-serializes results, which turns a Set into
+ * `{}` (no .has()) and crashes downstream. Cache the plain-array form and
+ * rebuild the Set at the call site. Same trap for any Map return. */
+const cachedGetCloserRecoveredArr = timed('closer-recovered', unstable_cache(
+  async () => Array.from(await getCloserRecoveredSignupIds()),
+  ['dashboard:closer-recovered'],
+  cacheOpts,
 ));
 const cachedCountPageViews = timed('page-views', unstable_cache(countPageViews, ['dashboard:page-views'], cacheOpts));
 const cachedGetVisitBuckets = timed('visit-buckets', unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], cacheOpts));
@@ -321,7 +326,8 @@ async function DashboardBody({
       cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
       cachedGetVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
       cachedGetVisitBuckets({ sinceIso: prevSinceIso, untilIso: funnelSinceIso, bucketMs }),
-      cachedGetCloserRecovered(),
+      // Array-form of the closer-recovered set (see unstable_cache Set gotcha above)
+      cachedGetCloserRecoveredArr().then((arr) => new Set(arr)),
       cachedGetEmailStats(),
       cachedGetAdSpend(),
       cachedSumWebinarIncome(dashRange?.startMs, rangeEnd),
