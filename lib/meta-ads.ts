@@ -64,6 +64,11 @@ export type AdEntity = AdMetrics & {
   status: string; // raw effective_status
   active: boolean;
   parentId?: string; // ad → adset id
+  /** Only populated for level='ad'. Small creative thumbnail from Meta,
+   *  shown next to the ad name so admins can eyeball what's running before
+   *  opening the full preview modal. Null when the ad has no image creative
+   *  (rare — usually happens for pure text or DPA ads). */
+  thumbnailUrl?: string | null;
 };
 
 export type AdsReport =
@@ -201,7 +206,10 @@ export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsRe
     const [campRaw, adsetsRaw, adsRaw] = await Promise.all([
       graph(CAMPAIGN_ID, `id,name,effective_status,${win}`),
       graph(`${CAMPAIGN_ID}/adsets`, `id,name,effective_status,${win}`),
-      graph(`${CAMPAIGN_ID}/ads`, `id,name,effective_status,adset{id,name},${win}`),
+      graph(
+        `${CAMPAIGN_ID}/ads`,
+        `id,name,effective_status,adset{id,name},creative{thumbnail_url,image_url},${win}`,
+      ),
     ]);
 
     const firstError =
@@ -239,15 +247,21 @@ export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsRe
 
     const ads: AdEntity[] = (
       (adsRaw as { data?: Array<Record<string, unknown>> })?.data ?? []
-    ).map((a) => ({
-      level: 'ad' as const,
-      id: String(a.id),
-      name: String(a.name ?? ''),
-      status: String(a.effective_status ?? ''),
-      active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
-      parentId: (a.adset as { id?: string } | undefined)?.id,
-      ...metricsFrom(a.insights as RawInsights | undefined),
-    }));
+    ).map((a) => {
+      const creative = a.creative as { thumbnail_url?: string; image_url?: string } | undefined;
+      return {
+        level: 'ad' as const,
+        id: String(a.id),
+        name: String(a.name ?? ''),
+        status: String(a.effective_status ?? ''),
+        active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+        parentId: (a.adset as { id?: string } | undefined)?.id,
+        // Prefer the small thumbnail; fall back to the full image_url when
+        // Meta doesn't ship a thumbnail (some creatives skip it).
+        thumbnailUrl: creative?.thumbnail_url ?? creative?.image_url ?? null,
+        ...metricsFrom(a.insights as RawInsights | undefined),
+      };
+    });
 
     return { configured: true, campaign, adsets, ads, rangeLabel: range.label, error: firstError };
   } catch (err) {
@@ -259,6 +273,44 @@ export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsRe
       rangeLabel: range.label,
       error: String(err),
     };
+  }
+}
+
+/* ── Ad preview HTML (Meta's official iframe render) ────────────────────── */
+
+// Format enum lives in a separate client-safe file so client components can
+// import it without dragging lib/db.ts (and its Node `fs` deps) into the
+// browser bundle. Re-exported here so server-side callers still get one import.
+export { AD_PREVIEW_FORMATS, type AdPreviewFormat } from './meta-ads-formats';
+import type { AdPreviewFormat } from './meta-ads-formats';
+
+/** Meta returns `<iframe src="..." width="..." height="...">…</iframe>` in a
+ *  body field. We extract src + width + height so we can render our own
+ *  sandboxed iframe (safer than dangerouslySetInnerHTML). Any regex miss
+ *  falls back to the raw HTML string. */
+function parsePreviewIframe(html: string): { src?: string; width?: number; height?: number; raw: string } {
+  const src = /src=["']([^"']+)["']/i.exec(html)?.[1];
+  const width = Number(/width=["']?(\d+)/i.exec(html)?.[1]) || undefined;
+  const height = Number(/height=["']?(\d+)/i.exec(html)?.[1]) || undefined;
+  return { src, width, height, raw: html };
+}
+
+export async function getAdPreview(
+  adId: string,
+  format: AdPreviewFormat = 'DESKTOP_FEED_STANDARD',
+): Promise<{ ok: false; error: string } | { ok: true; src?: string; width?: number; height?: number; raw: string }> {
+  if (!process.env.META_ADS_TOKEN) return { ok: false, error: 'META_ADS_TOKEN not configured' };
+  try {
+    const json = (await graph(`${adId}/previews`, `ad_format=${format}`)) as {
+      data?: Array<{ body?: string }>;
+      error?: { message?: string };
+    };
+    if (json.error) return { ok: false, error: json.error.message ?? 'Meta error' };
+    const body = json.data?.[0]?.body;
+    if (!body) return { ok: false, error: 'No preview returned for this ad + format.' };
+    return { ok: true, ...parsePreviewIframe(body) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

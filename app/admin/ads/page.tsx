@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { formatPHP } from '@/lib/config';
 import { RefreshButton } from './RefreshButton';
 import { AdsResultsView } from './AdsResultsView';
+import { AdPreviewCell } from '@/components/admin/ads/AdPreviewCell';
 import {
   getAdsReportCached,
   ADS_RANGES,
@@ -331,10 +332,17 @@ function Row({
   return (
     <tr className={`border-b border-slate-100 ${tint ?? ''}`}>
       <td className="px-3 py-2" style={{ paddingLeft: `${12 + indent * 16}px` }}>
-        <div className={`truncate ${bold ? 'font-semibold text-slate-900' : 'text-slate-800'}`} style={{ maxWidth: 280 }}>
-          {e.name}
+        <div className="flex items-center gap-2">
+          {e.level === 'ad' && (
+            <AdPreviewCell adId={e.id} thumbnailUrl={e.thumbnailUrl ?? null} adName={e.name} />
+          )}
+          <div className="min-w-0">
+            <div className={`truncate ${bold ? 'font-semibold text-slate-900' : 'text-slate-800'}`} style={{ maxWidth: 260 }}>
+              {e.name}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">{levelLabel}</div>
+          </div>
         </div>
-        <div className="text-[10px] uppercase tracking-wide text-slate-400">{levelLabel}</div>
       </td>
       <td className="px-3 py-2">
         <span
