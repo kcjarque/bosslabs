@@ -7,8 +7,10 @@ import {
   deleteDfyCard,
   listDfyCandidates,
   setDfyDealAmount,
+  setDfyRetainerAmount,
   logDfyPayment,
   markDfyPaidInFull,
+  ensureDfyOpsProjectForCard,
 } from '@/lib/dfy-crm';
 
 export const runtime = 'nodejs';
@@ -40,12 +42,22 @@ export async function POST(req: Request) {
       case 'deal-amount':
         await setDfyDealAmount(String(body.id), Number(body.centavos) || 0);
         return NextResponse.json({ ok: true });
+      case 'retainer-amount':
+        await setDfyRetainerAmount(
+          String(body.id),
+          body.centavos == null ? null : Number(body.centavos),
+        );
+        return NextResponse.json({ ok: true });
       case 'log-payment':
         await logDfyPayment(String(body.id), Number(body.centavos) || 0, body.note ? String(body.note) : undefined);
         return NextResponse.json({ ok: true });
       case 'mark-paid-full':
         await markDfyPaidInFull(String(body.id));
         return NextResponse.json({ ok: true });
+      case 'ensure-ops-project': {
+        const projectId = await ensureDfyOpsProjectForCard(String(body.id));
+        return NextResponse.json({ projectId });
+      }
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });
     }
