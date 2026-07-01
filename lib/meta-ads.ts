@@ -299,9 +299,17 @@ export async function getAdPreview(
   adId: string,
   format: AdPreviewFormat = 'DESKTOP_FEED_STANDARD',
 ): Promise<{ ok: false; error: string } | { ok: true; src?: string; width?: number; height?: number; raw: string }> {
-  if (!process.env.META_ADS_TOKEN) return { ok: false, error: 'META_ADS_TOKEN not configured' };
+  const token = process.env.META_ADS_TOKEN;
+  if (!token) return { ok: false, error: 'META_ADS_TOKEN not configured' };
+  // /previews takes ad_format as its own query param — NOT inside ?fields=,
+  // so we bypass the graph() helper (which is shaped for ?fields=…).
+  const url =
+    `https://graph.facebook.com/${GRAPH_VERSION}/${adId}/previews` +
+    `?ad_format=${encodeURIComponent(format)}` +
+    `&access_token=${encodeURIComponent(token)}`;
   try {
-    const json = (await graph(`${adId}/previews`, `ad_format=${format}`)) as {
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = (await res.json()) as {
       data?: Array<{ body?: string }>;
       error?: { message?: string };
     };
