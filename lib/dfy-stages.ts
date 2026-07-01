@@ -35,6 +35,10 @@ export type DfyCard = {
   paidInFull: boolean;
   paidAt: string | null;
   payments: { amountCentavos: number; at: string; note?: string }[];
+  /** DFY Ops project id — set when this card has been promoted to the
+   *  delivery kanban (auto on Onboarding transition, or via the manual
+   *  Create button on existing cards). Null = not yet promoted. */
+  dfyOpsProjectId: string | null;
   createdAt: string;
   updatedAt: string;
 };

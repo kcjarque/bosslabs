@@ -7,6 +7,7 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { getSignups } from './db';
 import { DFY_STAGES, type DfyStage, type DfyCard } from './dfy-stages';
+import { createProject } from './dfy';
 
 export { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from './dfy-stages';
 
@@ -23,6 +24,7 @@ type DfyRow = {
   amount_centavos: number | null;
   payments: DfyPayment[] | null;
   paid_at: string | null;
+  dfy_ops_project_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -44,9 +46,42 @@ function rowToCard(r: DfyRow): DfyCard {
     paidInFull: deal > 0 && collected >= deal,
     paidAt: r.paid_at ?? null,
     payments,
+    dfyOpsProjectId: r.dfy_ops_project_id ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+/** Idempotent: if the CRM card already has a linked DFY Ops project, returns
+ *  its id. Otherwise creates a new dfy_projects row (lane='lite', customer
+ *  name from the CRM card) and stashes the id back on the CRM row.
+ *
+ *  Called on every stage-transition-to-onboarding path so a card that
+ *  bounces out and back doesn't spawn duplicates. Also exposed to the UI
+ *  as a manual button for pre-existing Onboarding cards. */
+export async function ensureDfyOpsProjectForCard(cardId: string): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  const { data: card, error } = await sb
+    .from('dfy_crm_cards')
+    .select('id, name, dfy_ops_project_id')
+    .eq('id', cardId)
+    .maybeSingle();
+  if (error) throw new Error(`ensureDfyOpsProject read: ${error.message}`);
+  if (!card) return null;
+  const existing = (card as { dfy_ops_project_id?: string | null }).dfy_ops_project_id;
+  if (existing) return existing;
+  const project = await createProject({
+    customerName: (card as { name: string }).name || 'DFY customer',
+    lane: 'lite',
+  });
+  if (!project) return null;
+  const { error: linkErr } = await sb
+    .from('dfy_crm_cards')
+    .update({ dfy_ops_project_id: project.id, updated_at: new Date().toISOString() })
+    .eq('id', cardId);
+  if (linkErr) throw new Error(`ensureDfyOpsProject link: ${linkErr.message}`);
+  return project.id;
 }
 
 export async function listDfyCards(): Promise<DfyCard[]> {
@@ -109,6 +144,16 @@ export async function updateDfyCard(
   if (patch.position !== undefined) row.position = patch.position;
   const { error } = await getSupabase().from('dfy_crm_cards').update(row).eq('id', id);
   if (error) throw new Error(`updateDfyCard: ${error.message}`);
+  // Onboarding transition → auto-create the delivery-kanban card (idempotent).
+  // Runs best-effort AFTER the stage flip so a failure here doesn't block the
+  // stage move itself; the manual "Create DFY Ops card" button covers retries.
+  if (patch.stage === 'onboarding') {
+    try {
+      await ensureDfyOpsProjectForCard(id);
+    } catch (err) {
+      console.warn('[dfy-crm] ensureDfyOpsProject on stage change failed:', err);
+    }
+  }
 }
 
 export async function deleteDfyCard(id: string): Promise<void> {
@@ -148,12 +193,21 @@ export async function logDfyPayment(id: string, centavos: number, note?: string)
   const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
   const deal = (data?.amount_centavos as number | null) ?? 0;
   const patch: Record<string, unknown> = { payments, updated_at: new Date().toISOString() };
-  if (deal > 0 && collected >= deal) {
+  const autoAdvanceToOnboarding = deal > 0 && collected >= deal;
+  if (autoAdvanceToOnboarding) {
     patch.paid_at = (data?.paid_at as string | null) ?? new Date().toISOString();
     patch.stage = 'onboarding';
   }
   const { error } = await sb.from('dfy_crm_cards').update(patch).eq('id', id);
   if (error) throw new Error(`logDfyPayment: ${error.message}`);
+  // Same idempotent auto-create hook as the drag-drop stage change.
+  if (autoAdvanceToOnboarding) {
+    try {
+      await ensureDfyOpsProjectForCard(id);
+    } catch (err) {
+      console.warn('[dfy-crm] ensureDfyOpsProject on final-payment auto-advance failed:', err);
+    }
+  }
 }
 
 /** Mark a DFY card paid in full — logs a payment for the remaining balance. */

@@ -106,6 +106,10 @@ export function DfyBoard() {
     await api({ action: 'mark-paid-full', id: card.id });
     await refresh();
   }
+  async function createOpsProject(card: DfyCard) {
+    await api({ action: 'ensure-ops-project', id: card.id });
+    await refresh();
+  }
 
   if (loading) return <BoardSkeleton />;
 
@@ -332,6 +336,27 @@ export function DfyBoard() {
                       onLogPayment={(v) => logPayment(c, v)}
                       onMarkPaid={() => markPaidFull(c)}
                     />
+                    {/* DFY Ops link — only shown on Onboarding cards. Auto-created
+                        when the card first lands on Onboarding; manual button
+                        covers older cards that were already there. */}
+                    {c.stage === 'onboarding' && (
+                      c.dfyOpsProjectId ? (
+                        <a
+                          href={`/admin/dfy/${c.dfyOpsProjectId}`}
+                          className="mt-2 flex items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          🛠 View in DFY Ops →
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => createOpsProject(c)}
+                          className="mt-2 block w-full rounded-md border border-dashed border-emerald-300 bg-white px-2 py-1.5 text-center text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
+                        >
+                          + Create DFY Ops card
+                        </button>
+                      )
+                    )}
                     {c.phone ? (
                       <a
                         href={smsHref(c.phone, DEFAULT_TPL, c.name)}
