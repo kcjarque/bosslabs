@@ -472,3 +472,18 @@ export function formatPHP(centavos: number) {
     minimumFractionDigits: 0,
   }).format(centavos / 100);
 }
+
+/** Whole-peso format for headline aggregate cards. formatPHP shows ".80"
+ *  when there are actual cents, which pushes a total like ₱1,322,892.80 past
+ *  the width of a 5-col KPI card and clips the trailing zero. On aggregates
+ *  the centavos are noise anyway — use this for revenue/income/spend totals,
+ *  keep formatPHP for individual invoice amounts and funnel prices where the
+ *  cents are real. */
+export function formatPHPWhole(centavos: number) {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(centavos / 100);
+}

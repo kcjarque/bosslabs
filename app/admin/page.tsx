@@ -11,7 +11,7 @@ import {
   getAdSpendByDay,
   type Signup,
 } from '@/lib/db';
-import { formatPHP, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
+import { formatPHP, formatPHPWhole, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
 import { sumDfyIncomeCentavos } from '@/lib/dfy-crm';
@@ -631,12 +631,12 @@ async function DashboardBody({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
           label="Revenue"
-          value={formatPHP(sRevenueByPaymentCentavos)}
+          value={formatPHPWhole(sRevenueByPaymentCentavos)}
           trend={revenueTrend}
           sub={
             sRecoveredRevenueCentavos > 0
-              ? `incl. ${formatPHP(sRecoveredRevenueCentavos)} recovered`
-              : `${sPaid.length} paid · AOV ${formatPHP(Math.round(sAovPhp * 100))}`
+              ? `incl. ${formatPHPWhole(sRecoveredRevenueCentavos)} recovered`
+              : `${sPaid.length} paid · AOV ${formatPHPWhole(Math.round(sAovPhp * 100))}`
           }
           tone="green"
         />
@@ -676,18 +676,18 @@ async function DashboardBody({
           label="Recovered"
           value={sRecoveredList.length.toString()}
           tone="orange"
-          sub={`${formatPHP(sRecoveredRevenueCentavos)} · paid after abandoning`}
+          sub={`${formatPHPWhole(sRecoveredRevenueCentavos)} · paid after abandoning`}
         />
         <StatCard
           label="Ave. cost per customer"
-          value={formatPHP(cacCentavos)}
-          sub={`${formatPHP(adSpendInPeriodCentavos)} ad spend · ${periodCustomers} customers`}
+          value={formatPHPWhole(cacCentavos)}
+          sub={`${formatPHPWhole(adSpendInPeriodCentavos)} ad spend · ${periodCustomers} customers`}
         />
         <StatCard
           label="LTV (lifetime value)"
-          value={formatPHP(totalLtvCentavos)}
+          value={formatPHPWhole(totalLtvCentavos)}
           tone="green"
-          sub={`Webinar LTV ${formatPHP(ltvCentavos)} · incl. Retreat + DFY`}
+          sub={`Webinar LTV ${formatPHPWhole(ltvCentavos)} · incl. Retreat + DFY`}
         />
       </div>
 
@@ -710,24 +710,24 @@ async function DashboardBody({
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
           <StatCard
             label="Total revenue"
-            value={formatPHP(totalIncomeCentavos)}
+            value={formatPHPWhole(totalIncomeCentavos)}
             sub={`${periodLabel} · front-end + back-end`}
             tone="green"
           />
           <StatCard
             label="Front-end (₱999)"
-            value={formatPHP(sRevenueByPaymentCentavos)}
+            value={formatPHPWhole(sRevenueByPaymentCentavos)}
             sub="webinar tickets + bumps/OTO"
           />
           <StatCard
             label="Webinar income (VCR)"
-            value={formatPHP(webinarIncomeCentavos)}
+            value={formatPHPWhole(webinarIncomeCentavos)}
             sub="high-ticket retreat cash"
             tone={webinarIncomeCentavos > 0 ? 'green' : undefined}
           />
           <StatCard
             label="DFY income"
-            value={formatPHP(dfyIncomeCentavos)}
+            value={formatPHPWhole(dfyIncomeCentavos)}
             sub="cash collected"
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
           />
@@ -759,27 +759,27 @@ async function DashboardBody({
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <StatCard
             label="Ad spend"
-            value={formatPHP(adSpendInPeriodCentavos)}
+            value={formatPHPWhole(adSpendInPeriodCentavos)}
             sub={`${periodLabel} · Meta`}
           />
           <StatCard
             label="ROAS"
             value={adRoas == null ? '—' : `${adRoas.toFixed(2)}×`}
-            sub={`${formatPHP(sRevenueByPaymentCentavos)} revenue`}
+            sub={`${formatPHPWhole(sRevenueByPaymentCentavos)} revenue`}
             tone={adRoas == null ? undefined : adRoas >= 1 ? 'green' : 'amber'}
           />
           <StatCard
             label="Cost / sale"
             value={
               adPaidCount > 0 && adSpendInPeriodCentavos > 0
-                ? formatPHP(adCostPerSaleCentavos)
+                ? formatPHPWhole(adCostPerSaleCentavos)
                 : '—'
             }
             sub={`${adPaidCount} paid in period`}
           />
           <StatCard
             label="Net (rev − spend)"
-            value={formatPHP(adNetCentavos)}
+            value={formatPHPWhole(adNetCentavos)}
             sub="front-end only"
             tone={adNetCentavos >= 0 ? 'green' : 'amber'}
           />
