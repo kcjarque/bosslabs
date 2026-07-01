@@ -98,6 +98,10 @@ export function DfyBoard() {
     await api({ action: 'deal-amount', id: card.id, centavos });
     await refresh();
   }
+  async function setRetainer(card: DfyCard, centavos: number | null) {
+    await api({ action: 'retainer-amount', id: card.id, centavos });
+    await refresh();
+  }
   async function logPayment(card: DfyCard, centavos: number) {
     await api({ action: 'log-payment', id: card.id, centavos });
     await refresh();
@@ -136,7 +140,8 @@ export function DfyBoard() {
         .slice(0, 12)
     : [];
 
-  // Lost leads are dead pipeline — keep them off the funnel + the pipeline value.
+  // Lost + Closed Deal are excluded from the pipeline totals — Lost is dead,
+  // Closed Deal is won (surfaced in its own "Closed Projects" summary below).
   const funnelRows = DFY_STAGES.filter((s) => s !== 'lost').map((s) => {
     const inStage = cards.filter((c) => c.stage === s);
     return {
@@ -144,11 +149,19 @@ export function DfyBoard() {
       bar: DFY_STAGE_META[s].bar,
       count: inStage.length,
       dealCentavos: inStage.reduce((sum, c) => sum + (c.amountCentavos || 0), 0),
+      mrrCentavos: inStage.reduce((sum, c) => sum + (c.retainerCentavos || 0), 0),
     };
   });
-  const pipelineTotalCentavos = cards
-    .filter((c) => c.stage !== 'lost')
-    .reduce((sum, c) => sum + (c.amountCentavos || 0), 0);
+  const inPipelineCards = cards.filter((c) => c.stage !== 'lost' && c.stage !== 'closed_deal');
+  const pipelineTotalCentavos = inPipelineCards.reduce((sum, c) => sum + (c.amountCentavos || 0), 0);
+  const pipelineMrrCentavos = inPipelineCards.reduce((sum, c) => sum + (c.retainerCentavos || 0), 0);
+
+  const closedCards = cards.filter((c) => c.stage === 'closed_deal');
+  const closedProjects = {
+    count: closedCards.length,
+    dealCentavos: closedCards.reduce((sum, c) => sum + (c.amountCentavos || 0), 0),
+    mrrCentavos: closedCards.reduce((sum, c) => sum + (c.retainerCentavos || 0), 0),
+  };
 
   return (
     <div className="space-y-4">
@@ -239,7 +252,12 @@ export function DfyBoard() {
         </div>
           </div>
           <div className="lg:border-l lg:border-slate-100 lg:pl-5">
-            <PipelineFunnel rows={funnelRows} totalCentavos={pipelineTotalCentavos} />
+            <PipelineFunnel
+              rows={funnelRows}
+              totalCentavos={pipelineTotalCentavos}
+              pipelineMrrCentavos={pipelineMrrCentavos}
+              closedProjects={closedProjects}
+            />
           </div>
         </div>
       </div>
@@ -333,13 +351,14 @@ export function DfyBoard() {
                     <DfyDeal
                       card={c}
                       onSetPrice={(v) => setPrice(c, v)}
+                      onSetRetainer={(v) => setRetainer(c, v)}
                       onLogPayment={(v) => logPayment(c, v)}
                       onMarkPaid={() => markPaidFull(c)}
                     />
                     {/* DFY Ops link — only shown on Onboarding cards. Auto-created
                         when the card first lands on Onboarding; manual button
                         covers older cards that were already there. */}
-                    {c.stage === 'onboarding' && (
+                    {c.stage === 'closed_deal' && (
                       c.dfyOpsProjectId ? (
                         <a
                           href={`/admin/dfy/${c.dfyOpsProjectId}`}
@@ -395,20 +414,27 @@ export function DfyBoard() {
 function DfyDeal({
   card,
   onSetPrice,
+  onSetRetainer,
   onLogPayment,
   onMarkPaid,
 }: {
   card: DfyCard;
   onSetPrice: (centavos: number) => void;
+  onSetRetainer: (centavos: number | null) => void;
   onLogPayment: (centavos: number) => void;
   onMarkPaid: () => void;
 }) {
   const [editPrice, setEditPrice] = useState(false);
   const [priceDraft, setPriceDraft] = useState(card.amountCentavos ? String(card.amountCentavos / 100) : '');
+  const [editRetainer, setEditRetainer] = useState(false);
+  const [retainerDraft, setRetainerDraft] = useState(
+    card.retainerCentavos ? String(card.retainerCentavos / 100) : '',
+  );
   const [openPay, setOpenPay] = useState(false);
   const [payAmt, setPayAmt] = useState('');
 
   const deal = card.amountCentavos ?? 0;
+  const retainer = card.retainerCentavos ?? 0;
   const collected = card.collectedCentavos;
   const remaining = Math.max(0, deal - collected);
   const peso = (c: number) => '₱' + (c / 100).toLocaleString();
@@ -465,6 +491,49 @@ function DfyDeal({
         >
           {peso(deal)} ✎
         </button>
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">Retainer</span>
+        {editRetainer ? (
+          <span className="flex items-center gap-1.5">
+            <input
+              className="input h-6 w-24 px-1.5 text-[11px]"
+              inputMode="decimal"
+              autoFocus
+              placeholder="₱/mo"
+              value={retainerDraft}
+              onChange={(e) => setRetainerDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = parseFloat(retainerDraft || '');
+                  onSetRetainer(Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null);
+                  setEditRetainer(false);
+                }
+                if (e.key === 'Escape') setEditRetainer(false);
+              }}
+            />
+            <button
+              onClick={() => {
+                const v = parseFloat(retainerDraft || '');
+                onSetRetainer(Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null);
+                setEditRetainer(false);
+              }}
+              className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-violet-500"
+            >
+              ✓
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => {
+              setRetainerDraft(retainer > 0 ? String(retainer / 100) : '');
+              setEditRetainer(true);
+            }}
+            className={`font-semibold hover:text-violet-700 ${retainer > 0 ? 'text-slate-700' : 'text-slate-400'}`}
+          >
+            {retainer > 0 ? `${peso(retainer)}/mo ✎` : '+ Set retainer'}
+          </button>
+        )}
       </div>
       <div className="mt-0.5 flex items-center justify-between text-[11px]">
         <span className="text-slate-500">Collected</span>

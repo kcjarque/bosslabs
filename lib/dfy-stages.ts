@@ -5,7 +5,7 @@ export const DFY_STAGES = [
   'contract_sent',
   'follow_up',
   'contract_signing',
-  'onboarding',
+  'closed_deal',
   'lost',
 ] as const;
 export type DfyStage = (typeof DFY_STAGES)[number];
@@ -15,7 +15,7 @@ export const DFY_STAGE_META: Record<DfyStage, { label: string; tint: string; bar
   contract_sent: { label: 'Contract Sent', tint: 'bg-cyan-50', bar: 'bg-cyan-500' },
   follow_up: { label: 'Follow Up', tint: 'bg-amber-50', bar: 'bg-amber-500' },
   contract_signing: { label: 'Contract Signing', tint: 'bg-violet-50', bar: 'bg-violet-500' },
-  onboarding: { label: 'Onboarding', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
+  closed_deal: { label: 'Closed Deal', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
   lost: { label: 'Lost Lead', tint: 'bg-rose-50', bar: 'bg-rose-400' },
 };
 
@@ -27,8 +27,11 @@ export type DfyCard = {
   note: string;
   stage: DfyStage;
   position: number;
-  /** The contract price (centavos). Null until set. */
+  /** The one-time contract price (centavos). Null until set. */
   amountCentavos: number | null;
+  /** Monthly retainer / MRR (centavos). Null when the deal is pure one-time.
+   *  Rolled into the Closed Projects MRR total on the board dashboard. */
+  retainerCentavos: number | null;
   /** Cash collected so far via the payments log (sum). */
   collectedCentavos: number;
   /** Fully collected (contract price set and collected >= it). */

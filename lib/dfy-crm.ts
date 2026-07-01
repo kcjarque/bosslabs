@@ -22,6 +22,7 @@ type DfyRow = {
   stage: string;
   position: number;
   amount_centavos: number | null;
+  retainer_centavos: number | null;
   payments: DfyPayment[] | null;
   paid_at: string | null;
   dfy_ops_project_id: string | null;
@@ -42,6 +43,7 @@ function rowToCard(r: DfyRow): DfyCard {
     stage: (DFY_STAGES as readonly string[]).includes(r.stage) ? (r.stage as DfyStage) : 'discovery_call',
     position: r.position ?? 0,
     amountCentavos: r.amount_centavos ?? null,
+    retainerCentavos: r.retainer_centavos ?? null,
     collectedCentavos: collected,
     paidInFull: deal > 0 && collected >= deal,
     paidAt: r.paid_at ?? null,
@@ -147,13 +149,24 @@ export async function updateDfyCard(
   // Onboarding transition → auto-create the delivery-kanban card (idempotent).
   // Runs best-effort AFTER the stage flip so a failure here doesn't block the
   // stage move itself; the manual "Create DFY Ops card" button covers retries.
-  if (patch.stage === 'onboarding') {
+  if (patch.stage === 'closed_deal') {
     try {
       await ensureDfyOpsProjectForCard(id);
     } catch (err) {
       console.warn('[dfy-crm] ensureDfyOpsProject on stage change failed:', err);
     }
   }
+}
+
+/** Set/edit the monthly retainer price (centavos) on a DFY card. */
+export async function setDfyRetainerAmount(id: string, centavos: number | null): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const value = centavos == null ? null : Math.max(0, Math.round(centavos));
+  const { error } = await getSupabase()
+    .from('dfy_crm_cards')
+    .update({ retainer_centavos: value, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`setDfyRetainerAmount: ${error.message}`);
 }
 
 export async function deleteDfyCard(id: string): Promise<void> {
@@ -193,15 +206,15 @@ export async function logDfyPayment(id: string, centavos: number, note?: string)
   const collected = payments.reduce((s, p) => s + (p.amountCentavos || 0), 0);
   const deal = (data?.amount_centavos as number | null) ?? 0;
   const patch: Record<string, unknown> = { payments, updated_at: new Date().toISOString() };
-  const autoAdvanceToOnboarding = deal > 0 && collected >= deal;
-  if (autoAdvanceToOnboarding) {
+  const autoAdvanceToClosedDeal = deal > 0 && collected >= deal;
+  if (autoAdvanceToClosedDeal) {
     patch.paid_at = (data?.paid_at as string | null) ?? new Date().toISOString();
-    patch.stage = 'onboarding';
+    patch.stage = 'closed_deal';
   }
   const { error } = await sb.from('dfy_crm_cards').update(patch).eq('id', id);
   if (error) throw new Error(`logDfyPayment: ${error.message}`);
   // Same idempotent auto-create hook as the drag-drop stage change.
-  if (autoAdvanceToOnboarding) {
+  if (autoAdvanceToClosedDeal) {
     try {
       await ensureDfyOpsProjectForCard(id);
     } catch (err) {
