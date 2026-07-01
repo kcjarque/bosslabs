@@ -23,5 +23,13 @@ export async function GET(req: Request) {
   const format = (VALID_FORMATS.has(formatRaw) ? formatRaw : 'DESKTOP_FEED_STANDARD') as AdPreviewFormat;
   const result = await getAdPreview(id, format);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
-  return NextResponse.json({ src: result.src, width: result.width, height: result.height });
+  // Return the raw iframe HTML too — some previews render blank when the src
+  // is dropped into a *different* iframe (sandbox conflicts, referer checks),
+  // but Meta's own <iframe> tag renders reliably when injected verbatim.
+  return NextResponse.json({
+    src: result.src,
+    width: result.width,
+    height: result.height,
+    html: result.raw,
+  });
 }

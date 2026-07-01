@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AD_PREVIEW_FORMATS, type AdPreviewFormat } from '@/lib/meta-ads-formats';
 
-type PreviewResp = { src?: string; width?: number; height?: number; error?: string };
+type PreviewResp = { src?: string; width?: number; height?: number; html?: string; error?: string };
 
 /** Small clickable thumbnail (32×32) next to an ad name. Click opens a modal
  *  with the Meta-rendered ad preview iframe. Format switcher lets the admin
@@ -96,8 +96,8 @@ export function AdPreviewCell({ adId, thumbnailUrl, adName }: {
               </button>
             </header>
 
-            {/* Format picker */}
-            <div className="flex flex-wrap gap-1 border-b border-slate-100 px-5 py-2.5">
+            {/* Format picker + open-standalone */}
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-5 py-2.5">
               {AD_PREVIEW_FORMATS.map((f) => (
                 <button
                   key={f.key}
@@ -112,10 +112,21 @@ export function AdPreviewCell({ adId, thumbnailUrl, adName }: {
                   {f.label}
                 </button>
               ))}
+              {preview?.src && (
+                <a
+                  href={preview.src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto rounded-full px-2.5 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-cyan-700"
+                >
+                  Open ↗
+                </a>
+              )}
             </div>
 
-            {/* Preview iframe */}
-            <div className="flex min-h-[300px] flex-1 items-center justify-center overflow-auto bg-slate-100 p-4">
+            {/* Preview — inject Meta's own iframe HTML so sandbox/referer
+                policies stay identical to how their docs render it. */}
+            <div className="flex min-h-[300px] flex-1 items-start justify-center overflow-auto bg-slate-100 p-4">
               {loading && <p className="text-[13px] text-slate-500">Loading preview…</p>}
               {!loading && preview?.error && (
                 <div className="max-w-md text-center">
@@ -123,14 +134,10 @@ export function AdPreviewCell({ adId, thumbnailUrl, adName }: {
                   <p className="mt-1 text-[12px] text-slate-500">{preview.error}</p>
                 </div>
               )}
-              {!loading && preview?.src && (
-                <iframe
-                  src={preview.src}
-                  width={preview.width ?? 540}
-                  height={preview.height ?? 640}
-                  sandbox="allow-scripts allow-same-origin allow-popups"
-                  className="rounded-lg border border-slate-300 bg-white shadow-sm"
-                  title={`Ad preview: ${adName}`}
+              {!loading && preview?.html && (
+                <div
+                  className="ad-preview-frame"
+                  dangerouslySetInnerHTML={{ __html: preview.html }}
                 />
               )}
             </div>
