@@ -356,6 +356,8 @@ export function CheckoutFlow({
           Pay once. Get the Zoom link. See you Live!
         </p>
 
+        <SeatHoldTimer />
+
         {sessions.length >= 2 && (
           <SessionPicker
             sessions={sessions}
@@ -363,8 +365,6 @@ export function CheckoutFlow({
             onChange={setSelectedSessionId}
           />
         )}
-
-        <SeatHoldTimer />
 
         <div className="mt-8 space-y-5">
           <div>
@@ -727,19 +727,19 @@ function SessionPicker({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="mt-8">
+    <div className="mt-6">
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400/80 sm:text-[11px]">
         Choose your session
       </div>
-      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
         {sessions.map((s) => {
           const active = s.id === selectedId;
           return (
             <label
               key={s.id}
-              className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
+              className={`flex cursor-pointer items-start gap-2 rounded-xl border p-3 transition ${
                 active
-                  ? 'border-cyan-400/60 bg-cyan-500/[0.08] shadow-[0_0_0_3px_rgba(34,211,238,0.12)]'
+                  ? 'border-cyan-400/60 bg-cyan-500/[0.08] shadow-[0_0_0_2px_rgba(34,211,238,0.12)]'
                   : 'border-white/10 bg-white/[0.02] hover:border-white/25'
               }`}
             >
@@ -753,18 +753,18 @@ function SessionPicker({
               />
               <span
                 aria-hidden="true"
-                className={`mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 transition ${
+                className={`mt-[3px] flex h-3.5 w-3.5 flex-none items-center justify-center rounded-full border-2 transition ${
                   active ? 'border-cyan-400 bg-cyan-400/20' : 'border-white/40'
                 }`}
               >
                 {active && <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold text-white sm:text-[14px]">
+                <span className="block text-[12.5px] font-semibold leading-tight text-white sm:text-[13px]">
                   {s.name}
                 </span>
-                <span className="mt-0.5 block text-[11.5px] text-ink-200 sm:text-[12.5px]">
-                  {s.dateLabel} · {s.timeLabel} · Live on Zoom
+                <span className="mt-0.5 block text-[10.5px] leading-tight text-ink-200 sm:text-[11.5px]">
+                  {s.dateLabel} · {s.timeLabel}
                 </span>
               </span>
             </label>
