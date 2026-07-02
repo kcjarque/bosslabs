@@ -2130,16 +2130,27 @@ export async function getUpcomingCheckoutSessions(
   leadTimeMs = 60 * 60_000,
 ): Promise<EventModel[]> {
   if (!isSupabaseConfigured()) return [];
-  const cutoffIso = new Date(Date.now() + leadTimeMs).toISOString();
+  // NOTE: starts_at_iso is a TEXT column holding local-offset ISO strings
+  // ("2026-07-02T19:00:00+08:00"). A SQL string `.gt()` against a UTC "Z"
+  // cutoff compares wall-clock DIGITS, not instants — so a same-day event
+  // that already started (19:00+08 = 11:00Z) sorts AFTER a 12:44Z cutoff and
+  // wrongly stays in the picker until the date rolls over. Filter by real
+  // instant in JS (Date.parse understands the +08:00 offset). The order-by is
+  // safe: every event shares the +08:00 offset, so the text sort is chronological.
+  const cutoffMs = Date.now() + leadTimeMs;
   const { data, error } = await getSupabase()
     .from('events')
     .select('*')
     .eq('active', true)
-    .gt('starts_at_iso', cutoffIso)
-    .order('starts_at_iso', { ascending: true })
-    .limit(Math.max(1, limit));
+    .order('starts_at_iso', { ascending: true });
   if (error) return [];
-  return (data as EventRow[]).map(rowToEvent);
+  return (data as EventRow[])
+    .map(rowToEvent)
+    .filter((e) => {
+      const t = Date.parse(e.startsAtIso);
+      return Number.isFinite(t) && t > cutoffMs;
+    })
+    .slice(0, Math.max(1, limit));
 }
 
 export const getEvents = cache(async (): Promise<EventModel[]> => {
