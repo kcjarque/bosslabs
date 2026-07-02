@@ -37,7 +37,7 @@ type CardRow = {
   people: number | null;
 };
 
-const DEFAULT_VCR_DEAL_CENTAVOS = 5_000_000; // ₱50,000
+const DEFAULT_VCR_DEAL_CENTAVOS = 7_500_000; // ₱75,000
 
 type ResRow = {
   id: string;

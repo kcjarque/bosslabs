@@ -3155,10 +3155,14 @@ export type EventFunnelConfig = {
   subtitle?: string;
   location?: string;
   capacity?: number;
-  /** Standard all-in price. */
+  /** Standard all-in price (the real transactional price — balance +
+   *  installment math derive from this). */
   standardPriceCentavos?: number;
   /** Discounted price if paid in full today. */
   payInFullPriceCentavos?: number;
+  /** Marketing anchor shown struck-through above the real price (e.g. the
+   *  ₱100,000 "was" price over the ₱75,000 seat). Display-only; never charged. */
+  slashedPriceCentavos?: number;
   /** Slot-securing deposit. */
   depositCentavos?: number;
   /** Human date by which the balance is due, e.g. "June 19". */

@@ -30,18 +30,19 @@ export default async function VibeCodeRetreatPage() {
   if (!funnel || !funnel.active) notFound();
   const c = funnel.config as EventFunnelConfig;
   const priceCentavos = c.payInFullPriceCentavos ?? null;
+  const slashedCentavos = c.slashedPriceCentavos ?? null;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#06070A] text-ink-200">
       <CinematicBackground />
       <RetreatHeader />
       <main className="relative z-10">
-        <Hero priceCentavos={priceCentavos} />
+        <Hero priceCentavos={priceCentavos} slashedCentavos={slashedCentavos} />
         <WhatYouGet />
         <Bonuses />
         <FoundersNetwork />
         <BillionaireSession />
-        <Payment priceCentavos={priceCentavos} />
+        <Payment priceCentavos={priceCentavos} slashedCentavos={slashedCentavos} />
         <FinalCta />
       </main>
       <Footer />
@@ -347,7 +348,7 @@ function RetreatHeader() {
 /* --------------------------------------------------------------------- */
 /* Hero                                                                  */
 /* --------------------------------------------------------------------- */
-function Hero({ priceCentavos }: { priceCentavos: number | null }) {
+function Hero({ priceCentavos, slashedCentavos }: { priceCentavos: number | null; slashedCentavos?: number | null }) {
   const cards = [
     { icon: IC.calendar, k: 'WHEN', v: 'July 31 – August 1, 10:00 AM', s: 'Friday to Saturday' },
     { icon: IC.people, k: 'WHO', v: 'Only 10 founders', s: 'Invite-only cohort' },
@@ -379,7 +380,11 @@ function Hero({ priceCentavos }: { priceCentavos: number | null }) {
           {priceCentavos != null && (
             <>
               {' '}
-              Your seat: <span className="font-semibold text-white">{formatPHP(priceCentavos)}</span>.
+              Your seat:{' '}
+              {slashedCentavos != null && slashedCentavos > priceCentavos && (
+                <span className="text-ink-500 line-through">{formatPHP(slashedCentavos)}</span>
+              )}{' '}
+              <span className="font-semibold text-white">{formatPHP(priceCentavos)}</span>.
             </>
           )}
         </p>
@@ -571,7 +576,7 @@ function BillionaireSession() {
 /* --------------------------------------------------------------------- */
 /* Payment — bank QR (InstaPay) + credit card + reserve                  */
 /* --------------------------------------------------------------------- */
-function Payment({ priceCentavos }: { priceCentavos: number | null }) {
+function Payment({ priceCentavos, slashedCentavos }: { priceCentavos: number | null; slashedCentavos?: number | null }) {
   return (
     <section id="secure-seat" className="relative container-tight py-16 sm:py-24">
       <SectionGlow className="left-1/2 top-[6%] -translate-x-1/2" />
@@ -582,6 +587,11 @@ function Payment({ priceCentavos }: { priceCentavos: number | null }) {
         </Display>
         {priceCentavos != null && (
           <div className="mt-5 inline-flex items-baseline gap-3">
+            {slashedCentavos != null && slashedCentavos > priceCentavos && (
+              <span className="font-sans text-2xl font-semibold tracking-tight text-ink-500 line-through sm:text-3xl">
+                {formatPHP(slashedCentavos)}
+              </span>
+            )}
             <span className="font-sans text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
               {formatPHP(priceCentavos)}
             </span>

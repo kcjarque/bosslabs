@@ -31,8 +31,8 @@ export function planAmountCentavos(
   plan: string | undefined,
   c: EventFunnelConfig,
 ): number {
-  const standard = c.standardPriceCentavos ?? 6_000_000;
-  const full = c.payInFullPriceCentavos ?? 5_000_000;
+  const standard = c.standardPriceCentavos ?? 7_500_000;
+  const full = c.payInFullPriceCentavos ?? 7_500_000;
   const deposit = c.depositCentavos ?? 1_000_000;
   switch (plan) {
     case 'full':
@@ -50,9 +50,10 @@ export function planSummary(
   plan: string | undefined,
   c: EventFunnelConfig,
 ): { label: string; dueNow: number; note: string } {
-  const standard = c.standardPriceCentavos ?? 6_000_000;
-  const full = c.payInFullPriceCentavos ?? 5_000_000;
+  const standard = c.standardPriceCentavos ?? 7_500_000;
+  const full = c.payInFullPriceCentavos ?? 7_500_000;
   const deposit = c.depositCentavos ?? 1_000_000;
+  const slashed = c.slashedPriceCentavos ?? 0;
   const dueDate = c.balanceDueDate ?? 'the balance date';
 
   switch (plan) {
@@ -60,7 +61,12 @@ export function planSummary(
       return {
         label: 'Full payment today',
         dueNow: full,
-        note: `One payment — you save ${formatPHP(standard - full)} versus the standard ${formatPHP(standard)}.`,
+        // Anchor the saving against the slashed "was" price when set; avoids a
+        // fake "save ₱0" now that standard and pay-in-full are the same number.
+        note:
+          slashed > full
+            ? `One payment of ${formatPHP(full)} — ${formatPHP(slashed - full)} off the ${formatPHP(slashed)} standard rate.`
+            : `One payment of ${formatPHP(full)} — locks your seat in full.`,
       };
     case 'installment': {
       const monthly = Math.round(standard / 3);
