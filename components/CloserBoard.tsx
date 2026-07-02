@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MarkPaidButton } from '@/components/MarkPaidButton';
 import { toE164Ph } from '@/lib/phone';
 
-type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
+type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string; sessionLabel: string };
 type Lead = {
   leadId: string;
   signupId: string;
@@ -17,7 +17,23 @@ type Lead = {
   commissionCentavos: number | null;
   remarks: string;
   remainingHoldMin: number | null;
+  sessionLabel: string;
 };
+
+/** Small cyan chip showing the webinar session the lead picked. Renders
+ *  nothing when the signup predates the multi-session picker. */
+function SessionChip({ label }: { label: string }) {
+  if (!label) return null;
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[10.5px] font-medium text-cyan-700">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+      {label}
+    </span>
+  );
+}
 
 const peso = (c: number) => `₱${(c / 100).toLocaleString()}`;
 
@@ -112,6 +128,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               <div className="text-sm font-medium text-slate-900">{p.name}</div>
               <div className="text-[11px] text-slate-400">🔒 Phone hidden — claim to reveal</div>
               <div className="mt-1 text-[11px] font-medium text-slate-600">Cart: {peso(p.amountDueCentavos)}</div>
+              <SessionChip label={p.sessionLabel} />
               <button
                 onClick={() => claim(p.signupId)}
                 disabled={busy === p.signupId}
@@ -172,6 +189,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
                   />
                 )}
               </div>
+              <SessionChip label={l.sessionLabel} />
               {l.phone && (
                 <div className="mt-2 flex gap-1.5">
                   <a href={`tel:${toE164Ph(l.phone)}`} className="flex-1 rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-medium text-white hover:bg-cyan-500">📞 Call</a>
@@ -193,6 +211,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
             <div key={l.leadId} className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-2.5 shadow-sm">
               <div className="text-sm font-medium text-slate-900">{l.name}</div>
               <div className="text-[11px] text-slate-500">Paid {peso(l.amountCentavos)}</div>
+              <SessionChip label={l.sessionLabel} />
               <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                 +{peso(l.commissionCentavos ?? 0)} commission
               </div>

@@ -111,7 +111,14 @@ function LeadList({
         {leads.length === 0 && <li className="text-[11px] text-slate-300">None</li>}
         {leads.map((l, i) => (
           <li key={i} className="flex items-center justify-between gap-2 text-xs">
-            <span className="truncate text-slate-700">{l.name}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-slate-700">{l.name}</span>
+              {l.sessionLabel && (
+                <span className="shrink-0 rounded-full bg-cyan-50 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">
+                  {l.sessionLabel}
+                </span>
+              )}
+            </span>
             {mode === 'active' ? (
               <span className="shrink-0 text-[11px] text-slate-400">{ago(l.claimedAt)}</span>
             ) : (

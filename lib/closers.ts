@@ -7,7 +7,37 @@
  */
 import crypto from 'crypto';
 import { getSupabase, isSupabaseConfigured } from './supabase';
-import { setSignupRemarks } from './db';
+import { setSignupRemarks, getEvents } from './db';
+
+/** Short human label for a webinar session, e.g. "Thu, Jul 9". Formatted in
+ *  the event's own timezone (falls back to Manila). Used across the closer
+ *  views so a closer can see which session the lead picked at checkout. */
+function formatSessionLabel(iso: string, tz?: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {
+      timeZone: tz || 'Asia/Manila',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
+/** eventId → "Thu, Jul 9" map for the currently-known events. Best-effort:
+ *  returns an empty map if events can't be read, so callers degrade to no
+ *  session label rather than erroring. */
+async function eventLabelMap(): Promise<Map<string, string>> {
+  try {
+    const events = await getEvents();
+    const m = new Map<string, string>();
+    for (const e of events) m.set(e.id, formatSessionLabel(e.startsAtIso, e.timezone));
+    return m;
+  } catch {
+    return new Map();
+  }
+}
 
 export type Closer = {
   id: string;
@@ -180,26 +210,30 @@ export async function getCloserForSignup(
 
 /** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
  *  No phone is returned — the pool is intentionally private until claimed. */
-export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string };
+export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string; sessionLabel: string };
 
 export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
   const { data: claimed } = await sb.from('closer_leads').select('signup_id');
   const taken = new Set(((claimed ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
-  const { data } = await sb
-    .from('signups')
-    .select('id, first_name, last_name, amount_centavos, created_at')
-    .eq('source', 'paid')
-    .eq('status', 'registered')
-    .order('created_at', { ascending: false });
-  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string }>)
+  const [{ data }, labels] = await Promise.all([
+    sb
+      .from('signups')
+      .select('id, first_name, last_name, amount_centavos, created_at, event_id')
+      .eq('source', 'paid')
+      .eq('status', 'registered')
+      .order('created_at', { ascending: false }),
+    eventLabelMap(),
+  ]);
+  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string; event_id: string | null }>)
     .filter((s) => !taken.has(s.id))
     .map((s) => ({
       signupId: s.id,
       name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
       amountDueCentavos: s.amount_centavos ?? 99900,
       createdAt: s.created_at,
+      sessionLabel: (s.event_id && labels.get(s.event_id)) || '',
     }));
 }
 
@@ -220,6 +254,9 @@ export type CloserLead = {
   /** Working minutes left before this claim auto-releases (null once closed).
    *  Counts only the closer's working hours — pauses overnight. */
   remainingHoldMin: number | null;
+  /** Which webinar session the lead picked at checkout, e.g. "Thu, Jul 9".
+   *  Empty when the signup predates the multi-session picker. */
+  sessionLabel: string;
 };
 
 /** Working-hours window in Asia/Manila local time (24h). */
@@ -288,10 +325,13 @@ export async function listCloserLeads(
   const rows = (leads ?? []) as Array<{ id: string; signup_id: string; stage: string; claimed_at: string; closed_at: string | null }>;
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.signup_id);
-  const { data: sigs } = await sb
-    .from('signups')
-    .select('id, first_name, last_name, phone, amount_centavos, metadata')
-    .in('id', ids);
+  const [{ data: sigs }, labels] = await Promise.all([
+    sb
+      .from('signups')
+      .select('id, first_name, last_name, phone, amount_centavos, metadata, event_id')
+      .in('id', ids),
+    eventLabelMap(),
+  ]);
   const sigMap = new Map(((sigs ?? []) as Array<Record<string, unknown>>).map((s) => [s.id as string, s]));
   const { data: comms } = await sb.from('closer_commissions').select('signup_id, amount_centavos').in('signup_id', ids);
   const commMap = new Map(((comms ?? []) as Array<{ signup_id: string; amount_centavos: number }>).map((c) => [c.signup_id, c.amount_centavos]));
@@ -313,6 +353,7 @@ export async function listCloserLeads(
         r.stage === 'closed'
           ? null
           : Math.max(0, remainingHoldMin(new Date(r.claimed_at).getTime(), holdHours)),
+      sessionLabel: ((s.event_id as string | null) && labels.get(s.event_id as string)) || '',
     };
   });
 }
@@ -427,6 +468,8 @@ export type AssignmentLead = {
   claimedAt: string;
   closedAt: string | null;
   commissionCentavos: number | null;
+  /** Which webinar session the lead picked at checkout, e.g. "Thu, Jul 9". */
+  sessionLabel: string;
 };
 export type CloserAssignment = {
   closer: Closer;
@@ -455,10 +498,15 @@ export async function getCloserAssignments(): Promise<{
 
   const ids = [...new Set(leadRows.map((r) => r.signup_id))];
   const nameMap = new Map<string, string>();
+  const sessionMap = new Map<string, string>();
   if (ids.length) {
-    const { data: sigs } = await sb.from('signups').select('id, first_name, last_name').in('id', ids);
-    for (const s of (sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>) {
+    const [{ data: sigs }, labels] = await Promise.all([
+      sb.from('signups').select('id, first_name, last_name, event_id').in('id', ids),
+      eventLabelMap(),
+    ]);
+    for (const s of (sigs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; event_id: string | null }>) {
       nameMap.set(s.id, `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer');
+      sessionMap.set(s.id, (s.event_id && labels.get(s.event_id)) || '');
     }
   }
 
@@ -480,6 +528,7 @@ export async function getCloserAssignments(): Promise<{
       claimedAt: r.claimed_at,
       closedAt: r.closed_at,
       commissionCentavos: commBySignup.get(r.signup_id) ?? null,
+      sessionLabel: sessionMap.get(r.signup_id) ?? '',
     };
     (r.stage === 'closed' ? b.closed : b.active).push(lead);
   }
