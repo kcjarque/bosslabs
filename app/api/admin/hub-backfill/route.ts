@@ -27,6 +27,7 @@ import { provisionHubAccount } from '@/lib/hub-provision';
 import { sendEmail } from '@/lib/email';
 import { signVaultOrder } from '@/lib/vault-token';
 import { siteUrl } from '@/lib/site';
+import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -135,9 +136,14 @@ export async function POST(req: Request) {
   if (!expected) {
     return NextResponse.json({ error: 'HUB_PROVISION_TOKEN not set on bosslabs-ai' }, { status: 503 });
   }
+  // Two ways in: (1) the shared operator Bearer token (CJ / scripts), or
+  // (2) a logged-in admin from a same-origin request (the /admin/hub-backfill
+  // button) — the server-side HUB_PROVISION_TOKEN is still what talks to Hub.
   const auth = req.headers.get('authorization') ?? '';
   const presented = auth.replace(/^Bearer\s+/i, '');
-  if (presented !== expected) {
+  const viaToken = presented === expected;
+  const viaAdmin = isAdminLoggedIn() && isSameOrigin(req);
+  if (!viaToken && !viaAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

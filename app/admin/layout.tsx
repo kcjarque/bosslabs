@@ -77,6 +77,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
     heading: 'System',
     items: [
       { href: '/admin/settings', label: 'Settings', icon: 'settings' },
+      { href: '/admin/hub-backfill', label: 'Hub backfill', icon: 'settings' },
       { href: '/admin/test-thank-you', label: 'QA', icon: 'qa' },
     ],
   },
