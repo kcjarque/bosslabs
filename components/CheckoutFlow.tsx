@@ -334,15 +334,20 @@ export function CheckoutFlow({
       {/* Left — event details + fields + bump */}
       <div>
         <div className="eyebrow">Step 1 of 2 · Secure checkout</div>
-        <h1 className="h-section mt-3">
+        {/* Compact headline so the session options sit above the fold. */}
+        <h1 className="mt-2 font-serif text-2xl leading-[1.1] tracking-tight text-white sm:text-3xl">
           Build Your System <span className="accent-italic">Live Workshop</span>
         </h1>
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <div className="flex items-baseline gap-2">
-            <span className="font-serif text-3xl tracking-tight text-white">{OFFER.main.label}</span>
-            <span className="font-serif text-base text-ink-300 line-through">{OFFER.main.crossed}</span>
-          </div>
-          {displayWebinar?.date && (
+        {/* Price as a small inline line — no big display number. */}
+        <div className="mt-2 flex items-baseline gap-2">
+          <span className="font-serif text-xl tracking-tight text-white">{OFFER.main.label}</span>
+          <span className="font-serif text-sm text-ink-300 line-through">{OFFER.main.crossed}</span>
+          <span className="text-[13px] text-ink-100">Pay once. Get the Zoom link. See you Live!</span>
+        </div>
+        {/* Date pill only when there is NO picker (single-session mode) — with a
+            picker the chosen date already shows on each option card. */}
+        {sessions.length < 2 && displayWebinar?.date && (
+          <div className="mt-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-1.5 text-[12px] font-medium text-cyan-100 sm:text-[13px]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-none text-cyan-400" aria-hidden="true">
                 <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
@@ -350,11 +355,8 @@ export function CheckoutFlow({
               </svg>
               {displayWebinar.date} · {displayWebinar.time} {displayWebinar.timezone}
             </span>
-          )}
-        </div>
-        <p className="mt-3 max-w-md text-sm text-ink-100">
-          Pay once. Get the Zoom link. See you Live!
-        </p>
+          </div>
+        )}
 
         <SeatHoldTimer />
 
