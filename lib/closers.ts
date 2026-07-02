@@ -468,6 +468,9 @@ export type AssignmentLead = {
   claimedAt: string;
   closedAt: string | null;
   commissionCentavos: number | null;
+  /** True once this commission has been settled via a payout batch. Drives the
+   *  "paid" pill (vs the green owed amount) on the assignments view. */
+  commissionPaid: boolean;
   /** Which webinar session the lead picked at checkout, e.g. "Thu, Jul 9". */
   sessionLabel: string;
 };
@@ -475,7 +478,11 @@ export type CloserAssignment = {
   closer: Closer;
   active: AssignmentLead[];
   closed: AssignmentLead[];
+  /** OUTSTANDING commission — pending only, so it drops to zero once a closer's
+   *  batch is paid out. Paid commissions are surfaced in commissionPaidCentavos. */
   commissionTotalCentavos: number;
+  /** Already-settled commission (lifetime paid out to this closer). */
+  commissionPaidCentavos: number;
 };
 
 /** Every closer with their leads grouped into active/closed + commission
@@ -489,7 +496,7 @@ export async function getCloserAssignments(): Promise<{
   const [closers, leadsRes, commsRes, pool] = await Promise.all([
     listClosers(),
     sb.from('closer_leads').select('signup_id, closer_id, stage, claimed_at, closed_at'),
-    sb.from('closer_commissions').select('signup_id, closer_id, amount_centavos'),
+    sb.from('closer_commissions').select('signup_id, closer_id, amount_centavos, status'),
     listUnclaimedAbandoned(),
   ]);
   const leadRows = (leadsRes.data ?? []) as Array<{
@@ -510,11 +517,22 @@ export async function getCloserAssignments(): Promise<{
     }
   }
 
+  // commByCloser = OUTSTANDING (pending) only → refreshes to zero after a payout.
+  // commPaidByCloser = lifetime settled. paidBySignup drives the per-lead pill.
   const commByCloser = new Map<string, number>();
+  const commPaidByCloser = new Map<string, number>();
   const commBySignup = new Map<string, number>();
-  for (const c of (commsRes.data ?? []) as Array<{ signup_id: string; closer_id: string; amount_centavos: number }>) {
-    commByCloser.set(c.closer_id, (commByCloser.get(c.closer_id) ?? 0) + c.amount_centavos);
+  const paidBySignup = new Map<string, boolean>();
+  for (const c of (commsRes.data ?? []) as Array<{ signup_id: string; closer_id: string; amount_centavos: number; status: string }>) {
     commBySignup.set(c.signup_id, c.amount_centavos);
+    const isPaid = c.status === 'paid';
+    paidBySignup.set(c.signup_id, isPaid);
+    if (isPaid) {
+      commPaidByCloser.set(c.closer_id, (commPaidByCloser.get(c.closer_id) ?? 0) + c.amount_centavos);
+    } else if (c.status !== 'void') {
+      // pending (not yet paid, not voided) = still owed
+      commByCloser.set(c.closer_id, (commByCloser.get(c.closer_id) ?? 0) + c.amount_centavos);
+    }
   }
 
   const buckets = new Map<string, { active: AssignmentLead[]; closed: AssignmentLead[] }>();
@@ -528,6 +546,7 @@ export async function getCloserAssignments(): Promise<{
       claimedAt: r.claimed_at,
       closedAt: r.closed_at,
       commissionCentavos: commBySignup.get(r.signup_id) ?? null,
+      commissionPaid: paidBySignup.get(r.signup_id) ?? false,
       sessionLabel: sessionMap.get(r.signup_id) ?? '',
     };
     (r.stage === 'closed' ? b.closed : b.active).push(lead);
@@ -538,6 +557,7 @@ export async function getCloserAssignments(): Promise<{
     active: buckets.get(closer.id)!.active,
     closed: buckets.get(closer.id)!.closed,
     commissionTotalCentavos: commByCloser.get(closer.id) ?? 0,
+    commissionPaidCentavos: commPaidByCloser.get(closer.id) ?? 0,
   }));
   return { rows, unassignedCount: pool.length };
 }

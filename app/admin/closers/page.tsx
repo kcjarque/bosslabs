@@ -24,7 +24,9 @@ export default async function CloserAssignmentsPage() {
 
   const totalActive = rows.reduce((s, r) => s + r.active.length, 0);
   const totalClosed = rows.reduce((s, r) => s + r.closed.length, 0);
-  const totalCommission = rows.reduce((s, r) => s + r.commissionTotalCentavos, 0);
+  // Owed = pending only (drops to zero once paid out); Paid = lifetime settled.
+  const totalOwed = rows.reduce((s, r) => s + r.commissionTotalCentavos, 0);
+  const totalPaid = rows.reduce((s, r) => s + r.commissionPaidCentavos, 0);
 
   return (
     <div className="space-y-6">
@@ -41,11 +43,12 @@ export default async function CloserAssignmentsPage() {
       <ClosersTabs active="assignments" />
 
       {/* Totals */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Unassigned pool" value={String(unassignedCount)} />
         <Stat label="Working (claimed)" value={String(totalActive)} tint="text-cyan-700" />
         <Stat label="Closed — won" value={String(totalClosed)} tint="text-emerald-700" />
-        <Stat label="Commissions" value={peso(totalCommission)} tint="text-emerald-700" />
+        <Stat label="Owed (unpaid)" value={peso(totalOwed)} tint="text-amber-700" />
+        <Stat label="Paid out" value={peso(totalPaid)} tint="text-slate-500" />
       </div>
 
       {/* Per-closer breakdown */}
@@ -64,7 +67,16 @@ export default async function CloserAssignmentsPage() {
               <span className="ml-auto flex flex-wrap items-center gap-2 text-[11px]">
                 <span className="rounded-full bg-cyan-50 px-2 py-0.5 font-medium text-cyan-700">{r.active.length} working</span>
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">{r.closed.length} closed</span>
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">{peso(r.commissionTotalCentavos)}</span>
+                {/* Owed (pending) — refreshes to zero once this closer's batch is
+                    paid out. When nothing's owed, show a settled pill instead. */}
+                {r.commissionTotalCentavos > 0 ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">{peso(r.commissionTotalCentavos)} owed</span>
+                ) : r.commissionPaidCentavos > 0 ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">paid out ✓</span>
+                ) : null}
+                {r.commissionPaidCentavos > 0 && (
+                  <span className="text-slate-400">{peso(r.commissionPaidCentavos)} paid</span>
+                )}
               </span>
             </div>
 
@@ -121,6 +133,10 @@ function LeadList({
             </span>
             {mode === 'active' ? (
               <span className="shrink-0 text-[11px] text-slate-400">{ago(l.claimedAt)}</span>
+            ) : l.commissionPaid ? (
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                paid
+              </span>
             ) : (
               <span className="shrink-0 text-[11px] font-medium text-emerald-700">
                 {l.commissionCentavos != null ? `+${peso(l.commissionCentavos)}` : '—'}
