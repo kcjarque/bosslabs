@@ -38,6 +38,9 @@ export async function POST(req: Request) {
       bump2?: boolean;
       paymentMethod?: PaymentMethodGroup;
       promoCode?: string;
+      /** The webinar event the buyer selected on the /checkout picker.
+       *  When null/omitted, the API falls back to settings.active_event_id. */
+      webinarEventId?: string | null;
       meta?: {
         eventId?: string;
         fbp?: string;
@@ -168,10 +171,11 @@ export async function POST(req: Request) {
       let signupId: string;
       if (existing) {
         signupId = existing.id;
-        // Re-tag to the active event (see the paid-invoice branch below) so a
-        // returning lead who claims a free seat for the NEW event lands on its
-        // list and gets this event's reminders.
+        // Re-tag to the buyer's chosen event (picker) or the active event
+        // (fallback) so a returning lead who claims a free seat for the NEW
+        // event lands on its list and gets this event's reminders.
         const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
+        const chosenEventId = body.webinarEventId ?? activeEventId;
         await updateSignup(existing.id, {
           firstName,
           lastName: rest.join(' ') || undefined,
@@ -179,7 +183,7 @@ export async function POST(req: Request) {
           status: 'paid',
           amountCentavos: 0,
           bumped,
-          ...(activeEventId ? { eventId: activeEventId } : {}),
+          ...(chosenEventId ? { eventId: chosenEventId } : {}),
           metadata: {
             ...(existing.metadata ?? {}),
             ...baseMeta,
@@ -196,6 +200,7 @@ export async function POST(req: Request) {
           status: 'paid',
           amountCentavos: 0,
           bumped,
+          eventId: body.webinarEventId ?? undefined,
           metadata: {
             ...baseMeta,
             confirmationSent: new Date().toISOString(),
@@ -357,13 +362,14 @@ export async function POST(req: Request) {
       // the old list and never get this event's reminders / Zoom link. No-op
       // when the active event hasn't changed.
       const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
+      const chosenEventId = body.webinarEventId ?? activeEventId;
       await updateSignup(existing.id, {
         firstName,
         lastName: rest.join(' ') || undefined,
         phone: body.mobile || existing.phone,
         amountCentavos,
         bumped,
-        ...(activeEventId ? { eventId: activeEventId } : {}),
+        ...(chosenEventId ? { eventId: chosenEventId } : {}),
         metadata: {
           ...(existing.metadata ?? {}),
           ...sharedMetadata,
@@ -383,6 +389,7 @@ export async function POST(req: Request) {
         status: 'registered',
         amountCentavos,
         bumped,
+        eventId: body.webinarEventId ?? undefined,
         metadata: sharedMetadata,
       });
     }

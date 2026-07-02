@@ -156,6 +156,11 @@ export type Settings = {
   /** Which event new signups attach to. Null = no active event (signups
    *  not tagged with an event). Settable from /admin/settings. */
   activeEventId: string | null;
+  /** How many upcoming sessions the /checkout page shows to the buyer. 1 =
+   *  single-session (just the current active event). 2 = radio between the
+   *  two next upcoming events. When 2 is set but only 1 upcoming exists,
+   *  the picker degrades to a single-session display. */
+  checkoutSessionsVisible: number;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -191,6 +196,7 @@ const DEFAULT_SETTINGS: Settings = {
   closerWorkStartHour: 9,
   closerWorkEndHour: 20,
   activeEventId: null,
+  checkoutSessionsVisible: 2,
 };
 
 /* --------------------------------------------------------------------- */
@@ -277,6 +283,7 @@ type SettingsRow = {
   closer_work_start_hour: number | string;
   closer_work_end_hour: number | string;
   active_event_id: string | null;
+  checkout_sessions_visible: number | string;
 };
 
 function rowToSettings(r: SettingsRow): Settings {
@@ -307,6 +314,8 @@ function rowToSettings(r: SettingsRow): Settings {
     closerWorkStartHour: r.closer_work_start_hour != null ? Number(r.closer_work_start_hour) : 9,
     closerWorkEndHour: r.closer_work_end_hour != null ? Number(r.closer_work_end_hour) : 20,
     activeEventId: r.active_event_id ?? null,
+    checkoutSessionsVisible:
+      r.checkout_sessions_visible != null ? Number(r.checkout_sessions_visible) : 2,
   };
 }
 
@@ -338,6 +347,10 @@ function settingsToRow(s: Partial<Settings>): Partial<SettingsRow> {
   if (s.closerWorkStartHour !== undefined) out.closer_work_start_hour = s.closerWorkStartHour;
   if (s.closerWorkEndHour !== undefined) out.closer_work_end_hour = s.closerWorkEndHour;
   if (s.activeEventId !== undefined) out.active_event_id = s.activeEventId;
+  if (s.checkoutSessionsVisible !== undefined) {
+    // Clamp to 1|2 defensively so a bad admin input can't break the check.
+    out.checkout_sessions_visible = s.checkoutSessionsVisible >= 2 ? 2 : 1;
+  }
   return out;
 }
 
@@ -2106,6 +2119,28 @@ function rowToStep(r: SequenceStepRow): SequenceStep {
 }
 
 /* ─── Events ──────────────────────────────────────────────────────────── */
+
+/** Upcoming active events for the /checkout session picker. Filters out
+ *  events whose start is inside the "stop selling" lead-time (default 1h
+ *  ahead — matches the existing rollover convention), sorts soonest-first,
+ *  and caps by `limit`. Returns [] if the DB is offline so the picker
+ *  degrades to no-picker instead of erroring. */
+export async function getUpcomingCheckoutSessions(
+  limit = 2,
+  leadTimeMs = 60 * 60_000,
+): Promise<EventModel[]> {
+  if (!isSupabaseConfigured()) return [];
+  const cutoffIso = new Date(Date.now() + leadTimeMs).toISOString();
+  const { data, error } = await getSupabase()
+    .from('events')
+    .select('*')
+    .eq('active', true)
+    .gt('starts_at_iso', cutoffIso)
+    .order('starts_at_iso', { ascending: true })
+    .limit(Math.max(1, limit));
+  if (error) return [];
+  return (data as EventRow[]).map(rowToEvent);
+}
 
 export const getEvents = cache(async (): Promise<EventModel[]> => {
   if (!isSupabaseConfigured()) return [];

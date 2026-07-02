@@ -28,11 +28,40 @@ type AppliedPromo = {
   isFree: boolean;
 };
 
+export type CheckoutSession = {
+  id: string;
+  name: string;
+  /** e.g. "Thursday July 2" */
+  dateLabel: string;
+  /** e.g. "7:00 PM PHT" */
+  timeLabel: string;
+};
+
 export function CheckoutFlow({
   webinar,
+  sessions = [],
 }: {
   webinar?: { date: string; time: string; timezone: string };
+  /** Upcoming sessions available to pick. Empty = fall back to `webinar` prop
+   *  (single-session mode). One entry = show it as a confirmation (no radio).
+   *  Two+ entries = show radio picker; first is the default. */
+  sessions?: CheckoutSession[];
 }) {
+  // Selected session id — defaults to the first upcoming (soonest). null when
+  // the list is empty (falls back to the settings-based webinar display).
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    sessions[0]?.id ?? null,
+  );
+  const selectedSession = sessions.find((s) => s.id === selectedSessionId) ?? sessions[0] ?? null;
+  // What to render in the top pill + order-summary line. Prefer the picked
+  // session; fall back to the settings-based webinar prop for legacy display.
+  const displayWebinar = selectedSession
+    ? {
+        date: selectedSession.dateLabel,
+        time: selectedSession.timeLabel.replace(/\s+[A-Z]+$/, ''), // "7:00 PM PHT" → "7:00 PM"
+        timezone: selectedSession.timeLabel.match(/\s+([A-Z]+)$/)?.[1] ?? webinar?.timezone ?? 'PHT',
+      }
+    : webinar;
   // `loading` is the method currently in flight — lets us spinner just that
   // button while the other two stay disabled (prevents double-submits).
   const [loading, setLoading] = useState<PayMethod | 'FREE' | null>(null);
@@ -176,6 +205,9 @@ export function CheckoutFlow({
       bump,
       bump2,
       paymentMethod: method,
+      // Which session the buyer picked (only present when the picker showed).
+      // When null the API falls back to settings.active_event_id.
+      webinarEventId: selectedSessionId,
       // Include the applied promo so the server can revalidate + redeem
       // atomically. Partial-discount path still routes through Xendit.
       promoCode: appliedPromo?.code,
@@ -253,6 +285,7 @@ export function CheckoutFlow({
       bump,
       bump2,
       promoCode: appliedPromo.code,
+      webinarEventId: selectedSessionId,
       meta: {
         eventId,
         fbp: fb.fbp,
@@ -309,19 +342,27 @@ export function CheckoutFlow({
             <span className="font-serif text-3xl tracking-tight text-white">{OFFER.main.label}</span>
             <span className="font-serif text-base text-ink-300 line-through">{OFFER.main.crossed}</span>
           </div>
-          {webinar?.date && (
+          {displayWebinar?.date && (
             <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-1.5 text-[12px] font-medium text-cyan-100 sm:text-[13px]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-none text-cyan-400" aria-hidden="true">
                 <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
                 <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
-              {webinar.date} · {webinar.time} {webinar.timezone}
+              {displayWebinar.date} · {displayWebinar.time} {displayWebinar.timezone}
             </span>
           )}
         </div>
         <p className="mt-3 max-w-md text-sm text-ink-100">
           Pay once. Get the Zoom link. See you Live!
         </p>
+
+        {sessions.length >= 2 && (
+          <SessionPicker
+            sessions={sessions}
+            selectedId={selectedSessionId}
+            onChange={setSelectedSessionId}
+          />
+        )}
 
         <SeatHoldTimer />
 
@@ -391,9 +432,9 @@ export function CheckoutFlow({
               <div className="font-serif text-xl text-white">
                 BOSSLABS AI — Build Your System Live Workshop
               </div>
-              {webinar?.date && (
+              {displayWebinar?.date && (
                 <div className="mt-1 text-[13px] font-medium text-cyan-300">
-                  {webinar.date} · {webinar.time} {webinar.timezone}
+                  {displayWebinar.date} · {displayWebinar.time} {displayWebinar.timezone}
                 </div>
               )}
               <div className="mt-1 text-xs text-ink-200">
@@ -667,6 +708,68 @@ function SeatHoldTimer() {
         aria-live="off"
       >
         {mm}:{ss}
+      </div>
+    </div>
+  );
+}
+
+/** Radio picker between two (or more) upcoming session dates. Only rendered
+ *  when `sessions.length >= 2`. When only one upcoming session exists, the
+ *  session date already displays in the top pill + order summary, so a picker
+ *  would just be one radio card with no choice — noise. */
+function SessionPicker({
+  sessions,
+  selectedId,
+  onChange,
+}: {
+  sessions: CheckoutSession[];
+  selectedId: string | null;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="mt-8">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400/80 sm:text-[11px]">
+        Choose your session
+      </div>
+      <div className="space-y-2">
+        {sessions.map((s) => {
+          const active = s.id === selectedId;
+          return (
+            <label
+              key={s.id}
+              className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
+                active
+                  ? 'border-cyan-400/60 bg-cyan-500/[0.08] shadow-[0_0_0_3px_rgba(34,211,238,0.12)]'
+                  : 'border-white/10 bg-white/[0.02] hover:border-white/25'
+              }`}
+            >
+              <input
+                type="radio"
+                name="session"
+                value={s.id}
+                checked={active}
+                onChange={() => onChange(s.id)}
+                className="sr-only"
+              />
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 transition ${
+                  active ? 'border-cyan-400 bg-cyan-400/20' : 'border-white/40'
+                }`}
+              >
+                {active && <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold text-white sm:text-[14px]">
+                  {s.name}
+                </span>
+                <span className="mt-0.5 block text-[11.5px] text-ink-200 sm:text-[12.5px]">
+                  {s.dateLabel} · {s.timeLabel} · Live on Zoom
+                </span>
+              </span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );

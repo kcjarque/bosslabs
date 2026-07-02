@@ -67,12 +67,38 @@ export async function templateVarsForSignup(
     paidPhp != null ? Math.round(paidPhp * 100) : signup.amountCentavos ?? null;
   const amount =
     amountCentavos != null ? `PHP ${(amountCentavos / 100).toLocaleString('en-PH')}` : '';
+
+  // Event-aware date/time/zoom — the signup owns which webinar they picked
+  // (session picker on /checkout). Templates continue to reference
+  // {{webinarDate}}/{{webinarTime}}/{{zoomJoinUrl}}; we just resolve them
+  // from the signup's event when available. Falls back to global settings
+  // when the signup has no event or the lookup fails.
+  let webinarDate = webinar.date;
+  let webinarTime = webinar.time;
+  let webinarTimezone = webinar.timezone;
   if (signup.eventId) {
     try {
       const event = await getEvent(signup.eventId);
       if (event?.zoomJoinUrl) zoomJoinUrl = event.zoomJoinUrl;
+      if (event?.startsAtIso) {
+        const d = new Date(event.startsAtIso);
+        const tzIana = event.timezone || 'Asia/Manila';
+        webinarDate = d.toLocaleString('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          timeZone: tzIana,
+        });
+        webinarTime = d.toLocaleString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: tzIana,
+        });
+        webinarTimezone = tzIana === 'Asia/Manila' ? 'PHT' : webinar.timezone;
+      }
     } catch {
-      // fall back to the global link on any lookup error
+      // fall back to the global settings on any lookup error
     }
   }
   return {
@@ -82,9 +108,9 @@ export async function templateVarsForSignup(
     phone: signup.phone,
     amount,
     webinarName: webinar.name,
-    webinarDate: webinar.date,
-    webinarTime: webinar.time,
-    webinarTimezone: webinar.timezone,
+    webinarDate,
+    webinarTime,
+    webinarTimezone,
     zoomJoinUrl,
     zoomRegisterUrl: webinar.zoomRegisterUrl,
     replayUrl: webinar.replayUrl,

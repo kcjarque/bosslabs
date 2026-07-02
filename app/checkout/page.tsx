@@ -1,9 +1,10 @@
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
-import { CheckoutFlow } from '@/components/CheckoutFlow';
+import { CheckoutFlow, type CheckoutSession } from '@/components/CheckoutFlow';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { PILLARS, STUDENT_BUILDS } from '@/lib/config';
 import { getWebinarInfo } from '@/lib/webinar';
+import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 
 // Render per-request so the order summary shows whichever event is currently
 // active (dynamic date).
@@ -11,13 +12,53 @@ export const dynamic = 'force-dynamic';
 
 const FB_PAGE = 'https://www.facebook.com/profile.php?id=61589686430234';
 
+const TZ_LABEL: Record<string, string> = { 'Asia/Manila': 'PHT' };
+
+function formatSessionLabels(
+  startsAtIso: string,
+  timezone: string,
+): { dateLabel: string; timeLabel: string } {
+  const d = new Date(startsAtIso);
+  const dateLabel = d.toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: timezone || 'Asia/Manila',
+  });
+  const time = d.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone || 'Asia/Manila',
+  });
+  const tz = TZ_LABEL[timezone] || 'PHT';
+  return { dateLabel, timeLabel: `${time} ${tz}` };
+}
+
 export default async function CheckoutPage({
   searchParams,
 }: {
   searchParams: { status?: string };
 }) {
   const failed = searchParams.status === 'failed';
-  const webinar = await getWebinarInfo();
+  const [webinar, settings, upcoming] = await Promise.all([
+    getWebinarInfo(),
+    getSettings().catch(() => null),
+    getUpcomingCheckoutSessions(2),
+  ]);
+  const limit = settings?.checkoutSessionsVisible ?? 2;
+  const sessions: CheckoutSession[] = upcoming.slice(0, Math.max(1, limit)).map((e) => {
+    const { dateLabel, timeLabel } = formatSessionLabels(e.startsAtIso, e.timezone);
+    // Short name in the radio — full event name is "AI Vibe Coding 101 —
+    // July 9"; picker reads cleaner as just "July 9 Session".
+    const short = e.name.replace(/^.*?—\s*/, '').trim();
+    return {
+      id: e.id,
+      name: `${short} Session`,
+      dateLabel,
+      timeLabel,
+    };
+  });
   return (
     <>
       <Nav ctaLabel="Need help?" ctaHref={FB_PAGE} />
@@ -33,6 +74,7 @@ export default async function CheckoutPage({
         <section className="container-tight py-10 sm:py-16">
           <CheckoutFlow
             webinar={{ date: webinar.date, time: webinar.time, timezone: webinar.timezone }}
+            sessions={sessions}
           />
         </section>
 
