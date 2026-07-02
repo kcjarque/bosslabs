@@ -731,7 +731,7 @@ function SessionPicker({
   return (
     <div className="mt-6">
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400/80 sm:text-[11px]">
-        {single ? 'Your session' : 'Choose your session'}
+        Choose your session
       </div>
       <div className={`grid gap-2 ${single ? 'grid-cols-1' : 'grid-cols-2'}`}>
         {sessions.map((s) => {
