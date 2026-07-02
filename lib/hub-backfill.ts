@@ -12,6 +12,9 @@ import { sendEmail } from '@/lib/email';
 import { signVaultOrder } from '@/lib/vault-token';
 
 const VAULT_BUMP_TOTAL_CENTAVOS = 199800; // ₱999 ticket + ₱999 Vault bump
+// Vault OTO price points (in PESOS, as stored in metadata.otoAmount): ₱999
+// (current) or ₱1,997 (original). ₱3,997 is the 1:1 Build Session — NOT Vault.
+const VAULT_OTO_AMOUNTS_PHP = new Set([999, 1997]);
 
 export type StuckBuyer = {
   signupId: string;
@@ -91,8 +94,16 @@ export function findStuckVaultBuyers(signups: Signup[]): StuckBuyer[] {
       const otoConfirmed = Boolean(meta.otoConfirmed);
       if (ext.startsWith('BL-OTOX-VAULT-')) return otoConfirmed || (r.amountCentavos ?? 0) === 0;
       if (ext.startsWith('BL-OTO-') && (otoProduct === 'oto' || otoProduct === 'both') && otoConfirmed) return true;
-      // Main-checkout: only the exact ticket+Vault total is high-confidence.
+      // Main-checkout: exact ticket+Vault bump total is high-confidence.
       if (r.bumped === true && (r.amountCentavos ?? 0) === VAULT_BUMP_TOTAL_CENTAVOS) return true;
+      // Main-checkout + a confirmed OTO whose amount is a Vault price point
+      // (₱999/₱1,997 → Vault; ₱3,997 → 1:1, excluded). Catches older buyers
+      // (like Lou) who bought the Vault via the OTO page before otoProduct was
+      // tracked, so otoProduct is null but otoAmount tells us what they bought.
+      if (otoConfirmed && otoProduct !== 'oto2') {
+        const otoAmt = Number(meta.otoAmount);
+        if (Number.isFinite(otoAmt) && VAULT_OTO_AMOUNTS_PHP.has(otoAmt)) return true;
+      }
       return false;
     });
     if (!vaultRow) continue;
