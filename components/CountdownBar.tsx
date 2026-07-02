@@ -75,17 +75,19 @@ export function CountdownBar({
         aria-hidden
         className="pointer-events-none absolute inset-0 animate-[pulseBar_3.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent"
       />
-      <div className="container-tight relative flex flex-col items-center justify-between gap-2 py-3 text-center sm:flex-row sm:gap-4 sm:py-2.5 sm:text-left">
-        <div className="flex items-center gap-2.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-white sm:text-[13px]">
-          <span aria-hidden className="text-[15px] leading-none drop-shadow-[0_0_4px_rgba(255,210,210,0.6)] sm:text-[16px]">⚠️</span>
-          <span>
+      <div className="container-tight relative flex flex-col items-center justify-between gap-1.5 py-2 text-center sm:flex-row sm:gap-4 sm:py-2.5 sm:text-left">
+        <div className="flex items-center gap-2 whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white sm:gap-2.5 sm:text-[13px] sm:tracking-[0.16em]">
+          <span aria-hidden className="text-[13px] leading-none drop-shadow-[0_0_4px_rgba(255,210,210,0.6)] sm:text-[16px]">⚠️</span>
+          {/* Short label on mobile so the bar stays 2 lines; full copy on ≥sm. */}
+          <span className="sm:hidden">WARNING · SEATS CLOSE SOON</span>
+          <span className="hidden sm:inline">
             <span className="text-white">WARNING ·</span>{' '}
             <span className="text-white">{message}</span>
           </span>
         </div>
         <div
           suppressHydrationWarning
-          className="flex items-center gap-2 font-serif text-base font-semibold tracking-tight text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.18)] sm:gap-2.5 sm:text-lg"
+          className="flex items-center gap-1.5 font-serif text-sm font-semibold tracking-tight text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.18)] sm:gap-2.5 sm:text-lg"
         >
           <Cell n={mounted ? days : 0} label="D" />
           <Sep />
