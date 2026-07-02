@@ -346,7 +346,7 @@ export function CheckoutFlow({
         </div>
         {/* Date pill only when there is NO picker (single-session mode) — with a
             picker the chosen date already shows on each option card. */}
-        {sessions.length < 2 && displayWebinar?.date && (
+        {sessions.length === 0 && displayWebinar?.date && (
           <div className="mt-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-1.5 text-[12px] font-medium text-cyan-100 sm:text-[13px]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-none text-cyan-400" aria-hidden="true">
@@ -360,7 +360,7 @@ export function CheckoutFlow({
 
         <SeatHoldTimer />
 
-        {sessions.length >= 2 && (
+        {sessions.length >= 1 && (
           <SessionPicker
             sessions={sessions}
             selectedId={selectedSessionId}
@@ -715,10 +715,9 @@ function SeatHoldTimer() {
   );
 }
 
-/** Radio picker between two (or more) upcoming session dates. Only rendered
- *  when `sessions.length >= 2`. When only one upcoming session exists, the
- *  session date already displays in the top pill + order summary, so a picker
- *  would just be one radio card with no choice — noise. */
+/** Session picker. With 2+ upcoming dates it's a real radio choice; with a
+ *  single upcoming session it still renders (as a confirmation card) so the
+ *  buyer clearly sees which session their ticket is for. */
 function SessionPicker({
   sessions,
   selectedId,
@@ -728,12 +727,13 @@ function SessionPicker({
   selectedId: string | null;
   onChange: (id: string) => void;
 }) {
+  const single = sessions.length === 1;
   return (
     <div className="mt-6">
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400/80 sm:text-[11px]">
-        Choose your session
+        {single ? 'Your session' : 'Choose your session'}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className={`grid gap-2 ${single ? 'grid-cols-1' : 'grid-cols-2'}`}>
         {sessions.map((s) => {
           const active = s.id === selectedId;
           return (

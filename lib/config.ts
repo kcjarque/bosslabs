@@ -175,6 +175,12 @@ export const STUDENT_BUILDS = [
     img: '/anaya-ops.png',
     url: 'https://anaya-ops.vercel.app/',
   },
+  {
+    name: 'Guilang Tableya',
+    tag: 'Heritage cacao tableya — DTC storefront & checkout',
+    img: '/guilang-tableya.png',
+    url: 'https://guilang-tableya.vercel.app/',
+  },
 ];
 
 /* --------------------------------------------------------------------- */
@@ -432,6 +438,19 @@ export const OUR_APPS: AppShowcase[] = [
     detail: { value: '58 done', label: 'This quarter · personal + org' },
     built: 'Shipped in 3 days',
     screenshot: '/apps/taskman.png',
+  },
+  {
+    slug: 'guilang-tableya',
+    name: 'Guilang Tableya',
+    business: 'Heritage cacao tableya · DTC store',
+    tagline: 'Single-origin tableya storefront — shop, cart & checkout for sikwate lovers.',
+    hint: 'guilang-tableya.vercel.app',
+    primary: 'bg-amber-900/15 border-amber-800/40',
+    accent: '#92400E',
+    metric: { value: 'Since 1948', label: 'Family recipe · Argao, Cebu' },
+    detail: { value: 'Single-origin', label: 'High-roasted · hand-molded' },
+    built: 'Shipped in one session',
+    screenshot: '/guilang-tableya.png',
   },
 ];
 
