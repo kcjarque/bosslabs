@@ -327,7 +327,7 @@ export const OFFER = {
     eyebrow: 'Action Taker Bonus',
     discountLabel: '50% off',
     savings: 'Save ₱4,000',
-    footerNote: '📅 Book your 1:1 right after you pay',
+    footerNote: '📅 Book your 1:1 right after the webinar',
     promise:
       'A 1-hour exclusive 1:1 call with the founders — we map your full AI integration roadmap, scope out your MVP, and hand you the exact prompts to start coding in under 24 hours.',
     inclusions: [
