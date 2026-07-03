@@ -1,10 +1,9 @@
 // Payment options shown AFTER a seat is reserved: credit card (Xendit) +
-// UnionBank / BPI InstaPay QRs. Highlights the method the buyer picked.
+// BDO InstaPay QR. Highlights the method the buyer picked.
 import { RetreatCardButton } from '@/components/RetreatCardButton';
 
 const BANKS = [
-  { method: 'UnionBank', name: 'UnionBank', holder: 'Manago, Michael Batiquin', img: '/qr-unionbank.jpeg' },
-  { method: 'BPI', name: 'BPI', holder: 'BossLabs · MI•••L B MA•••O', img: '/qr-bpi.jpeg' },
+  { method: 'BDO', name: 'BDO', holder: 'Kyle Matthew C. Jarque', img: '/qr-bdo.jpeg' },
 ];
 
 export function RetreatPayPanel({
@@ -43,7 +42,7 @@ export function RetreatPayPanel({
         <p className="mt-1 text-center text-sm text-ink-300">
           Scan with your banking app{transferNote ? `, and use “${transferNote}” as the note` : ''}.
         </p>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+        <div className="mt-5 flex justify-center">
           {BANKS.map((b) => (
             <div
               key={b.name}

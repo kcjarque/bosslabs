@@ -3293,7 +3293,7 @@ export async function updateFunnel(
 /* ─── VibeCode Retreat reservations ─────────────────────────────────────── */
 
 export type RetreatPlan = 'full' | 'reservation' | 'installment';
-export type RetreatMethod = 'UnionBank' | 'BPI' | 'Credit Card';
+export type RetreatMethod = 'UnionBank' | 'BPI' | 'BDO' | 'Credit Card';
 
 export type RetreatReservationInput = {
   name: string;

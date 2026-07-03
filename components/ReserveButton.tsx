@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-type Method = 'UnionBank' | 'BPI' | 'Credit Card';
+type Method = 'BDO' | 'Credit Card';
 
-const METHODS: Method[] = ['UnionBank', 'BPI', 'Credit Card'];
+const METHODS: Method[] = ['BDO', 'Credit Card'];
 
 // Dark, glassy input — matches the retreat page. py-3 keeps it ≥44px tall;
 // text-base avoids iOS focus-zoom; cyan focus glow.
@@ -198,7 +198,7 @@ export function ReserveButton({
                       </div>
                     </Group>
                     <Group label="How will you pay? *">
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         {METHODS.map((m) => (
                           <button
                             key={m}
