@@ -152,16 +152,19 @@ export function CloserUpsellBoard() {
       {/* Priority — hot retreat leads. Collapsible; hidden by default. */}
       {pool.some((p) => p.priority) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50/50">
-          <div className="flex items-center gap-2 border-b border-amber-200 px-3 py-2">
-            <span className="text-sm">⭐</span>
-            <span className="text-xs font-semibold text-amber-800">Priority · retreat leads</span>
-            <span className="text-[11px] text-amber-600">{pool.filter((p) => p.priority).length}</span>
-            <button
-              onClick={() => setPriorityHidden((v) => !v)}
-              className="ml-auto rounded-md border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100"
-            >
-              {priorityHidden ? 'Show list' : 'Hide list'}
-            </button>
+          <div className="border-b border-amber-200 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">⭐</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-amber-800">Priority · VibeCode Retreat</span>
+              <span className="text-[11px] text-amber-600">{pool.filter((p) => p.priority).length}</span>
+              <button
+                onClick={() => setPriorityHidden((v) => !v)}
+                className="ml-auto rounded-md border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100"
+              >
+                {priorityHidden ? 'Show list' : 'Hide list'}
+              </button>
+            </div>
+            <div className="mt-0.5 text-[10.5px] text-amber-700/80">Joined the retreat breakout — offer these the VibeCode Retreat first.</div>
           </div>
           {!priorityHidden && (
             <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
