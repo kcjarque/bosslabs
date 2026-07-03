@@ -12,6 +12,7 @@ type Send = {
   baseCentavos: number;
   discountCentavos: number;
   finalCentavos: number;
+  link: string;
   emailStatus: string;
   emailSentAt: string | null;
   smsStatus: string;
@@ -202,6 +203,28 @@ function LeadCard({
       )}
       {lead.email && <div className="truncate text-[11px] text-slate-400">{lead.email}</div>}
 
+      {/* Already offered — pinned on top, with a copyable link so the closer can
+          resend manually if the customer asks. */}
+      {lead.sends.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Already offered</div>
+          {lead.sends.map((s) => (
+            <div key={s.id} className="rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-slate-700">{PRODUCTS.find((p) => p.key === s.product)?.label ?? s.product}</span>
+                <span className="font-mono text-[10px] text-slate-500">{s.promoCode}</span>
+              </div>
+              <div className="mt-0.5 text-[10.5px] text-slate-500">{s.discountLabel} → {peso(s.finalCentavos)} <span className="text-slate-300">(was {peso(s.baseCentavos)})</span></div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <StatusPill label="Email" status={s.emailStatus} />
+                <StatusPill label="SMS" status={s.smsStatus} />
+                {s.link && <CopyLinkButton link={s.link} />}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="mt-2 flex flex-wrap gap-1.5">
         {lead.phone && <a href={`tel:${toE164Ph(lead.phone)}`} className="rounded-md bg-cyan-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-cyan-500">📞 Call</a>}
         <button onClick={onToggleOffer} className="rounded-md border border-cyan-200 px-2 py-1 text-[11px] font-medium text-cyan-700 hover:bg-cyan-50">🏷️ {openOffer ? 'Close' : 'Create offer'}</button>
@@ -219,40 +242,49 @@ function LeadCard({
         </div>
       )}
 
-      {openOffer && <OfferForm leadId={lead.leadId} hasEmail={!!lead.email} hasPhone={!!lead.phone} onSent={onSent} onToast={onToast} />}
-
-      {/* Send history */}
-      {lead.sends.length > 0 && (
-        <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
-          {lead.sends.map((s) => (
-            <div key={s.id} className="rounded-md bg-slate-50 px-2 py-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-slate-700">{PRODUCTS.find((p) => p.key === s.product)?.label ?? s.product}</span>
-                <span className="font-mono text-[10px] text-slate-500">{s.promoCode}</span>
-              </div>
-              <div className="mt-0.5 text-[10.5px] text-slate-500">{s.discountLabel} → {peso(s.finalCentavos)} <span className="text-slate-300">(was {peso(s.baseCentavos)})</span></div>
-              <div className="mt-1 flex gap-1.5">
-                <StatusPill label="Email" status={s.emailStatus} />
-                <StatusPill label="SMS" status={s.smsStatus} />
-              </div>
-            </div>
-          ))}
-        </div>
+      {openOffer && (
+        <OfferForm
+          leadId={lead.leadId}
+          hasEmail={!!lead.email}
+          hasPhone={!!lead.phone}
+          offeredProducts={new Set(lead.sends.map((s) => s.product))}
+          onSent={onSent}
+          onToast={onToast}
+        />
       )}
     </div>
   );
 }
 
-function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: string; hasEmail: boolean; hasPhone: boolean; onSent: () => void; onToast: (t: string) => void }) {
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+      }}
+      className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:border-cyan-300 hover:text-cyan-700"
+      title={link}
+    >
+      {copied ? '✓ Copied' : '🔗 Copy link'}
+    </button>
+  );
+}
+
+function OfferForm({ leadId, hasEmail, hasPhone, offeredProducts, onSent, onToast }: { leadId: string; hasEmail: boolean; hasPhone: boolean; offeredProducts: Set<Send['product']>; onSent: () => void; onToast: (t: string) => void }) {
   const MAX_PCT = 15;
-  const [product, setProduct] = useState<Send['product']>('vault');
+  // Only products not already offered to this customer — no duplicate offers.
+  const available = PRODUCTS.filter((p) => !offeredProducts.has(p.key));
+  // Default to NO product picked — not every customer needs a promo.
+  const [product, setProduct] = useState<Send['product'] | ''>('');
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
   const [value, setValue] = useState('15');
   const [email, setEmail] = useState(hasEmail);
   const [sms, setSms] = useState(hasPhone);
   const [sending, setSending] = useState(false);
 
-  const base = PRODUCTS.find((p) => p.key === product)!.price;
+  const base = product ? PRODUCTS.find((p) => p.key === product)!.price : 0;
   const v = Math.max(0, Number(value) || 0);
   const discountC = discountType === 'percent' ? Math.round((base * Math.min(100, v)) / 100) : Math.min(base, v * 100);
   const final = Math.max(0, base - discountC);
@@ -268,10 +300,19 @@ function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: st
     onSent();
   }
 
+  if (available.length === 0) {
+    return (
+      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-500" onPointerDown={(e) => e.stopPropagation()}>
+        All 3 products have already been offered to this customer.
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-cyan-200 bg-cyan-50/40 p-2.5" onPointerDown={(e) => e.stopPropagation()}>
-      <select value={product} onChange={(e) => setProduct(e.target.value as Send['product'])} className="input w-full text-xs">
-        {PRODUCTS.map((p) => <option key={p.key} value={p.key}>{p.label} · {peso(p.price)}</option>)}
+      <select value={product} onChange={(e) => setProduct(e.target.value as Send['product'] | '')} className="input w-full text-xs">
+        <option value="">Choose a product…</option>
+        {available.map((p) => <option key={p.key} value={p.key}>{p.label} · {peso(p.price)}</option>)}
       </select>
       <div className="flex gap-1.5">
         <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'percent' | 'fixed')} className="input text-xs">
@@ -283,7 +324,9 @@ function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: st
           className="input w-full text-xs" placeholder={discountType === 'percent' ? '15' : '100'} />
       </div>
       <div className={`rounded-md px-2 py-1.5 text-[11px] ${overCap ? 'bg-rose-50 text-rose-600' : 'bg-white text-slate-600'}`}>
-        {overCap ? (
+        {!product ? (
+          <span className="text-slate-400">Pick a product above to price the offer.</span>
+        ) : overCap ? (
           <>Over the {MAX_PCT}% cap — max {peso(maxDiscountC)} off {PRODUCTS.find((p) => p.key === product)!.label}.</>
         ) : (
           <>Customer pays <strong className="text-slate-900">{peso(final)}</strong> <span className="text-slate-400">(was {peso(base)}, save {peso(discountC)})</span></>

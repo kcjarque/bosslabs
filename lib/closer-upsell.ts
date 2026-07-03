@@ -80,6 +80,7 @@ export type UpsellSend = {
   baseCentavos: number;
   discountCentavos: number;
   finalCentavos: number;
+  link: string;
   emailStatus: string;
   emailSentAt: string | null;
   smsStatus: string;
@@ -154,6 +155,7 @@ export async function listMyUpsellLeads(closerId: string): Promise<UpsellLead[]>
       baseCentavos: Number(r.base_centavos),
       discountCentavos: Number(r.discount_centavos),
       finalCentavos: Number(r.final_centavos),
+      link: (r.link as string) ?? '',
       emailStatus: r.email_status as string,
       emailSentAt: (r.email_sent_at as string) ?? null,
       smsStatus: r.sms_status as string,
@@ -213,6 +215,7 @@ export async function listAllUpsellActivity(): Promise<CloserUpsellSummary[]> {
       baseCentavos: Number(r.base_centavos),
       discountCentavos: Number(r.discount_centavos),
       finalCentavos: Number(r.final_centavos),
+      link: (r.link as string) ?? '',
       emailStatus: r.email_status as string,
       emailSentAt: (r.email_sent_at as string) ?? null,
       smsStatus: r.sms_status as string,
