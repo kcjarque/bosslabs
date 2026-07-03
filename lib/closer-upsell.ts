@@ -57,6 +57,8 @@ export type UpsellPoolLead = {
   name: string;
   paidCentavos: number;
   paidAt: string;
+  /** Hot lead (e.g. joined the retreat breakout) — floats to the top. */
+  priority: boolean;
 };
 
 export type UpsellLead = {
@@ -101,12 +103,14 @@ const displayName = (s: Signup) =>
 export async function listUpsellPool(): Promise<UpsellPoolLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
-  const [claimedRes, dfyRes, retreatRes] = await Promise.all([
+  const [claimedRes, dfyRes, retreatRes, priorityRes] = await Promise.all([
     sb.from('closer_upsell_leads').select('signup_id'),
     sb.from('dfy_crm_cards').select('email').eq('stage', 'closed_deal'),
     sb.from('retreat_reservations').select('email'),
+    sb.from('closer_priority_signups').select('signup_id'),
   ]);
   const taken = new Set(((claimedRes.data ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
+  const priority = new Set(((priorityRes.data ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
   const excludedEmails = new Set<string>();
   for (const r of [...(dfyRes.data ?? []), ...(retreatRes.data ?? [])] as { email: string | null }[]) {
     const e = (r.email ?? '').toLowerCase().trim();
@@ -114,13 +118,17 @@ export async function listUpsellPool(): Promise<UpsellPoolLead[]> {
   }
   const signups = await getSignups();
   return signups
-    .filter((s) => isPaid(s) && !taken.has(s.id) && !excludedEmails.has((s.email ?? '').toLowerCase().trim()))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    // Paid customers OR flagged-priority leads (hot retreat leads may not have
+    // paid yet), minus anyone already claimed or excluded.
+    .filter((s) => (isPaid(s) || priority.has(s.id)) && !taken.has(s.id) && !excludedEmails.has((s.email ?? '').toLowerCase().trim()))
+    // Priority first, then most recent.
+    .sort((a, b) => (Number(priority.has(b.id)) - Number(priority.has(a.id))) || (a.createdAt < b.createdAt ? 1 : -1))
     .map((s) => ({
       signupId: s.id,
       name: displayName(s),
       paidCentavos: s.amountCentavos ?? 0,
       paidAt: s.createdAt,
+      priority: priority.has(s.id),
     }));
 }
 

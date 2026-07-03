@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toE164Ph } from '@/lib/phone';
 
-type PoolLead = { signupId: string; name: string; paidCentavos: number; paidAt: string };
+type PoolLead = { signupId: string; name: string; paidCentavos: number; paidAt: string; priority: boolean };
 type Send = {
   id: string;
   product: 'retreat' | 'vault' | 'build_session';
@@ -65,6 +65,7 @@ export function CloserUpsellBoard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [offerFor, setOfferFor] = useState<string | null>(null);
+  const [poolHidden, setPoolHidden] = useState(false);
 
   async function load() {
     const r = await fetch('/api/closer/upsell');
@@ -112,30 +113,43 @@ export function CloserUpsellBoard() {
         </div>
       </div>
 
-      {/* Pool of paid customers to claim */}
+      {/* Priority — hot retreat leads, always shown on top */}
+      {pool.some((p) => p.priority) && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/50">
+          <div className="flex items-center gap-2 border-b border-amber-200 px-3 py-2">
+            <span className="text-sm">⭐</span>
+            <span className="text-xs font-semibold text-amber-800">Priority · retreat leads</span>
+            <span className="ml-auto text-[11px] text-amber-600">{pool.filter((p) => p.priority).length}</span>
+          </div>
+          <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
+            {pool.filter((p) => p.priority).map((p) => (
+              <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* The rest of the pool — collapsible so 300+ cards don't overload */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/40">
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
           <span className="h-2 w-2 rounded-full bg-slate-400" />
           <span className="text-xs font-semibold text-slate-700">Customers to work · paid</span>
-          <span className="ml-auto text-[11px] text-slate-400">{pool.length}</span>
+          <span className="text-[11px] text-slate-400">{pool.filter((p) => !p.priority).length}</span>
+          <button
+            onClick={() => setPoolHidden((v) => !v)}
+            className="ml-auto rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100"
+          >
+            {poolHidden ? 'Show list' : 'Hide list'}
+          </button>
         </div>
-        <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
-          {pool.length === 0 && <div className="px-1 py-3 text-center text-[11px] text-slate-300">No unclaimed customers.</div>}
-          {pool.map((p) => (
-            <div key={p.signupId} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
-              <div className="text-sm font-medium text-slate-900">{p.name}</div>
-              <div className="text-[11px] text-slate-400">🔒 Contact hidden — claim to reveal</div>
-              <div className="mt-1 text-[11px] font-medium text-slate-600">Paid {peso(p.paidCentavos)} · {shortDate(p.paidAt)}</div>
-              <button
-                onClick={() => claim(p.signupId)}
-                disabled={busy === p.signupId}
-                className="mt-2 block w-full rounded-md bg-slate-800 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
-              >
-                {busy === p.signupId ? '…' : 'Claim →'}
-              </button>
-            </div>
-          ))}
-        </div>
+        {!poolHidden && (
+          <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
+            {pool.filter((p) => !p.priority).length === 0 && <div className="px-1 py-3 text-center text-[11px] text-slate-300">No unclaimed customers.</div>}
+            {pool.filter((p) => !p.priority).map((p) => (
+              <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Claimed — kanban or list */}
@@ -172,6 +186,28 @@ export function CloserUpsellBoard() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PoolCard({ p, busy, onClaim }: { p: PoolLead; busy: string | null; onClaim: (id: string) => void }) {
+  return (
+    <div className={`rounded-lg border p-2.5 shadow-sm ${p.priority ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 bg-white'}`}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {p.priority && <span className="rounded-full bg-amber-400/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">★ Priority</span>}
+        <span className="text-sm font-medium text-slate-900">{p.name}</span>
+      </div>
+      <div className="text-[11px] text-slate-400">🔒 Contact hidden — claim to reveal</div>
+      <div className="mt-1 text-[11px] font-medium text-slate-600">
+        {p.paidCentavos > 0 ? `Paid ${peso(p.paidCentavos)} · ${shortDate(p.paidAt)}` : p.priority ? 'Retreat lead · Jul 2 webinar' : shortDate(p.paidAt)}
+      </div>
+      <button
+        onClick={() => onClaim(p.signupId)}
+        disabled={busy === p.signupId}
+        className="mt-2 block w-full rounded-md bg-slate-800 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
+      >
+        {busy === p.signupId ? '…' : 'Claim →'}
+      </button>
     </div>
   );
 }

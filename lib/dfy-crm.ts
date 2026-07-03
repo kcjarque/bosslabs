@@ -261,6 +261,22 @@ export async function sumDfyIncomeCentavos(sinceMs?: number, untilMs?: number): 
   return total;
 }
 
+/** Outstanding balance on CLOSED DFY deals — deal value minus what's been
+ *  collected. Money committed but not yet paid (deals are mostly partial). As
+ *  payments come in this shrinks and dfy income grows. */
+export async function sumDfyPendingCentavos(): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const { data, error } = await getSupabase().from('dfy_crm_cards').select('stage, amount_centavos, payments');
+  if (error) return 0;
+  let pending = 0;
+  for (const row of (data ?? []) as { stage: string; amount_centavos: number | null; payments: DfyPayment[] | null }[]) {
+    if (row.stage !== 'closed_deal') continue;
+    const paid = (row.payments ?? []).reduce((s, p) => s + (p.amountCentavos || 0), 0);
+    pending += Math.max(0, (row.amount_centavos ?? 0) - paid);
+  }
+  return pending;
+}
+
 /** Existing customers (signups) for the "add from existing customer" search. */
 export type DfyCandidate = { id: string; name: string; email: string; phone: string };
 export async function listDfyCandidates(): Promise<DfyCandidate[]> {

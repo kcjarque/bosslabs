@@ -14,7 +14,7 @@ import {
 import { formatPHP, formatPHPWhole, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
-import { sumDfyIncomeCentavos } from '@/lib/dfy-crm';
+import { sumDfyIncomeCentavos, sumDfyPendingCentavos } from '@/lib/dfy-crm';
 import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
@@ -73,6 +73,7 @@ const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
   sumWebinarIncomeCentavos, ['dashboard:webinar-income'], cacheOpts,
 ));
 const cachedSumDfyIncome = timed('dfy-income', unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts));
+const cachedSumDfyPending = timed('dfy-pending', unstable_cache(sumDfyPendingCentavos, ['dashboard:dfy-pending'], cacheOpts));
 
 /* --------------------------------------------------------------------- */
 /* Analytics helpers                                                     */
@@ -315,6 +316,7 @@ async function DashboardBody({
     dfyIncomeCentavos,
     webinarIncomeAllCentavos,
     dfyIncomeAllCentavos,
+    dfyPendingCentavos,
   ] = await (async () => {
     const _allStart = performance.now();
     console.log(`[dash] body fetch start · period=${dashRange?.key ?? 'all'}`);
@@ -334,6 +336,7 @@ async function DashboardBody({
       cachedSumDfyIncome(dashRange?.startMs, rangeEnd),
       cachedSumWebinarIncome(),
       cachedSumDfyIncome(),
+      cachedSumDfyPending(),
     ]);
     console.log(`[dash] body fetch done in ${(performance.now() - _allStart).toFixed(0)}ms`);
     return result;
@@ -728,7 +731,7 @@ async function DashboardBody({
           <StatCard
             label="DFY income"
             value={formatPHPWhole(dfyIncomeCentavos)}
-            sub="cash collected"
+            sub={dfyPendingCentavos > 0 ? `cash collected · ${formatPHPWhole(dfyPendingCentavos)} still to collect` : 'cash collected'}
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
           />
           <StatCard
