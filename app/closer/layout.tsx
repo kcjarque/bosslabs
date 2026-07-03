@@ -8,8 +8,8 @@ import '../admin/admin.css';
 export const metadata = { title: 'Closer · BOSSLABS' };
 
 const NAV = [
-  { href: '/closer', label: 'Leads' },
-  { href: '/closer/customers', label: 'Customers' },
+  { href: '/closer', label: 'Webinar' },
+  { href: '/closer/customers', label: 'Upsells' },
   { href: '/closer/commissions', label: 'Commissions' },
 ];
 

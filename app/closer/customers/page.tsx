@@ -9,7 +9,7 @@ export default async function CloserCustomersPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          Customers · {closer.name.split(' ')[0]}
+          Upsells · {closer.name.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Claim a paid customer, then send them a <strong>personal promo code</strong> for the
