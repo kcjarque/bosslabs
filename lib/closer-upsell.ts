@@ -168,6 +168,73 @@ export async function listMyUpsellLeads(closerId: string): Promise<UpsellLead[]>
   });
 }
 
+export type CloserUpsellSummary = {
+  closerId: string;
+  closerName: string;
+  closerUsername: string;
+  leads: UpsellLead[];
+};
+
+/** Admin oversight: every closer's claimed upsell customers + the promo codes
+ *  they sent (with per-channel status). Read-only. */
+export async function listAllUpsellActivity(): Promise<CloserUpsellSummary[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const [{ data: closers }, { data: leadRows }, { data: sendRows }] = await Promise.all([
+    sb.from('closer_accounts').select('id, name, username').order('name'),
+    sb.from('closer_upsell_leads').select('*').order('claimed_at', { ascending: false }),
+    sb.from('closer_promo_sends').select('*').order('created_at', { ascending: false }),
+  ]);
+  const leads = (leadRows ?? []) as Array<{ id: string; signup_id: string; closer_id: string; stage: string; claimed_at: string }>;
+  if (leads.length === 0) return [];
+
+  const signups = await getSignups();
+  const byId = new Map(signups.map((s) => [s.id, s]));
+  const sendsByLead = new Map<string, UpsellSend[]>();
+  for (const r of (sendRows ?? []) as Array<Record<string, unknown>>) {
+    const list = sendsByLead.get(r.upsell_lead_id as string) ?? [];
+    list.push({
+      id: r.id as string,
+      product: r.product as UpsellProductKey,
+      promoCode: r.promo_code as string,
+      discountLabel: labelFor(r.discount_type as string, Number(r.discount_value)),
+      baseCentavos: Number(r.base_centavos),
+      discountCentavos: Number(r.discount_centavos),
+      finalCentavos: Number(r.final_centavos),
+      emailStatus: r.email_status as string,
+      emailSentAt: (r.email_sent_at as string) ?? null,
+      smsStatus: r.sms_status as string,
+      smsSentAt: (r.sms_sent_at as string) ?? null,
+      createdAt: r.created_at as string,
+    });
+    sendsByLead.set(r.upsell_lead_id as string, list);
+  }
+
+  const leadsByCloser = new Map<string, UpsellLead[]>();
+  for (const r of leads) {
+    const s = byId.get(r.signup_id);
+    const lead: UpsellLead = {
+      leadId: r.id,
+      signupId: r.signup_id,
+      name: s ? displayName(s) : r.signup_id,
+      email: s?.email ?? '',
+      phone: s?.phone ?? '',
+      paidCentavos: s?.amountCentavos ?? 0,
+      paidAt: s?.createdAt ?? r.claimed_at,
+      stage: r.stage,
+      claimedAt: r.claimed_at,
+      sends: sendsByLead.get(r.id) ?? [],
+    };
+    const list = leadsByCloser.get(r.closer_id) ?? [];
+    list.push(lead);
+    leadsByCloser.set(r.closer_id, list);
+  }
+
+  return ((closers ?? []) as Array<{ id: string; name: string; username: string }>)
+    .map((c) => ({ closerId: c.id, closerName: c.name, closerUsername: c.username, leads: leadsByCloser.get(c.id) ?? [] }))
+    .filter((c) => c.leads.length > 0);
+}
+
 /** Claim a paid customer into this closer's upsell pipeline. */
 export async function claimUpsellLead(signupId: string, closerId: string): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseConfigured()) return { ok: false, error: 'not configured' };

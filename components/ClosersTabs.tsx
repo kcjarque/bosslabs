@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const TABS = [
   { id: 'assignments', href: '/admin/closers', label: 'Assignments' },
+  { id: 'upsells', href: '/admin/closers/upsells', label: 'Upsells' },
   { id: 'commissions', href: '/admin/closers/commissions', label: 'Commissions' },
   { id: 'payouts', href: '/admin/closers/payouts', label: 'Payout History' },
   { id: 'settings', href: '/admin/closers/settings', label: 'Settings' },
