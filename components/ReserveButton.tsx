@@ -39,6 +39,7 @@ export function ReserveButton({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<Method | ''>('');
+  const [persons, setPersons] = useState('1');
 
   // Lock background scroll + allow Escape to close while the modal is open.
   useEffect(() => {
@@ -78,6 +79,7 @@ export function ReserveButton({
           paymentMethod: method,
           paymentPlan: 'full', // default — exact amount + deposit option shown next
           promoCode: promoCode || undefined,
+          persons: Number(persons) || 1,
         }),
       });
       const json = (await res.json()) as { id?: string; error?: string };
@@ -177,6 +179,23 @@ export function ReserveButton({
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                       />
+                    </Group>
+                    <Group label="How many persons? *">
+                      <div className="grid grid-cols-5 gap-2">
+                        {['1', '2', '3', '4', '5'].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            aria-pressed={persons === n}
+                            onClick={() => setPersons(n)}
+                            className={`rounded-xl border px-2 py-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 ${
+                              persons === n ? `text-cyan-100 ${selCls(true)}` : `text-ink-200 ${selCls(false)}`
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
                     </Group>
                     <Group label="How will you pay? *">
                       <div className="grid grid-cols-3 gap-2">

@@ -3308,6 +3308,8 @@ export type RetreatReservationInput = {
   extraPersonName?: string;
   tshirtSize?: string;
   heardFrom?: string;
+  /** How many people the reservation is for (headcount). */
+  persons?: number;
   amountDueCentavos?: number;
   /** Applied retreat-scoped promo code (closer-issued), if any. */
   promoCode?: string | null;
@@ -3341,6 +3343,7 @@ type RetreatReservationRow = {
   extra_person_name: string | null;
   tshirt_size: string | null;
   heard_from: string | null;
+  persons: number | null;
   amount_due_centavos: number | null;
   status: string;
   proof_submitted_at: string | null;
@@ -3364,6 +3367,7 @@ function rowToReservation(r: RetreatReservationRow): RetreatReservation {
     extraPersonName: r.extra_person_name ?? '',
     tshirtSize: r.tshirt_size ?? '',
     heardFrom: r.heard_from ?? '',
+    persons: r.persons ?? 1,
     amountDueCentavos: r.amount_due_centavos ?? undefined,
     status:
       r.status === 'paid'
@@ -3398,6 +3402,7 @@ export async function createRetreatReservation(
       extra_person_name: input.extraPersonName ?? '',
       tshirt_size: input.tshirtSize ?? '',
       heard_from: input.heardFrom ?? '',
+      persons: input.persons ?? 1,
       amount_due_centavos: input.amountDueCentavos ?? null,
       promo_code: input.promoCode ?? null,
       discount_centavos: input.discountCentavos ?? 0,

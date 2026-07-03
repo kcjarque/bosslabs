@@ -51,6 +51,7 @@ export async function POST(req: Request) {
     const extraPersonName = b.extraPersonName ? String(b.extraPersonName).trim() : '';
     const tshirtSize = b.tshirtSize ? String(b.tshirtSize).trim() : '';
     const heardFrom = b.heardFrom ? String(b.heardFrom).trim() : '';
+    const persons = Math.max(1, Math.min(20, Math.round(Number(b.persons) || 1)));
 
     const funnels = await getFunnels();
     const funnel = funnels.find((f) => f.slug === 'vibecode-retreat');
@@ -105,6 +106,7 @@ export async function POST(req: Request) {
       extraPersonName,
       tshirtSize,
       heardFrom,
+      persons,
       amountDueCentavos,
       promoCode: appliedPromo,
       discountCentavos,
@@ -118,6 +120,7 @@ export async function POST(req: Request) {
       `👤 ${esc(name)}`,
       `✉️ ${esc(email)}`,
       `📱 ${esc(phone)}`,
+      `👥 Persons: ${persons}`,
       paymentPlan
         ? `💳 ${esc(planLabel(paymentPlan))} — due now ${formatPHP(amountDueCentavos)}`
         : '',
