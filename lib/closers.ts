@@ -8,6 +8,7 @@
 import crypto from 'crypto';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { setSignupRemarks, getEvents } from './db';
+import { syncPayoutExpense, removePayoutExpense } from './finance';
 
 /** Short human label for a webinar session, e.g. "Thu, Jul 9". Formatted in
  *  the event's own timezone (falls back to Manila). Used across the closer
@@ -781,6 +782,28 @@ export async function createCloserPayout(input: {
     .in('id', commissionIds);
   if (updErr) throw new Error(`createCloserPayout link: ${updErr.message}`);
 
+  // Mirror the payout into the expense ledger (category: Salary) with the same
+  // deposit slip as the receipt. Best-effort — the commissions are already paid,
+  // so a finance hiccup must not throw and undo the caller's success.
+  try {
+    const { data: c } = await sb
+      .from('closer_accounts')
+      .select('name')
+      .eq('id', input.closerId)
+      .maybeSingle();
+    await syncPayoutExpense({
+      payoutId: payout.id,
+      closerName: (c as { name: string } | null)?.name ?? 'Closer',
+      amountCentavos: payout.amountCentavos,
+      commissionCount: payout.commissionCount,
+      receiptUrl: payout.slipUrl,
+      spentOn: new Date(payout.paidAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
+      paidBy: payout.createdBy,
+    });
+  } catch (err) {
+    console.warn('[closers] syncPayoutExpense skipped:', err instanceof Error ? err.message : err);
+  }
+
   return payout;
 }
 
@@ -799,6 +822,13 @@ export async function voidCloserPayout(payoutId: string): Promise<void> {
     .from('closer_payouts')
     .update({ status: 'voided', voided_at: new Date().toISOString() })
     .eq('id', payoutId);
+  // Drop the mirrored Salary expense so the P&L doesn't count a reverted
+  // payment. Best-effort — never let a finance hiccup block the void.
+  try {
+    await removePayoutExpense(payoutId);
+  } catch (err) {
+    console.warn('[closers] removePayoutExpense skipped:', err instanceof Error ? err.message : err);
+  }
 }
 
 export type PayoutWithCloser = CloserPayout & { closerName: string; closerUsername: string };

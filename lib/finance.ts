@@ -525,6 +525,72 @@ export async function addExpense(input: {
   if (error) throw new Error(`addExpense: ${error.message}`);
 }
 
+/** Category that closer commission payouts land under. Reuses an existing
+ *  "Salary"/"Salaries" category if present (matched loosely so we never
+ *  create a near-duplicate), else creates "Salary". */
+async function salaryCategoryId(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  const { data } = await sb.from('finance_categories').select('id, name');
+  const cats = (data ?? []) as { id: string; name: string }[];
+  const hit = cats.find((c) => /^salar/i.test((c.name ?? '').trim()));
+  if (hit) return hit.id;
+  const { data: made } = await sb
+    .from('finance_categories')
+    .insert({ name: 'Salary' })
+    .select('id')
+    .single();
+  return (made as { id: string } | null)?.id ?? null;
+}
+
+/** Mirror a closer payout into the expense ledger (category: Salary) with the
+ *  deposit slip as the receipt. Keyed by payout_id so it's idempotent — a
+ *  re-run updates the same row instead of duplicating. Callers treat this as
+ *  best-effort: a finance hiccup must never undo a payout. */
+export async function syncPayoutExpense(input: {
+  payoutId: string;
+  closerName: string;
+  amountCentavos: number;
+  commissionCount: number;
+  receiptUrl?: string | null;
+  spentOn: string; // YYYY-MM-DD (Manila)
+  paidBy?: string | null;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const categoryId = await salaryCategoryId();
+  const n = input.commissionCount;
+  const row = {
+    description: `Closer commission payout — ${input.closerName} (${n} commission${n === 1 ? '' : 's'})`,
+    amount_centavos: Math.max(0, Math.round(input.amountCentavos)),
+    category_id: categoryId,
+    spent_on: input.spentOn || manilaToday(),
+    source: 'single',
+    is_abono: false,
+    paid_by: input.paidBy ?? null,
+    receipt_url: input.receiptUrl ?? null,
+    payout_id: input.payoutId,
+  };
+  // Check-then-write (not upsert) — the unique index on payout_id is a partial
+  // index, which PostgREST on_conflict can't reliably target.
+  const { data: existing } = await sb
+    .from('finance_expenses')
+    .select('id')
+    .eq('payout_id', input.payoutId)
+    .maybeSingle();
+  const { error } = existing
+    ? await sb.from('finance_expenses').update(row).eq('id', (existing as { id: string }).id)
+    : await sb.from('finance_expenses').insert(row);
+  if (error) throw new Error(`syncPayoutExpense: ${error.message}`);
+}
+
+/** Remove a payout's mirrored expense (called when the payout is voided) so the
+ *  P&L doesn't count a payment that was undone. Best-effort. */
+export async function removePayoutExpense(payoutId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  await getSupabase().from('finance_expenses').delete().eq('payout_id', payoutId);
+}
+
 export async function deleteExpense(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('finance_expenses').delete().eq('id', id);
