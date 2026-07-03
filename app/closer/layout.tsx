@@ -9,6 +9,7 @@ export const metadata = { title: 'Closer · BOSSLABS' };
 
 const NAV = [
   { href: '/closer', label: 'Leads' },
+  { href: '/closer/customers', label: 'Customers' },
   { href: '/closer/commissions', label: 'Commissions' },
 ];
 

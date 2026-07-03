@@ -111,6 +111,10 @@ export type PromoCode = {
   expiresAt?: string | null;
   active: boolean;
   note?: string | null;
+  /** Scope: only valid at this product's checkout. null = any product. */
+  product?: string | null;
+  /** Closer account that generated this code (for closer-issued codes). */
+  createdByCloser?: string | null;
   createdAt: string;
 };
 
@@ -1357,6 +1361,8 @@ type PromoCodeRow = {
   expires_at: string | null;
   active: boolean;
   note: string | null;
+  product: string | null;
+  created_by_closer: string | null;
   created_at: string;
 };
 
@@ -1370,6 +1376,8 @@ function rowToPromo(r: PromoCodeRow): PromoCode {
     expiresAt: r.expires_at,
     active: r.active,
     note: r.note,
+    product: r.product ?? null,
+    createdByCloser: r.created_by_closer ?? null,
     createdAt: r.created_at,
   };
 }
@@ -1415,6 +1423,8 @@ export async function savePromoCode(p: PromoCode): Promise<PromoCode> {
       expires_at: normalized.expiresAt ?? null,
       active: normalized.active,
       note: normalized.note ?? null,
+      product: normalized.product ?? null,
+      created_by_closer: normalized.createdByCloser ?? null,
       created_at: normalized.createdAt,
     };
     const { error } = await getSupabase().from('promo_codes').upsert(row);
@@ -1507,6 +1517,19 @@ export function computeDiscountCentavos(
       raw = 0;
   }
   return Math.min(raw, totalCentavos);
+}
+
+/**
+ * Whether a promo may be redeemed at a given product's checkout. A code with
+ * no product scope (product = null — e.g. admin/site-wide codes) works
+ * anywhere; a scoped code (closer-issued) works ONLY at its own product.
+ * Product keys: 'main' | 'vault' | 'build_session' | 'retreat'.
+ */
+export function promoAllowedForProduct(
+  promo: Pick<PromoCode, 'product'>,
+  productKey: string,
+): boolean {
+  return !promo.product || promo.product === productKey;
 }
 
 /* --------------------------------------------------------------------- */

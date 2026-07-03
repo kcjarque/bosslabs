@@ -17,6 +17,7 @@ import {
   findSignupByEmail,
   findPromoCode,
   computeDiscountCentavos,
+  promoAllowedForProduct,
   redeemPromoCode,
   updateSignup,
 } from '@/lib/db';
@@ -89,6 +90,13 @@ export async function POST(req: Request) {
       const promo = await findPromoCode(promoCode);
       if (!promo || !promo.active) {
         return NextResponse.json({ error: 'Promo code is invalid.' }, { status: 400 });
+      }
+      // Enforce closer-code product scope: an 'oto2' bump is the Build Session,
+      // anything else here is the Vault. A code scoped to the other product is
+      // refused rather than silently mispriced.
+      const bumpScope = body.product === 'oto2' ? 'build_session' : 'vault';
+      if (!promoAllowedForProduct(promo, bumpScope)) {
+        return NextResponse.json({ error: 'This code is not valid for this upgrade.' }, { status: 400 });
       }
       if (promo.expiresAt && new Date(promo.expiresAt).getTime() <= Date.now()) {
         return NextResponse.json({ error: 'This promo code has expired.' }, { status: 400 });

@@ -21,6 +21,7 @@ import {
   findSignupByExternalId,
   findPromoCode,
   computeDiscountCentavos,
+  promoAllowedForProduct,
   redeemPromoCode,
   updateSignup,
   addSignup,
@@ -119,6 +120,20 @@ export async function POST(req: Request) {
         { error: 'Promo codes only apply to a single upgrade — uncheck one to use the code.' },
         { status: 400 },
       );
+    }
+
+    // Enforce closer-code product scope: a Vault code ('vault') only works on
+    // the Vault ('oto'); a Build Session code only on 'oto2'. Site-wide codes
+    // (product = null) still work anywhere.
+    if (promoCode && product !== 'both') {
+      const scopeKey = product === 'oto' ? 'vault' : 'build_session';
+      const scopePromo = await findPromoCode(promoCode);
+      if (scopePromo && !promoAllowedForProduct(scopePromo, scopeKey)) {
+        return NextResponse.json(
+          { error: 'This code is not valid for this upgrade.' },
+          { status: 400 },
+        );
+      }
     }
 
     if (body.standalone === true) {

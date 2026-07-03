@@ -15,6 +15,7 @@ import {
   findPromoCode,
   findSignupByEmail,
   getSettings,
+  promoAllowedForProduct,
   redeemPromoCode,
   updateSignup,
 } from '@/lib/db';
@@ -91,6 +92,11 @@ export async function POST(req: Request) {
       const promo = await findPromoCode(body.promoCode);
       if (!promo || !promo.active) {
         return NextResponse.json({ error: 'Promo code is invalid.' }, { status: 400 });
+      }
+      // A closer-issued code is scoped to an upsell product (Retreat / Vault /
+      // Build Session) — it must not apply to the main webinar ticket.
+      if (!promoAllowedForProduct(promo, 'main')) {
+        return NextResponse.json({ error: 'This code is not valid for the webinar ticket.' }, { status: 400 });
       }
       const previewDiscount = computeDiscountCentavos(promo, baseAmountCentavos);
       const redeemed = await redeemPromoCode(promo.code);
