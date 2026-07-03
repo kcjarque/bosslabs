@@ -65,7 +65,8 @@ export function CloserUpsellBoard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [offerFor, setOfferFor] = useState<string | null>(null);
-  const [poolHidden, setPoolHidden] = useState(false);
+  const [poolHidden, setPoolHidden] = useState(true);
+  const [priorityHidden, setPriorityHidden] = useState(true);
 
   async function load() {
     const r = await fetch('/api/closer/upsell');
@@ -113,46 +114,7 @@ export function CloserUpsellBoard() {
         </div>
       </div>
 
-      {/* Priority — hot retreat leads, always shown on top */}
-      {pool.some((p) => p.priority) && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50/50">
-          <div className="flex items-center gap-2 border-b border-amber-200 px-3 py-2">
-            <span className="text-sm">⭐</span>
-            <span className="text-xs font-semibold text-amber-800">Priority · retreat leads</span>
-            <span className="ml-auto text-[11px] text-amber-600">{pool.filter((p) => p.priority).length}</span>
-          </div>
-          <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
-            {pool.filter((p) => p.priority).map((p) => (
-              <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* The rest of the pool — collapsible so 300+ cards don't overload */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50/40">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
-          <span className="h-2 w-2 rounded-full bg-slate-400" />
-          <span className="text-xs font-semibold text-slate-700">Customers to work · paid</span>
-          <span className="text-[11px] text-slate-400">{pool.filter((p) => !p.priority).length}</span>
-          <button
-            onClick={() => setPoolHidden((v) => !v)}
-            className="ml-auto rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100"
-          >
-            {poolHidden ? 'Show list' : 'Hide list'}
-          </button>
-        </div>
-        {!poolHidden && (
-          <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
-            {pool.filter((p) => !p.priority).length === 0 && <div className="px-1 py-3 text-center text-[11px] text-slate-300">No unclaimed customers.</div>}
-            {pool.filter((p) => !p.priority).map((p) => (
-              <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Claimed — kanban or list */}
+      {/* Claimed — kanban or list. Pinned on top: this is the closer's board. */}
       {view === 'kanban' ? (
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           {STAGES.map((st) => {
@@ -178,7 +140,7 @@ export function CloserUpsellBoard() {
         </div>
       ) : (
         <div className="space-y-2">
-          {leads.length === 0 && <div className="card text-sm text-slate-400">Claim a customer above to start.</div>}
+          {leads.length === 0 && <div className="card text-sm text-slate-400">Claim a customer below to start.</div>}
           {leads.map((l) => (
             <LeadCard key={l.leadId} lead={l} busy={busy} onRelease={release} onStage={setStage}
               openOffer={offerFor === l.leadId} onToggleOffer={() => setOfferFor(offerFor === l.leadId ? null : l.leadId)}
@@ -186,6 +148,53 @@ export function CloserUpsellBoard() {
           ))}
         </div>
       )}
+
+      {/* Priority — hot retreat leads. Collapsible; hidden by default. */}
+      {pool.some((p) => p.priority) && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/50">
+          <div className="flex items-center gap-2 border-b border-amber-200 px-3 py-2">
+            <span className="text-sm">⭐</span>
+            <span className="text-xs font-semibold text-amber-800">Priority · retreat leads</span>
+            <span className="text-[11px] text-amber-600">{pool.filter((p) => p.priority).length}</span>
+            <button
+              onClick={() => setPriorityHidden((v) => !v)}
+              className="ml-auto rounded-md border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100"
+            >
+              {priorityHidden ? 'Show list' : 'Hide list'}
+            </button>
+          </div>
+          {!priorityHidden && (
+            <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
+              {pool.filter((p) => p.priority).map((p) => (
+                <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* The rest of the pool — collapsible so 300+ cards don't overload */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/40">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+          <span className="h-2 w-2 rounded-full bg-slate-400" />
+          <span className="text-xs font-semibold text-slate-700">Customers to work · paid</span>
+          <span className="text-[11px] text-slate-400">{pool.filter((p) => !p.priority).length}</span>
+          <button
+            onClick={() => setPoolHidden((v) => !v)}
+            className="ml-auto rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100"
+          >
+            {poolHidden ? 'Show list' : 'Hide list'}
+          </button>
+        </div>
+        {!poolHidden && (
+          <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">
+            {pool.filter((p) => !p.priority).length === 0 && <div className="px-1 py-3 text-center text-[11px] text-slate-300">No unclaimed customers.</div>}
+            {pool.filter((p) => !p.priority).map((p) => (
+              <PoolCard key={p.signupId} p={p} busy={busy} onClaim={claim} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
