@@ -68,6 +68,8 @@ export function CloserUpsellBoard() {
   const [offerFor, setOfferFor] = useState<string | null>(null);
   const [poolHidden, setPoolHidden] = useState(true);
   const [priorityHidden, setPriorityHidden] = useState(true);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overStage, setOverStage] = useState<string | null>(null);
 
   async function load() {
     const r = await fetch('/api/closer/upsell');
@@ -125,7 +127,13 @@ export function CloserUpsellBoard() {
           {STAGES.map((st) => {
             const items = leads.filter((l) => l.stage === st.key);
             return (
-              <div key={st.key} className="flex min-h-[120px] flex-col rounded-xl border border-slate-200 bg-slate-50/40">
+              <div
+                key={st.key}
+                onDragOver={(e) => { if (dragId) { e.preventDefault(); setOverStage(st.key); } }}
+                onDragLeave={() => setOverStage((s) => (s === st.key ? null : s))}
+                onDrop={() => { if (dragId) setStage(dragId, st.key); setDragId(null); setOverStage(null); }}
+                className={`flex min-h-[120px] flex-col rounded-xl border transition ${overStage === st.key ? 'border-cyan-400 bg-cyan-50/50' : 'border-slate-200 bg-slate-50/40'}`}
+              >
                 <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
                   <span className={`h-2 w-2 rounded-full ${st.dot}`} />
                   <span className="text-xs font-semibold text-slate-700">{st.label}</span>
@@ -133,11 +141,19 @@ export function CloserUpsellBoard() {
                 </div>
                 <div className="flex-1 space-y-2 p-2">
                   {items.map((l) => (
-                    <LeadCard key={l.leadId} lead={l} compact busy={busy} onRelease={release} onStage={setStage}
-                      openOffer={offerFor === l.leadId} onToggleOffer={() => setOfferFor(offerFor === l.leadId ? null : l.leadId)}
-                      onSent={() => { setOfferFor(null); load(); }} onToast={setToast} onSaveNote={saveNote} />
+                    <div
+                      key={l.leadId}
+                      draggable
+                      onDragStart={(e) => { setDragId(l.leadId); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                      className={`cursor-grab active:cursor-grabbing ${dragId === l.leadId ? 'opacity-50' : ''}`}
+                    >
+                      <LeadCard lead={l} compact busy={busy} onRelease={release} onStage={setStage}
+                        openOffer={offerFor === l.leadId} onToggleOffer={() => setOfferFor(offerFor === l.leadId ? null : l.leadId)}
+                        onSent={() => { setOfferFor(null); load(); }} onToast={setToast} onSaveNote={saveNote} />
+                    </div>
                   ))}
-                  {items.length === 0 && <div className="px-1 py-2 text-center text-[11px] text-slate-300">—</div>}
+                  {items.length === 0 && <div className="px-1 py-2 text-center text-[11px] text-slate-300">Drop here</div>}
                 </div>
               </div>
             );
