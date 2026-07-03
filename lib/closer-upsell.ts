@@ -93,15 +93,27 @@ const displayName = (s: Signup) =>
   s.email?.split('@')[0] ||
   'Customer';
 
-/** All paid customers not yet claimed by any closer in the upsell pool. */
+/** All paid customers not yet claimed by any closer in the upsell pool.
+ *  Excludes customers who are already committed elsewhere and shouldn't be
+ *  cold-upsold: those who CLOSED a DFY deal, and anyone who joined the
+ *  VibeCode Retreat (batch 1). Matched by email, live. */
 export async function listUpsellPool(): Promise<UpsellPoolLead[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
-  const { data: claimed } = await sb.from('closer_upsell_leads').select('signup_id');
-  const taken = new Set(((claimed ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
+  const [claimedRes, dfyRes, retreatRes] = await Promise.all([
+    sb.from('closer_upsell_leads').select('signup_id'),
+    sb.from('dfy_crm_cards').select('email').eq('stage', 'closed_deal'),
+    sb.from('retreat_reservations').select('email'),
+  ]);
+  const taken = new Set(((claimedRes.data ?? []) as { signup_id: string }[]).map((r) => r.signup_id));
+  const excludedEmails = new Set<string>();
+  for (const r of [...(dfyRes.data ?? []), ...(retreatRes.data ?? [])] as { email: string | null }[]) {
+    const e = (r.email ?? '').toLowerCase().trim();
+    if (e) excludedEmails.add(e);
+  }
   const signups = await getSignups();
   return signups
-    .filter((s) => isPaid(s) && !taken.has(s.id))
+    .filter((s) => isPaid(s) && !taken.has(s.id) && !excludedEmails.has((s.email ?? '').toLowerCase().trim()))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     .map((s) => ({
       signupId: s.id,
