@@ -11,7 +11,7 @@
  *     existing promo_codes discount engine.
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
-import { getSignups, savePromoCode, findPromoCode, computeDiscountCentavos, type Signup } from './db';
+import { getSignups, getEvents, savePromoCode, findPromoCode, computeDiscountCentavos, type Signup } from './db';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
 
@@ -50,6 +50,14 @@ export const CLOSER_MAX_DISCOUNT_PCT = 15;
 
 const peso = (c: number) => `₱${(c / 100).toLocaleString('en-PH')}`;
 
+/** Short webinar-date label in Manila time, e.g. "Jul 2". Empty for a bad date. */
+function webinarDateLabel(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  return new Date(t).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' });
+}
+
 /* ── Pool: paid customers not yet claimed in the upsell pipeline ─────────── */
 
 export type UpsellPoolLead = {
@@ -57,6 +65,8 @@ export type UpsellPoolLead = {
   name: string;
   paidCentavos: number;
   paidAt: string;
+  /** Date of the webinar they attended (from their event), e.g. "Jul 2". */
+  webinarLabel: string;
   /** Hot lead (e.g. joined the retreat breakout) — floats to the top. */
   priority: boolean;
 };
@@ -117,7 +127,10 @@ export async function listUpsellPool(): Promise<UpsellPoolLead[]> {
     const e = (r.email ?? '').toLowerCase().trim();
     if (e) excludedEmails.add(e);
   }
-  const signups = await getSignups();
+  const [signups, events] = await Promise.all([getSignups(), getEvents()]);
+  // eventId → the webinar's date label (e.g. "Jul 2") — this is what we show,
+  // not the signup date.
+  const eventLabel = new Map(events.map((e) => [e.id, webinarDateLabel(e.startsAtIso)]));
   return signups
     // Paid customers OR flagged-priority leads (hot retreat leads may not have
     // paid yet), minus anyone already claimed or excluded.
@@ -129,6 +142,7 @@ export async function listUpsellPool(): Promise<UpsellPoolLead[]> {
       name: displayName(s),
       paidCentavos: s.amountCentavos ?? 0,
       paidAt: s.createdAt,
+      webinarLabel: eventLabel.get(s.eventId ?? '') ?? '',
       priority: priority.has(s.id),
     }));
 }
@@ -305,6 +319,7 @@ export async function setUpsellNote(leadId: string, closerId: string, note: stri
 /* ── Promo code + send ──────────────────────────────────────────────────── */
 
 function labelFor(type: string, value: number): string {
+  if (type === 'none') return 'No discount';
   return type === 'percent' ? `${value}% off` : `${peso(value)} off`;
 }
 
@@ -330,7 +345,7 @@ export async function createPromoAndSend(input: {
   closerName: string;
   closerUsername: string;
   product: UpsellProductKey;
-  discountType: 'percent' | 'fixed';
+  discountType: 'none' | 'percent' | 'fixed';
   discountValue: number;
   channels: { email: boolean; sms: boolean };
 }): Promise<{ ok: boolean; error?: string; sendId?: string; code?: string; finalCentavos?: number }> {
@@ -352,49 +367,55 @@ export async function createPromoAndSend(input: {
   if (!customer) return { ok: false, error: 'Customer not found.' };
 
   const prod = UPSELL_PRODUCTS[input.product];
-  const value = Math.max(0, Math.round(input.discountValue));
-  if (input.discountType === 'percent' && value < 1) return { ok: false, error: 'Enter a percent between 1 and 15.' };
-  if (input.discountType === 'percent' && value > CLOSER_MAX_DISCOUNT_PCT) {
-    return { ok: false, error: `Closer promo codes are capped at ${CLOSER_MAX_DISCOUNT_PCT}%.` };
-  }
-  const discountValueForEngine = input.discountType === 'percent' ? value : value * 100; // fixed = pesos → centavos
   const base = prod.baseCentavos;
-  const discount = computeDiscountCentavos({ discountType: input.discountType, discountValue: discountValueForEngine }, base);
-  const final = Math.max(0, base - discount);
-  if (discount <= 0) return { ok: false, error: 'Discount works out to ₱0 — check the value.' };
-  // Enforce the 15% ceiling on the resolved discount — catches fixed-peso codes
-  // that would otherwise exceed the cap on a low-priced product.
-  const maxDiscount = Math.round((base * CLOSER_MAX_DISCOUNT_PCT) / 100);
-  if (discount > maxDiscount) {
-    return { ok: false, error: `That's over the ${CLOSER_MAX_DISCOUNT_PCT}% cap — max ${peso(maxDiscount)} off ${prod.name}.` };
-  }
-
-  // Mint a unique scoped code (retry a couple times on the rare collision).
-  let code = '';
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const candidate = genCode(input.closerUsername, input.product);
-    const existing = await findPromoCode(candidate);
-    if (!existing) { code = candidate; break; }
-  }
-  if (!code) return { ok: false, error: 'Could not generate a unique code, try again.' };
-
-  await savePromoCode({
-    code,
-    discountType: input.discountType,
-    discountValue: discountValueForEngine,
-    maxUses: PROMO_MAX_USES,
-    usesCount: 0,
-    active: true,
-    note: `Closer ${input.closerName} → ${customer.email} for ${prod.name}`,
-    product: input.product,
-    createdByCloser: input.closerId,
-    createdAt: new Date().toISOString(),
-  });
-
-  const sep = prod.path.includes('?') ? '&' : '?';
-  const link = `${BASE_URL}${prod.path}${sep}promo=${encodeURIComponent(code)}`;
-  const discountLabel = labelFor(input.discountType, value);
   const firstName = customer.firstName || displayName(customer);
+  const value = Math.max(0, Math.round(input.discountValue));
+
+  let code = '';
+  let discount = 0;
+  let discountLabel = 'No discount';
+  let templateId = 'closer_offer_direct';
+
+  // Discount is optional — 'none' sends the product link at full price, no code.
+  if (input.discountType !== 'none') {
+    if (input.discountType === 'percent' && value < 1) return { ok: false, error: 'Enter a percent between 1 and 15.' };
+    if (input.discountType === 'percent' && value > CLOSER_MAX_DISCOUNT_PCT) {
+      return { ok: false, error: `Closer discounts are capped at ${CLOSER_MAX_DISCOUNT_PCT}%.` };
+    }
+    const discountValueForEngine = input.discountType === 'percent' ? value : value * 100; // fixed = pesos → centavos
+    discount = computeDiscountCentavos({ discountType: input.discountType, discountValue: discountValueForEngine }, base);
+    if (discount <= 0) return { ok: false, error: 'Discount works out to ₱0 — pick "No discount" or raise the value.' };
+    const maxDiscount = Math.round((base * CLOSER_MAX_DISCOUNT_PCT) / 100);
+    if (discount > maxDiscount) {
+      return { ok: false, error: `That's over the ${CLOSER_MAX_DISCOUNT_PCT}% cap — max ${peso(maxDiscount)} off ${prod.name}.` };
+    }
+    // Mint a unique scoped code (retry a couple times on the rare collision).
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = genCode(input.closerUsername, input.product);
+      if (!(await findPromoCode(candidate))) { code = candidate; break; }
+    }
+    if (!code) return { ok: false, error: 'Could not generate a unique code, try again.' };
+    await savePromoCode({
+      code,
+      discountType: input.discountType,
+      discountValue: discountValueForEngine,
+      maxUses: PROMO_MAX_USES,
+      usesCount: 0,
+      active: true,
+      note: `Closer ${input.closerName} → ${customer.email} for ${prod.name}`,
+      product: input.product,
+      createdByCloser: input.closerId,
+      createdAt: new Date().toISOString(),
+    });
+    discountLabel = labelFor(input.discountType, value);
+    templateId = 'closer_promo_offer';
+  }
+
+  const final = Math.max(0, base - discount);
+  // Pre-apply the code when there is one; otherwise the plain product link.
+  const link = code
+    ? `${BASE_URL}${prod.path}${prod.path.includes('?') ? '&' : '?'}promo=${encodeURIComponent(code)}`
+    : `${BASE_URL}${prod.path}`;
 
   // Log the send first (pending) so we always have an audit row.
   const { data: sendRow, error: sendErr } = await sb
@@ -406,7 +427,7 @@ export async function createPromoAndSend(input: {
       product: input.product,
       promo_code: code,
       discount_type: input.discountType,
-      discount_value: value,
+      discount_value: input.discountType === 'none' ? 0 : value,
       base_centavos: base,
       discount_centavos: discount,
       final_centavos: final,
@@ -433,7 +454,7 @@ export async function createPromoAndSend(input: {
 
   // Email channel.
   if (input.channels.email && customer.email) {
-    const res = await sendEmail({ to: customer.email, templateId: 'closer_promo_offer', vars }).catch((e) => ({ ok: false, error: String(e) }));
+    const res = await sendEmail({ to: customer.email, templateId, vars }).catch((e) => ({ ok: false, error: String(e) }));
     await sb.from('closer_promo_sends').update(
       res.ok
         ? { email_status: 'sent', email_sent_at: new Date().toISOString() }
@@ -443,7 +464,7 @@ export async function createPromoAndSend(input: {
 
   // SMS channel.
   if (input.channels.sms && customer.phone) {
-    const res = await sendSms({ to: customer.phone, templateId: 'closer_promo_offer', vars }).catch((e) => ({ ok: false, error: String(e) }));
+    const res = await sendSms({ to: customer.phone, templateId, vars }).catch((e) => ({ ok: false, error: String(e) }));
     await sb.from('closer_promo_sends').update(
       res.ok
         ? { sms_status: 'sent', sms_sent_at: new Date().toISOString() }

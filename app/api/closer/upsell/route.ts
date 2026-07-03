@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       case 'promoSend': {
         const product = String(body.product);
         if (!isUpsellProduct(product)) return NextResponse.json({ error: 'Unknown product' }, { status: 400 });
-        const discountType = body.discountType === 'fixed' ? 'fixed' : 'percent';
+        const discountType = body.discountType === 'fixed' ? 'fixed' : body.discountType === 'none' ? 'none' : 'percent';
         const res = await createPromoAndSend({
           leadId: String(body.leadId),
           closerId: closer.id,

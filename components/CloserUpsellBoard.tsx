@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toE164Ph } from '@/lib/phone';
 
-type PoolLead = { signupId: string; name: string; paidCentavos: number; paidAt: string; priority: boolean };
+type PoolLead = { signupId: string; name: string; paidCentavos: number; paidAt: string; webinarLabel: string; priority: boolean };
 type Send = {
   id: string;
   product: 'retreat' | 'vault' | 'build_session';
@@ -216,7 +216,11 @@ function PoolCard({ p, busy, onClaim }: { p: PoolLead; busy: string | null; onCl
       </div>
       <div className="text-[11px] text-slate-400">🔒 Contact hidden — claim to reveal</div>
       <div className="mt-1 text-[11px] font-medium text-slate-600">
-        {p.paidCentavos > 0 ? `Paid ${peso(p.paidCentavos)} · ${shortDate(p.paidAt)}` : p.priority ? 'Retreat lead · Jul 2 webinar' : shortDate(p.paidAt)}
+        {p.paidCentavos > 0
+          ? `Paid ${peso(p.paidCentavos)} · ${p.webinarLabel ? `${p.webinarLabel} webinar` : shortDate(p.paidAt)}`
+          : p.priority
+            ? `Retreat lead · ${p.webinarLabel ? `${p.webinarLabel} webinar` : 'webinar'}`
+            : (p.webinarLabel ? `${p.webinarLabel} webinar` : shortDate(p.paidAt))}
       </div>
       <button
         onClick={() => onClaim(p.signupId)}
@@ -368,18 +372,21 @@ function OfferForm({ leadId, hasEmail, hasPhone, offeredProducts, onSent, onToas
   const available = PRODUCTS.filter((p) => !offeredProducts.has(p.key));
   // Default to NO product picked — not every customer needs a promo.
   const [product, setProduct] = useState<Send['product'] | ''>('');
-  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  // Default to NO discount — not everyone needs one; the closer opts in.
+  const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
   const [value, setValue] = useState('15');
   const [email, setEmail] = useState(hasEmail);
   const [sms, setSms] = useState(hasPhone);
   const [sending, setSending] = useState(false);
 
+  const noDiscount = discountType === 'none';
   const base = product ? PRODUCTS.find((p) => p.key === product)!.price : 0;
-  const v = Math.max(0, Number(value) || 0);
-  const discountC = discountType === 'percent' ? Math.round((base * Math.min(100, v)) / 100) : Math.min(base, v * 100);
+  const v = noDiscount ? 0 : Math.max(0, Number(value) || 0);
+  const discountC = noDiscount ? 0 : discountType === 'percent' ? Math.round((base * Math.min(100, v)) / 100) : Math.min(base, v * 100);
   const final = Math.max(0, base - discountC);
   const maxDiscountC = Math.round((base * MAX_PCT) / 100);
-  const overCap = discountC > maxDiscountC;
+  const overCap = !noDiscount && discountC > maxDiscountC;
+  const canSend = !!product && !overCap && (noDiscount || discountC > 0);
 
   async function send() {
     if (!email && !sms) { onToast('Pick at least one channel (email or SMS).'); return; }
@@ -405,19 +412,24 @@ function OfferForm({ leadId, hasEmail, hasPhone, offeredProducts, onSent, onToas
         {available.map((p) => <option key={p.key} value={p.key}>{p.label} · {peso(p.price)}</option>)}
       </select>
       <div className="flex gap-1.5">
-        <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'percent' | 'fixed')} className="input text-xs">
+        <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'none' | 'percent' | 'fixed')} className="input text-xs">
+          <option value="none">No discount</option>
           <option value="percent">% off</option>
           <option value="fixed">₱ off</option>
         </select>
-        <input type="number" value={value} onChange={(e) => setValue(e.target.value)} min={1}
-          max={discountType === 'percent' ? MAX_PCT : undefined}
-          className="input w-full text-xs" placeholder={discountType === 'percent' ? '15' : '100'} />
+        {!noDiscount && (
+          <input type="number" value={value} onChange={(e) => setValue(e.target.value)} min={1}
+            max={discountType === 'percent' ? MAX_PCT : undefined}
+            className="input w-full text-xs" placeholder={discountType === 'percent' ? '15' : '100'} />
+        )}
       </div>
       <div className={`rounded-md px-2 py-1.5 text-[11px] ${overCap ? 'bg-rose-50 text-rose-600' : 'bg-white text-slate-600'}`}>
         {!product ? (
-          <span className="text-slate-400">Pick a product above to price the offer.</span>
+          <span className="text-slate-400">Pick a product to send.</span>
         ) : overCap ? (
           <>Over the {MAX_PCT}% cap — max {peso(maxDiscountC)} off {PRODUCTS.find((p) => p.key === product)!.label}.</>
+        ) : noDiscount ? (
+          <>Customer pays <strong className="text-slate-900">{peso(base)}</strong> <span className="text-slate-400">· full price, no code</span></>
         ) : (
           <>Customer pays <strong className="text-slate-900">{peso(final)}</strong> <span className="text-slate-400">(was {peso(base)}, save {peso(discountC)})</span></>
         )}
@@ -426,9 +438,9 @@ function OfferForm({ leadId, hasEmail, hasPhone, offeredProducts, onSent, onToas
         <label className="flex items-center gap-1"><input type="checkbox" checked={email} disabled={!hasEmail} onChange={(e) => setEmail(e.target.checked)} /> Email{!hasEmail && ' (none)'}</label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={sms} disabled={!hasPhone} onChange={(e) => setSms(e.target.checked)} /> SMS{!hasPhone && ' (none)'}</label>
       </div>
-      <button onClick={send} disabled={sending || discountC <= 0 || overCap}
+      <button onClick={send} disabled={sending || !canSend}
         className="block w-full rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50">
-        {sending ? 'Sending…' : `Generate code + send →`}
+        {sending ? 'Sending…' : noDiscount ? 'Send offer →' : 'Generate code + send →'}
       </button>
     </div>
   );
