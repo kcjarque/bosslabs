@@ -126,7 +126,7 @@ export function ReserveButton({
                   <div className="relative">
                     <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                      Invite-only · 10 seats
+                      Invite-only · 15 seats
                     </div>
                     <h2 className="mt-2 font-serif text-[26px] tracking-tight text-white">
                       Reserve your seat
@@ -246,7 +246,7 @@ export function ReserveButton({
                     {submitting ? 'Reserving…' : 'Reserve my slot → show me how to pay'}
                   </button>
                   <p className="mt-2.5 text-center text-[11px] text-ink-400">
-                    We&apos;ll never share your details · 10 seats only.
+                    We&apos;ll never share your details · 15 seats only.
                   </p>
                 </form>
               </div>

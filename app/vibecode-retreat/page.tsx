@@ -17,7 +17,7 @@ const SLUG = 'vibecode-retreat';
 export const metadata: Metadata = {
   title: 'VibeCode Retreat — Walk in with an idea. Walk out with an app.',
   description:
-    'An invite-only, build-or-refund founder retreat. July 31 – August 1, Tagaytay City. 10 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
+    'An invite-only, build-or-refund founder retreat. July 31 – August 1, Tagaytay City. 15 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
 };
 
 async function getRetreat() {
@@ -351,7 +351,7 @@ function RetreatHeader() {
 function Hero({ priceCentavos, slashedCentavos }: { priceCentavos: number | null; slashedCentavos?: number | null }) {
   const cards = [
     { icon: IC.calendar, k: 'WHEN', v: 'July 31 – August 1, 10:00 AM', s: 'Friday to Saturday' },
-    { icon: IC.people, k: 'WHO', v: 'Only 10 founders', s: 'Invite-only cohort' },
+    { icon: IC.people, k: 'WHO', v: 'Only 15 founders', s: 'Invite-only cohort' },
     { icon: IC.pin, k: 'WHERE', v: 'Tagaytay City, Cavite', s: 'The best private villa' },
     { icon: IC.rocket, k: 'FORMAT', v: '24 straight hours', s: 'Build · Pitch · Ship' },
   ];
@@ -454,7 +454,7 @@ function WhatYouGet() {
         items={[
           { icon: IC.code, top: 'No Coding Required', bottom: 'Zero developers hired' },
           { icon: IC.clock, top: '24 Hours', bottom: 'Deep-dive session' },
-          { icon: IC.people, top: '10 Founders', bottom: 'Invite-only' },
+          { icon: IC.people, top: '15 Founders', bottom: 'Invite-only' },
           { icon: IC.bolt, top: '10× Value', bottom: 'Guaranteed' },
         ]}
       />
@@ -607,7 +607,7 @@ function Payment({ priceCentavos, slashedCentavos }: { priceCentavos: number | n
           <ReserveButton label="Reserve your seat →" />
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.16em] text-ink-400">
-          <span>10 seats only</span>
+          <span>15 seats only</span>
           <span>Build-or-refund</span>
           <span>Pay by card or bank QR</span>
         </div>
