@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { OFFER, formatPHP } from '@/lib/config';
 import { getFbCookies } from '@/lib/meta-client';
 
@@ -19,13 +19,23 @@ function fmtCentavos(c: number) {
  * optional promo. Works post-purchase (orderId present) and standalone (no
  * order → collects name/email/phone). Posts the chosen product to /api/oto.
  */
-export function OtoOfferCard({ orderId }: { orderId: string }) {
+export function OtoOfferCard({
+  orderId,
+  initialProduct,
+  initialPromo,
+}: {
+  orderId: string;
+  initialProduct?: Product;
+  initialPromo?: string;
+}) {
   const standalone = !orderId;
 
   // Multi-select picker: at least one must be checked. Default to the premium
-  // (oto2 = 1:1 Build Session). When both are checked, the buyer pays the
-  // combined total in a single invoice and the webhook delivers both products.
-  const [selected, setSelected] = useState<Set<Product>>(new Set(['oto2']));
+  // (oto2 = 1:1 Build Session), or the product a closer's promo link targets.
+  const [selected, setSelected] = useState<Set<Product>>(new Set([initialProduct ?? 'oto2']));
+  // When we arrive via a closer promo link the code auto-applies and the input
+  // locks — the discount can't be re-entered or stacked (no duplication).
+  const [locked, setLocked] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -73,8 +83,18 @@ export function OtoOfferCard({ orderId }: { orderId: string }) {
     });
   }
 
-  async function applyPromo() {
-    const code = promoInput.trim();
+  // Auto-apply a closer promo code from the ?promo= link on first render.
+  useEffect(() => {
+    if (initialPromo) {
+      setPromoInput(initialPromo);
+      setLocked(true);
+      void applyPromo(initialPromo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function applyPromo(codeArg?: string) {
+    const code = (codeArg ?? promoInput).trim();
     if (!code) return;
     setPromoApplying(true);
     setPromoError(null);
@@ -291,7 +311,7 @@ export function OtoOfferCard({ orderId }: { orderId: string }) {
       {!both && (
         <div className="mt-5">
           <label htmlFor="oto-promo" className="block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-            Promo code <span className="text-ink-300">(optional)</span>
+            Promo code <span className="text-ink-300">{locked ? '(applied from your link)' : '(optional)'}</span>
           </label>
           <div className="mt-2 flex gap-2">
             <input
@@ -299,15 +319,15 @@ export function OtoOfferCard({ orderId }: { orderId: string }) {
               value={promoInput}
               onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
               placeholder="Enter code"
-              disabled={!!applied || loading}
+              disabled={!!applied || loading || locked}
               className="min-w-0 flex-1 rounded-full border border-white/15 bg-[#06070A]/60 px-5 py-3 text-[14px] uppercase tracking-wide text-white outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-400 focus:border-cyan-400 disabled:opacity-60"
             />
-            {applied ? (
+            {locked ? null : applied ? (
               <button type="button" onClick={() => { setApplied(null); setPromoInput(''); setPromoError(null); }} disabled={loading} className="flex-none rounded-full border border-white/15 px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-ink-200 transition hover:text-white">
                 Remove
               </button>
             ) : (
-              <button type="button" onClick={applyPromo} disabled={promoApplying || !promoInput.trim() || loading} className="flex-none rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50">
+              <button type="button" onClick={() => applyPromo()} disabled={promoApplying || !promoInput.trim() || loading} className="flex-none rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50">
                 {promoApplying ? 'Checking…' : 'Apply'}
               </button>
             )}

@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import {
   createRetreatReservation,
   getFunnels,
+  findPromoCode,
+  computeDiscountCentavos,
+  promoAllowedForProduct,
+  redeemPromoCode,
   type RetreatMethod,
   type RetreatPlan,
 } from '@/lib/db';
 import { planAmountCentavos, planLabel } from '@/lib/retreat';
+import { CLOSER_MAX_DISCOUNT_PCT } from '@/lib/closer-upsell';
 import { formatPHP } from '@/lib/config';
 import { sendTelegram, esc } from '@/lib/telegram';
 import { sendEmail } from '@/lib/email';
@@ -50,7 +55,42 @@ export async function POST(req: Request) {
     const funnels = await getFunnels();
     const funnel = funnels.find((f) => f.slug === 'vibecode-retreat');
     const config = funnel?.config ?? {};
-    const amountDueCentavos = planAmountCentavos(paymentPlan, config);
+    let amountDueCentavos = planAmountCentavos(paymentPlan, config);
+
+    // Auto-applied retreat promo (closer-issued). The discount comes off the
+    // FULL standard price and is capped at the closer 15% ceiling. It reduces
+    // what's charged now for the 'full' and 'installment' plans; a 'reservation'
+    // deposit is unchanged and the discount rides on total_centavos so the
+    // (externally-collected) balance is honoured.
+    const standard = config.standardPriceCentavos ?? 7_500_000;
+    const promoInput = String(b.promoCode ?? '').trim();
+    let appliedPromo: string | null = null;
+    let discountCentavos = 0;
+    let totalCentavos = standard;
+    if (promoInput) {
+      const promo = await findPromoCode(promoInput);
+      const now = Date.now();
+      const valid =
+        promo &&
+        promo.active &&
+        promoAllowedForProduct(promo, 'retreat') &&
+        (!promo.expiresAt || new Date(promo.expiresAt).getTime() > now) &&
+        (promo.maxUses == null || promo.usesCount < promo.maxUses);
+      if (!valid) {
+        return NextResponse.json({ error: 'That promo code isn’t valid for the Retreat.' }, { status: 400 });
+      }
+      const cap = Math.round((standard * CLOSER_MAX_DISCOUNT_PCT) / 100);
+      discountCentavos = Math.min(computeDiscountCentavos(promo!, standard), cap);
+      totalCentavos = standard - discountCentavos;
+      if (paymentPlan === 'full') amountDueCentavos = Math.max(0, totalCentavos);
+      else if (paymentPlan === 'installment') amountDueCentavos = Math.round(totalCentavos / 3);
+      // 'reservation' (deposit) → amountDueCentavos unchanged.
+      const redeemed = await redeemPromoCode(promo!.code);
+      if (!redeemed) {
+        return NextResponse.json({ error: 'That promo code is no longer available.' }, { status: 409 });
+      }
+      appliedPromo = promo!.code;
+    }
 
     const r = await createRetreatReservation({
       name,
@@ -66,6 +106,9 @@ export async function POST(req: Request) {
       tshirtSize,
       heardFrom,
       amountDueCentavos,
+      promoCode: appliedPromo,
+      discountCentavos,
+      totalCentavos: appliedPromo ? totalCentavos : null,
     });
 
     // Best-effort Telegram alert (awaited so it isn't killed when the

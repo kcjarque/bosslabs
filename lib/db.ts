@@ -3309,6 +3309,12 @@ export type RetreatReservationInput = {
   tshirtSize?: string;
   heardFrom?: string;
   amountDueCentavos?: number;
+  /** Applied retreat-scoped promo code (closer-issued), if any. */
+  promoCode?: string | null;
+  /** Discount in centavos off the full standard price. */
+  discountCentavos?: number;
+  /** Discounted retreat total (standard − discount) for the balance. */
+  totalCentavos?: number | null;
 };
 
 export type RetreatReservation = RetreatReservationInput & {
@@ -3393,6 +3399,9 @@ export async function createRetreatReservation(
       tshirt_size: input.tshirtSize ?? '',
       heard_from: input.heardFrom ?? '',
       amount_due_centavos: input.amountDueCentavos ?? null,
+      promo_code: input.promoCode ?? null,
+      discount_centavos: input.discountCentavos ?? 0,
+      total_centavos: input.totalCentavos ?? null,
     })
     .select('*')
     .single();

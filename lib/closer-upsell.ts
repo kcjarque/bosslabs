@@ -44,6 +44,10 @@ export function isUpsellProduct(v: string): v is UpsellProductKey {
  *  mass reuse if the code leaks. */
 const PROMO_MAX_USES = 5;
 
+/** Hard ceiling on a closer-issued discount — protects margin. Applies to BOTH
+ *  percent and fixed-peso codes (a ₱ code can't exceed 15% of the list price). */
+export const CLOSER_MAX_DISCOUNT_PCT = 15;
+
 const peso = (c: number) => `₱${(c / 100).toLocaleString('en-PH')}`;
 
 /* ── Pool: paid customers not yet claimed in the upsell pipeline ─────────── */
@@ -246,15 +250,21 @@ export async function createPromoAndSend(input: {
 
   const prod = UPSELL_PRODUCTS[input.product];
   const value = Math.max(0, Math.round(input.discountValue));
-  if (input.discountType === 'percent' && (value < 1 || value > 100)) return { ok: false, error: 'Percent must be 1–100.' };
-  if (input.discountType === 'fixed' && (value < 1 || value * 1 >= prod.baseCentavos)) {
-    // fixed value is entered in PESOS by the closer → convert to centavos.
+  if (input.discountType === 'percent' && value < 1) return { ok: false, error: 'Enter a percent between 1 and 15.' };
+  if (input.discountType === 'percent' && value > CLOSER_MAX_DISCOUNT_PCT) {
+    return { ok: false, error: `Closer promo codes are capped at ${CLOSER_MAX_DISCOUNT_PCT}%.` };
   }
   const discountValueForEngine = input.discountType === 'percent' ? value : value * 100; // fixed = pesos → centavos
   const base = prod.baseCentavos;
   const discount = computeDiscountCentavos({ discountType: input.discountType, discountValue: discountValueForEngine }, base);
   const final = Math.max(0, base - discount);
   if (discount <= 0) return { ok: false, error: 'Discount works out to ₱0 — check the value.' };
+  // Enforce the 15% ceiling on the resolved discount — catches fixed-peso codes
+  // that would otherwise exceed the cap on a low-priced product.
+  const maxDiscount = Math.round((base * CLOSER_MAX_DISCOUNT_PCT) / 100);
+  if (discount > maxDiscount) {
+    return { ok: false, error: `That's over the ${CLOSER_MAX_DISCOUNT_PCT}% cap — max ${peso(maxDiscount)} off ${prod.name}.` };
+  }
 
   // Mint a unique scoped code (retry a couple times on the rare collision).
   let code = '';

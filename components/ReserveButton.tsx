@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type Method = 'UnionBank' | 'BPI' | 'Credit Card';
 
@@ -27,6 +27,10 @@ export function ReserveButton({
   label?: string;
 }) {
   const router = useRouter();
+  // A closer's promo link lands on /vibecode-retreat?promo=CODE — carry it into
+  // the reservation so the discount auto-applies (the route validates + prices).
+  const searchParams = useSearchParams();
+  const promoCode = (searchParams.get('promo') ?? '').trim();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +77,7 @@ export function ReserveButton({
           phone: phone.trim(),
           paymentMethod: method,
           paymentPlan: 'full', // default — exact amount + deposit option shown next
+          promoCode: promoCode || undefined,
         }),
       });
       const json = (await res.json()) as { id?: string; error?: string };

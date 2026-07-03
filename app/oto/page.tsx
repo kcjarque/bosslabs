@@ -15,10 +15,14 @@ export const dynamic = 'force-dynamic';
 export default async function OtoPage({
   searchParams,
 }: {
-  searchParams: { order?: string; bumped?: string };
+  searchParams: { order?: string; bumped?: string; product?: string; promo?: string };
 }) {
   const orderId = searchParams.order ?? '';
   const bumped = searchParams.bumped === '1';
+  // A closer's promo link lands here with ?product=oto|oto2&promo=CODE — the
+  // card pre-selects that product and auto-applies the code.
+  const initialProduct = searchParams.product === 'oto' ? 'oto' : searchParams.product === 'oto2' ? 'oto2' : undefined;
+  const initialPromo = (searchParams.promo ?? '').trim() || undefined;
   // No order param → someone arrived from a shared/influencer link, not the
   // post-purchase redirect. The page becomes a standalone 1:1 checkout.
   const standalone = !orderId;
@@ -42,7 +46,7 @@ export default async function OtoPage({
       {bumped ? (
         <BumpedConfirmation orderId={orderId} />
       ) : (
-        <LastChance orderId={orderId} standalone={standalone} />
+        <LastChance orderId={orderId} standalone={standalone} initialProduct={initialProduct} initialPromo={initialPromo} />
       )}
     </>
   );
@@ -98,7 +102,17 @@ function BumpedConfirmation({ orderId }: { orderId: string }) {
 /* --------------------------------------------------------------------- */
 /* LAST CHANCE — user didn't bump at checkout                            */
 /* --------------------------------------------------------------------- */
-function LastChance({ orderId, standalone }: { orderId: string; standalone: boolean }) {
+function LastChance({
+  orderId,
+  standalone,
+  initialProduct,
+  initialPromo,
+}: {
+  orderId: string;
+  standalone: boolean;
+  initialProduct?: 'oto' | 'oto2';
+  initialPromo?: string;
+}) {
   return (
     <>
       <OtoHeader label={standalone ? '1:1 Build Session' : 'Step 2 of 2'} />
@@ -177,7 +191,7 @@ function LastChance({ orderId, standalone }: { orderId: string; standalone: bool
         </div>
 
         <div className="mx-auto mt-10 max-w-3xl">
-          <OtoOfferCard orderId={orderId} />
+          <OtoOfferCard orderId={orderId} initialProduct={initialProduct} initialPromo={initialPromo} />
 
           <div className="mt-3 text-center text-[10px] uppercase tracking-[0.22em] text-ink-300">
             One-time · No subscription · Instant access · This page only

@@ -244,9 +244,10 @@ function LeadCard({
 }
 
 function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: string; hasEmail: boolean; hasPhone: boolean; onSent: () => void; onToast: (t: string) => void }) {
+  const MAX_PCT = 15;
   const [product, setProduct] = useState<Send['product']>('vault');
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
-  const [value, setValue] = useState('20');
+  const [value, setValue] = useState('15');
   const [email, setEmail] = useState(hasEmail);
   const [sms, setSms] = useState(hasPhone);
   const [sending, setSending] = useState(false);
@@ -255,6 +256,8 @@ function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: st
   const v = Math.max(0, Number(value) || 0);
   const discountC = discountType === 'percent' ? Math.round((base * Math.min(100, v)) / 100) : Math.min(base, v * 100);
   const final = Math.max(0, base - discountC);
+  const maxDiscountC = Math.round((base * MAX_PCT) / 100);
+  const overCap = discountC > maxDiscountC;
 
   async function send() {
     if (!email && !sms) { onToast('Pick at least one channel (email or SMS).'); return; }
@@ -276,16 +279,21 @@ function OfferForm({ leadId, hasEmail, hasPhone, onSent, onToast }: { leadId: st
           <option value="fixed">₱ off</option>
         </select>
         <input type="number" value={value} onChange={(e) => setValue(e.target.value)} min={1}
-          className="input w-full text-xs" placeholder={discountType === 'percent' ? '20' : '500'} />
+          max={discountType === 'percent' ? MAX_PCT : undefined}
+          className="input w-full text-xs" placeholder={discountType === 'percent' ? '15' : '100'} />
       </div>
-      <div className="rounded-md bg-white px-2 py-1.5 text-[11px] text-slate-600">
-        Customer pays <strong className="text-slate-900">{peso(final)}</strong> <span className="text-slate-400">(was {peso(base)}, save {peso(discountC)})</span>
+      <div className={`rounded-md px-2 py-1.5 text-[11px] ${overCap ? 'bg-rose-50 text-rose-600' : 'bg-white text-slate-600'}`}>
+        {overCap ? (
+          <>Over the {MAX_PCT}% cap — max {peso(maxDiscountC)} off {PRODUCTS.find((p) => p.key === product)!.label}.</>
+        ) : (
+          <>Customer pays <strong className="text-slate-900">{peso(final)}</strong> <span className="text-slate-400">(was {peso(base)}, save {peso(discountC)})</span></>
+        )}
       </div>
       <div className="flex gap-3 text-[11px]">
         <label className="flex items-center gap-1"><input type="checkbox" checked={email} disabled={!hasEmail} onChange={(e) => setEmail(e.target.checked)} /> Email{!hasEmail && ' (none)'}</label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={sms} disabled={!hasPhone} onChange={(e) => setSms(e.target.checked)} /> SMS{!hasPhone && ' (none)'}</label>
       </div>
-      <button onClick={send} disabled={sending || discountC <= 0}
+      <button onClick={send} disabled={sending || discountC <= 0 || overCap}
         className="block w-full rounded-md bg-cyan-600 px-2 py-1.5 text-center text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50">
         {sending ? 'Sending…' : `Generate code + send →`}
       </button>
