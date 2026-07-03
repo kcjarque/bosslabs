@@ -45,7 +45,7 @@ export function ReplayOffer({
               <span className="font-semibold text-white">
                 Ready to build YOUR app?
               </span>{' '}
-              The AI Founder's Bootcamp — 24 hours, 80 seats only. Walk out
+              The VibeCode Retreat — 24 hours, 10 founders only. Walk out
               with a launched app.
             </p>
           </div>

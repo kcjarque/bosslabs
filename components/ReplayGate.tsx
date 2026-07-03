@@ -84,7 +84,7 @@ export function ReplayGate({
               href={retreatUrl}
               className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 px-9 py-4 text-base font-medium text-white transition hover:from-cyan-400 hover:to-indigo-400"
             >
-              Register for the AI Founder's Bootcamp →
+              Register for the VibeCode Retreat →
             </a>
           </div>
         </div>

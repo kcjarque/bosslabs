@@ -21,7 +21,7 @@ const REPLAY_VIMEO_ID = '1206532848';
 const APP_URL = 'https://anaya-ops.vercel.app/';
 // Screenshot of the app we built live this session (drop the file in /public).
 const APP_SCREENSHOT = '/anaya-ops.png';
-const BOOTCAMP_URL = 'https://www.bosslabs.live/founders-bootcamp';
+const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
 // opens tomorrow (the morning after the webinar) and runs 7 days. Change this
 // single line to move the close date. Webinar: July 2 → +7d = July 9.
@@ -86,7 +86,7 @@ export default function ReplayPage({
             closesAtIso={REPLAY_CLOSES_AT}
             endLabel={endLabel}
             initiallyClosed={initiallyClosed}
-            retreatUrl={BOOTCAMP_URL}
+            retreatUrl={RETREAT_URL}
             forceClosed={searchParams.closed === '1'}
           />
         </div>
@@ -208,16 +208,16 @@ export default function ReplayPage({
           </p>
           <div className="mt-8">
             <a
-              href={BOOTCAMP_URL}
+              href={RETREAT_URL}
               className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 px-9 py-4 text-base font-medium text-white shadow-[0_14px_34px_-12px_rgba(0,150,200,0.65)] transition hover:from-cyan-400 hover:to-indigo-400"
             >
-              Register for the AI Founder's Bootcamp →
+              Register for the VibeCode Retreat →
             </a>
           </div>
         </section>
       </main>
 
-      <ReplayOffer retreatUrl={BOOTCAMP_URL} delayMs={delayMs} />
+      <ReplayOffer retreatUrl={RETREAT_URL} delayMs={delayMs} />
       <Footer />
     </div>
   );
