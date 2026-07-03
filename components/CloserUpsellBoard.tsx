@@ -29,6 +29,7 @@ type Lead = {
   paidAt: string;
   stage: string;
   claimedAt: string;
+  note: string;
   sends: Send[];
 };
 
@@ -94,6 +95,10 @@ export function CloserUpsellBoard() {
     setLeads((ls) => ls.map((l) => (l.leadId === leadId ? { ...l, stage } : l)));
     await api({ action: 'stage', leadId, stage });
   }
+  function saveNote(leadId: string, note: string) {
+    setLeads((ls) => ls.map((l) => (l.leadId === leadId ? { ...l, note } : l)));
+    void api({ action: 'note', leadId, note });
+  }
 
   if (loading) return <div className="card text-sm text-slate-500">Loading your customers…</div>;
 
@@ -130,7 +135,7 @@ export function CloserUpsellBoard() {
                   {items.map((l) => (
                     <LeadCard key={l.leadId} lead={l} compact busy={busy} onRelease={release} onStage={setStage}
                       openOffer={offerFor === l.leadId} onToggleOffer={() => setOfferFor(offerFor === l.leadId ? null : l.leadId)}
-                      onSent={() => { setOfferFor(null); load(); }} onToast={setToast} />
+                      onSent={() => { setOfferFor(null); load(); }} onToast={setToast} onSaveNote={saveNote} />
                   ))}
                   {items.length === 0 && <div className="px-1 py-2 text-center text-[11px] text-slate-300">—</div>}
                 </div>
@@ -144,7 +149,7 @@ export function CloserUpsellBoard() {
           {leads.map((l) => (
             <LeadCard key={l.leadId} lead={l} busy={busy} onRelease={release} onStage={setStage}
               openOffer={offerFor === l.leadId} onToggleOffer={() => setOfferFor(offerFor === l.leadId ? null : l.leadId)}
-              onSent={() => { setOfferFor(null); load(); }} onToast={setToast} />
+              onSent={() => { setOfferFor(null); load(); }} onToast={setToast} onSaveNote={saveNote} />
           ))}
         </div>
       )}
@@ -231,11 +236,12 @@ function StatusPill({ label, status }: { label: string; status: string }) {
 }
 
 function LeadCard({
-  lead, compact, busy, onRelease, onStage, openOffer, onToggleOffer, onSent, onToast,
+  lead, compact, busy, onRelease, onStage, openOffer, onToggleOffer, onSent, onToast, onSaveNote,
 }: {
   lead: Lead; compact?: boolean; busy: string | null;
   onRelease: (id: string) => void; onStage: (id: string, s: string) => void;
   openOffer: boolean; onToggleOffer: () => void; onSent: () => void; onToast: (t: string) => void;
+  onSaveNote: (leadId: string, note: string) => void;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
@@ -300,7 +306,43 @@ function LeadCard({
           onToast={onToast}
         />
       )}
+
+      <CardNote value={lead.note} onSave={(text) => onSaveNote(lead.leadId, text)} />
     </div>
+  );
+}
+
+/** Inline note on a lead card — same pattern as the abandoned-cart board. */
+function CardNote({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
+
+  if (editing) {
+    return (
+      <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Add a note…"
+          style={{ minHeight: '48px' }}
+          className="input w-full text-xs"
+        />
+        <div className="mt-1 flex gap-1.5">
+          <button onClick={() => { onSave(draft.trim()); setEditing(false); }} className="rounded-md bg-slate-800 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-700">Save</button>
+          <button onClick={() => { setDraft(value); setEditing(false); }} className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="mt-2 block w-full rounded-md border border-dashed border-slate-200 px-2 py-1 text-left text-[11px] transition hover:border-amber-300 hover:bg-amber-50/40"
+    >
+      {value ? <span className="text-slate-600">📝 {value}</span> : <span className="text-slate-400">📝 Add note…</span>}
+    </button>
   );
 }
 

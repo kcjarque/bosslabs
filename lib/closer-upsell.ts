@@ -71,6 +71,7 @@ export type UpsellLead = {
   paidAt: string;
   stage: string; // new | contacted | sent | won | lost
   claimedAt: string;
+  note: string;
   sends: UpsellSend[];
 };
 
@@ -141,7 +142,7 @@ export async function listMyUpsellLeads(closerId: string): Promise<UpsellLead[]>
     .select('*')
     .eq('closer_id', closerId)
     .order('claimed_at', { ascending: false });
-  const rows = (leads ?? []) as Array<{ id: string; signup_id: string; stage: string; claimed_at: string }>;
+  const rows = (leads ?? []) as Array<{ id: string; signup_id: string; stage: string; claimed_at: string; note: string | null }>;
   if (rows.length === 0) return [];
 
   const signups = await getSignups();
@@ -185,6 +186,7 @@ export async function listMyUpsellLeads(closerId: string): Promise<UpsellLead[]>
       paidAt: s?.createdAt ?? r.claimed_at,
       stage: r.stage,
       claimedAt: r.claimed_at,
+      note: r.note ?? '',
       sends: sendsByLead.get(r.id) ?? [],
     };
   });
@@ -207,7 +209,7 @@ export async function listAllUpsellActivity(): Promise<CloserUpsellSummary[]> {
     sb.from('closer_upsell_leads').select('*').order('claimed_at', { ascending: false }),
     sb.from('closer_promo_sends').select('*').order('created_at', { ascending: false }),
   ]);
-  const leads = (leadRows ?? []) as Array<{ id: string; signup_id: string; closer_id: string; stage: string; claimed_at: string }>;
+  const leads = (leadRows ?? []) as Array<{ id: string; signup_id: string; closer_id: string; stage: string; claimed_at: string; note: string | null }>;
   if (leads.length === 0) return [];
 
   const signups = await getSignups();
@@ -246,6 +248,7 @@ export async function listAllUpsellActivity(): Promise<CloserUpsellSummary[]> {
       paidAt: s?.createdAt ?? r.claimed_at,
       stage: r.stage,
       claimedAt: r.claimed_at,
+      note: r.note ?? '',
       sends: sendsByLead.get(r.id) ?? [],
     };
     const list = leadsByCloser.get(r.closer_id) ?? [];
@@ -285,6 +288,16 @@ export async function setUpsellStage(leadId: string, closerId: string, stage: st
   await getSupabase()
     .from('closer_upsell_leads')
     .update({ stage, updated_at: new Date().toISOString(), closed_at: stage === 'won' || stage === 'lost' ? new Date().toISOString() : null })
+    .eq('id', leadId)
+    .eq('closer_id', closerId);
+}
+
+/** Save the inline note on a lead (owner only). */
+export async function setUpsellNote(leadId: string, closerId: string, note: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  await getSupabase()
+    .from('closer_upsell_leads')
+    .update({ note: note.slice(0, 2000), updated_at: new Date().toISOString() })
     .eq('id', leadId)
     .eq('closer_id', closerId);
 }

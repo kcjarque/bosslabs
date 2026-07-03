@@ -6,6 +6,7 @@ import {
   claimUpsellLead,
   releaseUpsellLead,
   setUpsellStage,
+  setUpsellNote,
   createPromoAndSend,
   isUpsellProduct,
 } from '@/lib/closer-upsell';
@@ -34,6 +35,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       case 'stage':
         await setUpsellStage(String(body.leadId), closer.id, String(body.stage));
+        return NextResponse.json({ ok: true });
+      case 'note':
+        await setUpsellNote(String(body.leadId), closer.id, String(body.note ?? ''));
         return NextResponse.json({ ok: true });
       case 'promoSend': {
         const product = String(body.product);
