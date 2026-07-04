@@ -50,6 +50,42 @@ const cprTone = (n: number | null, benchmark: number | null): Tone => {
   return 'bad';
 };
 
+/* ── sorting (URL-param driven; server re-sorts, no client JS, no extra Meta
+ *    fetch since getAdsReportCached is keyed by range not sort) ───────────── */
+type SortKey = 'spend' | 'results' | 'costPerResult' | 'linkCtr' | 'cpm' | 'frequency' | 'reach' | 'roas';
+const SORT_COLS: { key: SortKey; label: string }[] = [
+  { key: 'spend', label: 'Spend' },
+  { key: 'results', label: 'Results' },
+  { key: 'costPerResult', label: 'Cost / result' },
+  { key: 'linkCtr', label: 'CTR (link)' },
+  { key: 'cpm', label: 'CPM' },
+  { key: 'frequency', label: 'Freq.' },
+  { key: 'reach', label: 'Reach' },
+  { key: 'roas', label: 'ROAS' },
+];
+const SORT_ACCESSOR: Record<SortKey, (e: AdEntity) => number | null> = {
+  spend: (e) => e.spend,
+  results: (e) => e.results,
+  costPerResult: (e) => e.costPerResult,
+  linkCtr: (e) => e.linkCtr,
+  cpm: (e) => e.cpm,
+  frequency: (e) => e.frequency,
+  reach: (e) => e.reach,
+  roas: (e) => e.roas,
+};
+function isSortKey(v: string | undefined): v is SortKey {
+  return !!v && SORT_COLS.some((c) => c.key === v);
+}
+/** Compare two entities on the active column. Null metrics always sort last. */
+function cmpBy(a: AdEntity, b: AdEntity, key: SortKey, dir: 'asc' | 'desc'): number {
+  const av = SORT_ACCESSOR[key](a);
+  const bv = SORT_ACCESSOR[key](b);
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+  return dir === 'asc' ? av - bv : bv - av;
+}
+
 function AdsTabs({ view }: { view: 'live' | 'results' }) {
   const tabs = [
     { key: 'live' as const, label: 'Live (Meta)', href: '/admin/ads' },
@@ -80,7 +116,7 @@ function AdsTabs({ view }: { view: 'live' | 'results' }) {
 export default async function AdsPage({
   searchParams,
 }: {
-  searchParams: { range?: string; active?: string; view?: string; gran?: string; from?: string; to?: string };
+  searchParams: { range?: string; active?: string; view?: string; gran?: string; from?: string; to?: string; sort?: string; dir?: string };
 }) {
   requireAdmin();
 
@@ -101,6 +137,15 @@ export default async function AdsPage({
 
   const rangeKey: AdsRangeKey = isRangeKey(searchParams?.range) ? searchParams.range : 'all';
   const activeOnly = searchParams?.active === '1';
+  const sortKey: SortKey = isSortKey(searchParams?.sort) ? searchParams.sort : 'spend';
+  const sortDir: 'asc' | 'desc' = searchParams?.dir === 'asc' ? 'asc' : 'desc';
+  // Header link: same column → flip direction; new column → highest-first.
+  const sortHref = (col: SortKey) => {
+    const nextDir = sortKey === col && sortDir === 'desc' ? 'asc' : 'desc';
+    const p = new URLSearchParams({ range: rangeKey, sort: col, dir: nextDir });
+    if (activeOnly) p.set('active', '1');
+    return `/admin/ads?${p.toString()}`;
+  };
   const report = await getAdsReportCached(rangeKey);
 
   // Active-only filters the table rows (the summary stays campaign-level).
@@ -190,7 +235,14 @@ export default async function AdsPage({
 
           <AdsDashboard campaign={report.campaign} adCount={ads.length} activeOnly={activeOnly} />
 
-          <AdsTable campaign={report.campaign} adsets={adsets} ads={ads} />
+          <AdsTable
+            campaign={report.campaign}
+            adsets={adsets}
+            ads={ads}
+            sort={sortKey}
+            dir={sortDir}
+            sortHref={sortHref}
+          />
         </>
       )}
     </div>
@@ -261,13 +313,19 @@ function AdsTable({
   campaign,
   adsets,
   ads,
+  sort,
+  dir,
+  sortHref,
 }: {
   campaign: AdEntity | null;
   adsets: AdEntity[];
   ads: AdEntity[];
+  sort: SortKey;
+  dir: 'asc' | 'desc';
+  sortHref: (col: SortKey) => string;
 }) {
   const benchmark = campaign?.costPerResult ?? null;
-  const sortedAdsets = [...adsets].sort((a, b) => b.spend - a.spend);
+  const sortedAdsets = [...adsets].sort((a, b) => cmpBy(a, b, sort, dir));
   const adsByParent = new Map<string, AdEntity[]>();
   for (const ad of ads) {
     const key = ad.parentId ?? 'orphan';
@@ -275,7 +333,7 @@ function AdsTable({
     list.push(ad);
     adsByParent.set(key, list);
   }
-  for (const list of adsByParent.values()) list.sort((a, b) => b.spend - a.spend);
+  for (const list of adsByParent.values()) list.sort((a, b) => cmpBy(a, b, sort, dir));
   const orphans = adsByParent.get('orphan') ?? [];
 
   return (
@@ -286,14 +344,26 @@ function AdsTable({
             <tr className="border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.06em] text-slate-500">
               <th className="px-3 py-2 text-left font-medium">Name</th>
               <th className="px-3 py-2 text-left font-medium">Status</th>
-              <th className="px-3 py-2 text-right font-medium">Spend</th>
-              <th className="px-3 py-2 text-right font-medium">Results</th>
-              <th className="px-3 py-2 text-right font-medium">Cost / result</th>
-              <th className="px-3 py-2 text-right font-medium">CTR (link)</th>
-              <th className="px-3 py-2 text-right font-medium">CPM</th>
-              <th className="px-3 py-2 text-right font-medium">Freq.</th>
-              <th className="px-3 py-2 text-right font-medium">Reach</th>
-              <th className="px-3 py-2 text-right font-medium">ROAS</th>
+              {SORT_COLS.map(({ key, label }) => {
+                const active = sort === key;
+                return (
+                  <th key={key} className="px-3 py-2 text-right font-medium">
+                    <Link
+                      href={sortHref(key)}
+                      scroll={false}
+                      title={`Sort by ${label}`}
+                      className={`inline-flex items-center gap-1 whitespace-nowrap transition hover:text-slate-700 ${
+                        active ? 'text-slate-700' : ''
+                      }`}
+                    >
+                      {label}
+                      <span className={active ? 'text-cyan-600' : 'text-slate-300'}>
+                        {active ? (dir === 'desc' ? '▼' : '▲') : '↕'}
+                      </span>
+                    </Link>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
