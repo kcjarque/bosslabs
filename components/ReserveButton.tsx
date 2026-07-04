@@ -8,6 +8,9 @@ type Method = 'BDO' | 'Credit Card';
 
 const METHODS: Method[] = ['BDO', 'Credit Card'];
 
+// Retreat shirt is unisex; standard XS–2XL range.
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
+
 // Dark, glassy input — matches the retreat page. py-3 keeps it ≥44px tall;
 // text-base avoids iOS focus-zoom; cyan focus glow.
 const inputCls =
@@ -40,6 +43,7 @@ export function ReserveButton({
   const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<Method | ''>('');
   const [persons, setPersons] = useState('1');
+  const [shirt, setShirt] = useState('');
 
   // Lock background scroll + allow Escape to close while the modal is open.
   useEffect(() => {
@@ -63,6 +67,10 @@ export function ReserveButton({
       setError('Please fill in your name, email, and number.');
       return;
     }
+    if (!shirt) {
+      setError('Please choose a shirt size.');
+      return;
+    }
     if (!method) {
       setError('Please choose a payment method.');
       return;
@@ -80,6 +88,7 @@ export function ReserveButton({
           paymentPlan: 'full', // default — exact amount + deposit option shown next
           promoCode: promoCode || undefined,
           persons: Number(persons) || 1,
+          tshirtSize: shirt,
         }),
       });
       const json = (await res.json()) as { id?: string; error?: string };
@@ -193,6 +202,23 @@ export function ReserveButton({
                             }`}
                           >
                             {n}
+                          </button>
+                        ))}
+                      </div>
+                    </Group>
+                    <Group label="Shirt size *">
+                      <div className="grid grid-cols-6 gap-2">
+                        {SIZES.map((sz) => (
+                          <button
+                            key={sz}
+                            type="button"
+                            aria-pressed={shirt === sz}
+                            onClick={() => setShirt(sz)}
+                            className={`rounded-xl border px-1 py-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 ${
+                              shirt === sz ? `text-cyan-100 ${selCls(true)}` : `text-ink-200 ${selCls(false)}`
+                            }`}
+                          >
+                            {sz}
                           </button>
                         ))}
                       </div>
