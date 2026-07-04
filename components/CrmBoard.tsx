@@ -267,6 +267,14 @@ export function CrmBoard() {
                         No phone
                       </span>
                     )}
+                    {c.stage !== 'dfy' && (
+                      <button
+                        onClick={() => moveCard(c.id, 'dfy')}
+                        className="mt-1.5 block w-full rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-center text-[11px] font-medium text-violet-700 transition hover:border-violet-300 hover:bg-violet-100"
+                      >
+                        ⬆ Upgrade to DFY
+                      </button>
+                    )}
                     {c.signupId && (
                       <a
                         href={`/admin/customers/${c.signupId}`}

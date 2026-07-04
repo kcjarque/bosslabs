@@ -9,7 +9,7 @@ export const CRM_STAGE_META: Record<CrmStage, { label: string; tint: string; bar
   first_touch: { label: 'First Touch', tint: 'bg-blue-50', bar: 'bg-blue-500' },
   scheduled: { label: 'Scheduled Discovery Call', tint: 'bg-amber-50', bar: 'bg-amber-500' },
   dfy: { label: 'DFY Candidate', tint: 'bg-violet-50', bar: 'bg-violet-500' },
-  closed: { label: 'Closed Client', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
+  closed: { label: 'Done', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
 };
 
 export type CrmCard = {
