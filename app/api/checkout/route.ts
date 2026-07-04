@@ -157,6 +157,9 @@ export async function POST(req: Request) {
       const existing = await findSignupByEmail(body.email);
       const baseMeta = {
         externalId: acceptedSlug,
+        // Products in this order (line items) — trigger off the product, not price.
+        bumpVault,
+        bumpSession,
         ...affiliateMeta,
         // Session-replay id — links this signup to its recording.
         ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
@@ -324,6 +327,11 @@ export async function POST(req: Request) {
     const existing = await findSignupByEmail(body.email);
     const sharedMetadata = {
       externalId,
+      // Products in this order (ecommerce-style line items) — the source of
+      // truth for "what they bought", so downstream (1-on-1 board, provisioning)
+      // triggers off the product, never the price.
+      bumpVault,
+      bumpSession,
       ...affiliateMeta,
       // Session-replay id — links this signup to its recording.
       ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
