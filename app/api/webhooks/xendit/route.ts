@@ -699,7 +699,7 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
   });
 
   await sendTelegram(
-    `💰 <b>${product === 'both' ? 'Bundle' : '1:1 Build Session'} paid (standalone)!</b>\n\n` +
+    `💰 <b>${product === 'both' ? 'Bundle' : product === 'oto' ? OFFER.oto.name : OFFER.oto2.name} paid (standalone)!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +

@@ -5,6 +5,7 @@
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { CRM_STAGES, type CrmStage, type CrmCard } from './crm-stages';
+import { OFFER } from './config';
 
 export { CRM_STAGES, CRM_STAGE_META, type CrmStage, type CrmCard } from './crm-stages';
 
@@ -38,12 +39,23 @@ function rowToCard(r: CrmRow): CrmCard {
   };
 }
 
+// A "1-on-1" buyer = bought the ₱3,997 Build Session (oto2) — via a post-purchase
+// OTO (metadata.otoProduct) or a main-checkout bump (order total = ticket+Build,
+// or ticket+Vault+Build). Vault-only bumps (₱999) are excluded on purpose: this
+// board tracks 1-on-1 delivery, not Vault access (Vault has its own Hub flow).
+const BUILD_SESSION_AMOUNTS = new Set([
+  OFFER.main.priceCentavos + OFFER.oto2.priceCentavos,
+  OFFER.main.priceCentavos + OFFER.oto.priceCentavos + OFFER.oto2.priceCentavos,
+]);
+function boughtBuildSession(meta: { otoProduct?: string }, amountCentavos: number): boolean {
+  if (meta.otoProduct === 'oto2' || meta.otoProduct === 'both') return true;
+  return BUILD_SESSION_AMOUNTS.has(amountCentavos);
+}
+
 /**
- * Order-bump board: ONLY customers who actually took the OTO, each with the
- * total they paid (main + OTO). We resolve bump status + amount from the
- * linked signup at read time, then drop anyone who didn't bump — so the board
- * is a live check of order-bump buyers. (Same otoConfirmed gate the dashboard
- * + customer table use, so amounts agree.)
+ * 1-on-1 board: ONLY customers who bought the Build Session, each with the total
+ * they paid (main + bumps). We resolve product + amount from the linked signup
+ * at read time, then drop Vault-only bumps — so the board is a live 1-on-1 list.
  */
 export async function listCrmCards(): Promise<CrmCard[]> {
   if (!isSupabaseConfigured()) return [];
@@ -84,13 +96,15 @@ export async function listCrmCards(): Promise<CrmCard[]> {
       }
     }
     for (const s of sigRows) {
-      if (!s.bumped) continue; // only order-bump buyers land on this board
       const meta = (s.metadata ?? {}) as {
+        otoProduct?: string;
         otoConfirmed?: string;
         otoAmount?: number;
         remarks?: string;
         remarksUpdatedAt?: string;
       };
+      // 1-on-1 board: only Build Session buyers (Vault-only bumps excluded).
+      if (!boughtBuildSession(meta, s.amount_centavos ?? 0)) continue;
       const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
       bump.set(s.id, {
         total: (s.amount_centavos ?? 0) + otoExtra,
