@@ -1,4 +1,3 @@
-import { headers } from 'next/headers';
 import { Footer } from '@/components/Footer';
 import { Logo } from '@/components/Logo';
 import { Mark } from '@/components/Mark';
@@ -38,12 +37,10 @@ export default async function AcceptedPage({
     }
   }
 
-  // Build the share URL on the server so OG-scrapers and copy-paste both
-  // get the canonical site origin (NEXT_PUBLIC_SITE_URL > forwarded host).
-  const h = headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'bosslabs.live';
-  const proto = h.get('x-forwarded-proto') ?? 'https';
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL || `${proto}://${host}`).replace(/\/$/, '');
+  // Share link must always be the branded domain — never the raw *.vercel.app
+  // host a visitor may have arrived on. Prefer an explicit site URL, else the
+  // canonical domain.
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bosslabs.live').replace(/\/$/, '');
   const shareUrl = `${origin}/`;
   const shareText = `I just got accepted to the BOSSLABS AI webinar — ${webinar.name}. Free Zoom seat + community access here:`;
 

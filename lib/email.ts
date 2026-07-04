@@ -41,7 +41,7 @@ function redactEmail(email: string): string {
 function siteUrl(): string {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
-    'https://bosslabs.vercel.app'
+    'https://www.bosslabs.live'
   );
 }
 
