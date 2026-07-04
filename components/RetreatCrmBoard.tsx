@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   RETREAT_CRM_STAGES,
   RETREAT_CRM_STAGE_META,
+  RETREAT_CURRENT_BATCH,
   type RetreatCrmStage,
   type RetreatCrmCard,
 } from '@/lib/retreat-crm-stages';
@@ -114,6 +115,12 @@ export function RetreatCrmBoard() {
     if (people === card.people) return;
     setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, people } : c)));
     void api({ action: 'people', id: card.id, people });
+  }
+  /** Click the batch pill to cycle it (1 → 2 → … → current, then back to 1). */
+  function cycleBatch(card: RetreatCrmCard) {
+    const batch = ((card.batch || 1) % RETREAT_CURRENT_BATCH) + 1;
+    setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, batch } : c)));
+    void api({ action: 'update', id: card.id, patch: { batch } });
   }
 
   async function saveTemplate() {
@@ -333,6 +340,14 @@ export function RetreatCrmBoard() {
                         {c.email && <div className="truncate text-[11px] text-slate-400">{c.email}</div>}
                         {c.phone && <div className="text-[11px] text-slate-400">{toE164Ph(c.phone)}</div>}
                         <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => cycleBatch(c)}
+                            title="Retreat batch — click to change"
+                            className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition hover:bg-violet-200"
+                          >
+                            Batch {c.batch}
+                          </button>
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                               c.paid || c.paidInFull ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'

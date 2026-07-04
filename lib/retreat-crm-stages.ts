@@ -3,6 +3,11 @@
 export const RETREAT_CRM_STAGES = ['interested', 'confirmed', 'paid', 'attended', 'lost'] as const;
 export type RetreatCrmStage = (typeof RETREAT_CRM_STAGES)[number];
 
+/** The batch (cohort) new retreat cards are stamped with. Bump this when a new
+ *  batch's bookings open (batch 3, …). Existing cards keep their stored batch;
+ *  the pill on each card is editable for corrections. */
+export const RETREAT_CURRENT_BATCH = 2;
+
 export const RETREAT_CRM_STAGE_META: Record<RetreatCrmStage, { label: string; tint: string; bar: string }> = {
   interested: { label: 'Interested', tint: 'bg-slate-50', bar: 'bg-slate-400' },
   paid: { label: 'Paid', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
@@ -24,6 +29,8 @@ export type RetreatCrmCard = {
   paid: boolean;
   /** Headcount on this reservation: 1, or 2 when an extra person was added. */
   people: number;
+  /** Retreat batch (cohort): Batch 1, 2, … Shown as an editable pill. */
+  batch: number;
   amountCentavos: number | null;
   method: string | null;
   createdAt: string;

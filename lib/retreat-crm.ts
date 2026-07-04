@@ -10,7 +10,7 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 import { getSignups } from './db';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
-import { RETREAT_CRM_STAGES, type RetreatCrmStage, type RetreatCrmCard } from './retreat-crm-stages';
+import { RETREAT_CRM_STAGES, RETREAT_CURRENT_BATCH, type RetreatCrmStage, type RetreatCrmCard } from './retreat-crm-stages';
 
 export {
   RETREAT_CRM_STAGES,
@@ -35,6 +35,7 @@ type CardRow = {
   payments: VcrPayment[] | null;
   paid_at: string | null;
   people: number | null;
+  batch: number | null;
 };
 
 const DEFAULT_VCR_DEAL_CENTAVOS = 7_500_000; // ₱75,000
@@ -76,6 +77,7 @@ function rowToCard(r: CardRow, res?: ResRow): RetreatCrmCard {
     // Editable headcount: a manual override on the card wins; otherwise derive
     // from the reservation (1, or 2 when an extra person was added).
     people: r.people ?? (res?.extra_person_name && res.extra_person_name.trim() ? 2 : 1),
+    batch: r.batch ?? RETREAT_CURRENT_BATCH,
     amountCentavos: res?.amount_due_centavos ?? null,
     method: res?.payment_method ?? null,
     createdAt: r.created_at,
@@ -111,6 +113,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
       email: r.email,
       phone: r.phone,
       stage: isResPaid(r.status) ? 'paid' : 'interested',
+      batch: RETREAT_CURRENT_BATCH,
     }));
   if (toInsert.length) {
     const { data: inserted } = await sb
@@ -171,6 +174,7 @@ export async function addRetreatCrmCard(input: {
       email: input.email ?? '',
       phone: input.phone ?? '',
       stage: input.stage ?? 'interested',
+      batch: RETREAT_CURRENT_BATCH,
     })
     .select('*')
     .single();
@@ -180,7 +184,7 @@ export async function addRetreatCrmCard(input: {
 
 export async function updateRetreatCrmCard(
   id: string,
-  patch: Partial<Pick<RetreatCrmCard, 'name' | 'phone' | 'email' | 'note' | 'stage' | 'position'>>,
+  patch: Partial<Pick<RetreatCrmCard, 'name' | 'phone' | 'email' | 'note' | 'stage' | 'position' | 'batch'>>,
 ): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.name !== undefined) row.name = patch.name;
@@ -189,6 +193,7 @@ export async function updateRetreatCrmCard(
   if (patch.note !== undefined) row.note = patch.note;
   if (patch.stage !== undefined) row.stage = patch.stage;
   if (patch.position !== undefined) row.position = patch.position;
+  if (patch.batch !== undefined) row.batch = patch.batch;
   if (Object.keys(row).length === 0) return;
   const { error } = await getSupabase().from('retreat_crm_cards').update(row).eq('id', id);
   if (error) throw new Error(`updateRetreatCrmCard: ${error.message}`);
