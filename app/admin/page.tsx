@@ -14,7 +14,7 @@ import {
 import { formatPHP, formatPHPWhole, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
-import { sumDfyIncomeCentavos, sumDfyPendingCentavos } from '@/lib/dfy-crm';
+import { sumDfyIncomeCentavos, sumDfyPendingCentavos, sumDfyMonthlyRetainerCentavos } from '@/lib/dfy-crm';
 import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
@@ -74,6 +74,7 @@ const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
 ));
 const cachedSumDfyIncome = timed('dfy-income', unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts));
 const cachedSumDfyPending = timed('dfy-pending', unstable_cache(sumDfyPendingCentavos, ['dashboard:dfy-pending'], cacheOpts));
+const cachedSumDfyRetainer = timed('dfy-retainer', unstable_cache(sumDfyMonthlyRetainerCentavos, ['dashboard:dfy-retainer'], cacheOpts));
 
 /* --------------------------------------------------------------------- */
 /* Analytics helpers                                                     */
@@ -317,6 +318,7 @@ async function DashboardBody({
     webinarIncomeAllCentavos,
     dfyIncomeAllCentavos,
     dfyPendingCentavos,
+    dfyRetainerCentavos,
   ] = await (async () => {
     const _allStart = performance.now();
     console.log(`[dash] body fetch start · period=${dashRange?.key ?? 'all'}`);
@@ -337,6 +339,7 @@ async function DashboardBody({
       cachedSumWebinarIncome(),
       cachedSumDfyIncome(),
       cachedSumDfyPending(),
+      cachedSumDfyRetainer(),
     ]);
     console.log(`[dash] body fetch done in ${(performance.now() - _allStart).toFixed(0)}ms`);
     return result;
@@ -707,10 +710,11 @@ async function DashboardBody({
         </div>
         <p className="mt-1 text-[12px] text-slate-500">
           Front-end = ₱999 webinar + bumps/OTO. Webinar income = VCR high-ticket cash (retreat CRM).
-          DFY = cash collected on Done-For-You deals. Overall ROAS = total income ÷ ad spend (incl.
+          DFY = cash collected on Done-For-You deals. Monthly retainer = active DFY clients&rsquo;
+          recurring /mo (run-rate, not added to total). Overall ROAS = total income ÷ ad spend (incl.
           back-end). The Ad spend &amp; ROAS card below stays front-end-only.
         </p>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 sm:gap-4">
           <StatCard
             label="Total revenue"
             value={formatPHPWhole(totalIncomeCentavos)}
@@ -733,6 +737,12 @@ async function DashboardBody({
             value={formatPHPWhole(dfyIncomeCentavos)}
             sub={dfyPendingCentavos > 0 ? `cash collected · ${formatPHPWhole(dfyPendingCentavos)} still to collect` : 'cash collected'}
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
+          />
+          <StatCard
+            label="Monthly retainer"
+            value={formatPHPWhole(dfyRetainerCentavos)}
+            sub="recurring /mo · active DFY clients"
+            tone={dfyRetainerCentavos > 0 ? 'green' : undefined}
           />
           <StatCard
             label="Overall ROAS"

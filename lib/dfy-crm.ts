@@ -277,6 +277,20 @@ export async function sumDfyPendingCentavos(): Promise<number> {
   return pending;
 }
 
+/** Total monthly retainer (MRR) across active (closed_deal) DFY clients —
+ *  i.e. how much recurring retainer income we have booked per month. */
+export async function sumDfyMonthlyRetainerCentavos(): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const { data, error } = await getSupabase().from('dfy_crm_cards').select('stage, retainer_centavos');
+  if (error) return 0;
+  let mrr = 0;
+  for (const row of (data ?? []) as { stage: string; retainer_centavos: number | null }[]) {
+    if (row.stage !== 'closed_deal') continue;
+    mrr += Math.max(0, row.retainer_centavos ?? 0);
+  }
+  return mrr;
+}
+
 /** Existing customers (signups) for the "add from existing customer" search. */
 export type DfyCandidate = { id: string; name: string; email: string; phone: string };
 export async function listDfyCandidates(): Promise<DfyCandidate[]> {
