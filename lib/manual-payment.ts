@@ -8,7 +8,7 @@
  * Only abandoned carts (status 'registered') can be confirmed — never a free
  * signup or an already-paid order. Idempotent + best-effort on side-effects.
  */
-import { getSignupById, updateSignup, countPaidOrders } from './db';
+import { getSignupById, updateSignup, countPaidOrders, getSettings, getEvent } from './db';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
@@ -61,6 +61,23 @@ export async function markAbandonedCartPaid(
   const amountPhp = amountCentavos / 100;
   const now = new Date().toISOString();
 
+  // Re-tag stale returning leads to the active event. Someone can register for
+  // one webinar, then have their bank transfer confirmed AFTER that event ran —
+  // which leaves them stuck on a dead event's list (no future reminders). If
+  // their event has already passed (or is unset), move them to the current
+  // active event, mirroring what the Xendit checkout does via activeEventId.
+  let reTagEventId: string | null = null;
+  try {
+    const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
+    if (activeEventId && signup.eventId !== activeEventId) {
+      const current = signup.eventId ? await getEvent(signup.eventId) : null;
+      const passed = !current?.startsAtIso || new Date(current.startsAtIso).getTime() < Date.now();
+      if (passed) reTagEventId = activeEventId;
+    }
+  } catch {
+    /* re-tag is best-effort — never block the payment confirmation */
+  }
+
   // 1) Mark paid + stamp the manual-payment record (idempotency marker).
   const paidMeta = {
     ...(signup.metadata ?? {}),
@@ -72,7 +89,11 @@ export async function markAbandonedCartPaid(
     manualPaymentMethod: opts.method ?? null,
     manualPaymentProof: opts.proofUrl ?? null,
   };
-  await updateSignup(signup.id, { status: 'paid', metadata: paidMeta });
+  await updateSignup(signup.id, {
+    status: 'paid',
+    ...(reTagEventId ? { eventId: reTagEventId } : {}),
+    metadata: paidMeta,
+  });
 
   // 2) Affiliate commission (if this buyer was referred).
   const refMeta = signup.metadata as { affiliateCode?: string; affiliateSub?: string } | undefined;
