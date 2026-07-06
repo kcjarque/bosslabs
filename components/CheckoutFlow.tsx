@@ -125,6 +125,16 @@ export function CheckoutFlow({
     }
   }
 
+  // Auto-apply a promo passed via ?promo=CODE (e.g. a 7.7-sale email link) so
+  // the buyer lands on the discounted price without typing the code in.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('promo');
+    if (!code || !code.trim()) return;
+    setPromoInput(code.trim());
+    void reapplyPromo(code.trim(), bump, bump2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function applyPromo() {
     const code = promoInput.trim();
     if (!code) return;
