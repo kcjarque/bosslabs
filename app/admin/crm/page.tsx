@@ -16,7 +16,7 @@ const TABS = [
     key: 'order-bump',
     label: '1-on-1',
     subtitle:
-      'Customers who bought the 1-on-1 Build Session, each with the total they paid. Drag across stages and Text them from your phone.',
+      'Customers who bought the 1-on-1 Executive Session, each with the total they paid. Drag across stages and Text them from your phone.',
   },
   {
     key: 'dfy',

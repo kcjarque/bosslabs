@@ -13,7 +13,7 @@ export default async function CloserCustomersPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Claim a paid customer, then send them a <strong>personal promo code</strong> for the
-          Retreat, Vault, or Build Session over SMS + email. The discount is baked into the link.
+          Retreat, Vault, or Executive Session over SMS + email. The discount is baked into the link.
         </p>
       </header>
       <CloserUpsellBoard />

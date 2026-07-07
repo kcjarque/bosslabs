@@ -36,7 +36,7 @@ type Lead = {
 const PRODUCTS: { key: Send['product']; label: string; price: number }[] = [
   { key: 'retreat', label: 'VibeCode Retreat', price: 7_500_000 },
   { key: 'vault', label: 'AI Secrets Builder Vault', price: 99_900 },
-  { key: 'build_session', label: '1:1 Build Session', price: 399_700 },
+  { key: 'build_session', label: '1:1 Executive Session', price: 599_700 },
 ];
 const STAGES: { key: string; label: string; dot: string }[] = [
   { key: 'new', label: 'New', dot: 'bg-slate-400' },

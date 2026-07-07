@@ -71,7 +71,7 @@ export default async function ThankYouPage({
             <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center text-[13px] text-amber-100 sm:text-[14px]">
               {standalone ? (
                 <>
-                  Your <strong>1:1 Build Session</strong> payment didn&rsquo;t go through and
+                  Your <strong>1:1 Executive Session</strong> payment didn&rsquo;t go through and
                   no charge was made. You can try again anytime from the same link.
                 </>
               ) : (
@@ -122,7 +122,7 @@ export default async function ThankYouPage({
               {standalone ? (
                 <>
                   Your confirmation is on the way to your inbox. Kyle &amp; Mikey&rsquo;s team
-                  will message you shortly to schedule your <span className="text-white">1:1 Build
+                  will message you shortly to schedule your <span className="text-white">1:1 Executive
                   Session</span>. Check spam if it doesn&rsquo;t show up in 5 minutes.
                 </>
               ) : (

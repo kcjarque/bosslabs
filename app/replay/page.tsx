@@ -147,7 +147,7 @@ export default function ReplayPage({
             <p className="lead mx-auto mt-4 max-w-lg">
               Two ways to go further while it&apos;s fresh: the full <span className="text-white">AI
               Secrets Builder Vault</span> — every recording, tutorial, prompt &amp; blueprint — or a{' '}
-              <span className="text-white">1:1 Build Session</span> with Kyle &amp; Mikey. Pick one below.
+              <span className="text-white">1:1 Executive Session</span> with the founders. Pick one below.
             </p>
           </div>
           <div className="mt-8">

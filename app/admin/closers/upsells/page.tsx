@@ -9,7 +9,7 @@ const peso = (c: number) => `₱${(c / 100).toLocaleString('en-PH', { minimumFra
 const PRODUCT_LABEL: Record<string, string> = {
   retreat: 'VibeCode Retreat',
   vault: 'Vault',
-  build_session: 'Build Session',
+  build_session: 'Executive Session',
 };
 const STAGE_TINT: Record<string, string> = {
   new: 'bg-slate-100 text-slate-600',
