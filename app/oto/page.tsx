@@ -115,7 +115,7 @@ function LastChance({
 }) {
   return (
     <>
-      <OtoHeader label={standalone ? '1:1 Build Session' : 'Step 2 of 2'} />
+      <OtoHeader label={standalone ? '1:1 Executive Session' : 'Step 2 of 2'} />
 
       <main className="container-tight py-10 sm:py-16">
         {/* Ribbon */}
@@ -130,12 +130,12 @@ function LastChance({
 
         <div className="mx-auto mt-10 max-w-3xl text-center">
           <div className="eyebrow justify-center">
-            {standalone ? 'Work 1:1 with the founders' : 'Payment received · Seat locked'}
+            {standalone ? 'A private session with the founders' : 'Payment received · Seat locked'}
           </div>
           <h1 className="h-display mt-5">
             {standalone ? (
               <>
-                Build your MVP <span className="accent-italic">with the founders</span>.
+                Build your business <span className="accent-italic">with the founders</span>.
               </>
             ) : (
               <>
@@ -147,16 +147,17 @@ function LastChance({
           </h1>
           <p className="lead mt-6 max-w-xl mx-auto">
             Two ways to go further, <span className="text-white">only on this page</span>: book a{' '}
-            <span className="text-white">1:1 Build Session with Kyle &amp; Mikey</span>, or grab the{' '}
-            <span className="text-white">AI Secrets Builder Vault</span> — every recording, tutorial,
-            prompt &amp; blueprint we use to ship apps fast. Pick what fits.
+            <span className="text-white">private 1:1 Executive Session with the founders</span> — go deep
+            on your business, 7-to-9-figure growth &amp; real opportunities — or grab the{' '}
+            <span className="text-white">AI Secrets Builder Vault</span>, every recording, prompt &amp;
+            blueprint we use to ship apps fast. Pick what fits.
           </p>
         </div>
 
         {/* Proof gallery — real sessions + the Hub (what's inside the Vault) */}
         <div className="mx-auto mt-10 max-w-4xl">
           <div className="mb-3 text-center text-[11px] uppercase tracking-[0.22em] text-cyan-400">
-            Real 1:1 + build sessions with the founders
+            Real 1:1 sessions with the founders
           </div>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {[

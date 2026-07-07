@@ -33,7 +33,7 @@ export type UpsellProduct = {
 export const UPSELL_PRODUCTS: Record<UpsellProductKey, UpsellProduct> = {
   retreat: { key: 'retreat', name: 'VibeCode Retreat', baseCentavos: 7_500_000, path: '/vibecode-retreat' },
   vault: { key: 'vault', name: 'The AI Secrets Builder Vault', baseCentavos: 99_900, path: '/oto?product=oto' },
-  build_session: { key: 'build_session', name: '1:1 Build Session with Kyle & Mikey', baseCentavos: 399_700, path: '/oto?product=oto2' },
+  build_session: { key: 'build_session', name: 'Personal 1:1 Executive Session with the Founders', baseCentavos: 599_700, path: '/oto?product=oto2' },
 };
 
 export function isUpsellProduct(v: string): v is UpsellProductKey {

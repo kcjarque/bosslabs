@@ -322,35 +322,35 @@ export const OFFER = {
     ],
     totalValue: '₱9,997',
   },
-  // Second order bump — the original 1:1 founder session, now ₱3,997.
+  // Second order bump — the premium 1:1 executive session with the founders, ₱5,997.
   oto2: {
     sku: 'BL_OTO_1ON1',
-    name: '1:1 Build Session with Kyle & Mikey',
-    priceCentavos: 399700,
+    name: 'Personal 1:1 Executive Session with the Founders',
+    priceCentavos: 599700,
     currency: 'PHP',
-    label: '₱3,997',
-    crossed: '₱7,997',
-    eyebrow: 'Action Taker Bonus',
+    label: '₱5,997',
+    crossed: '₱11,997',
+    eyebrow: 'Founders Executive Session',
     discountLabel: '50% off',
-    savings: 'Save ₱4,000',
-    footerNote: '📅 Book your 1:1 right after the webinar',
+    savings: 'Save ₱6,000',
+    footerNote: '📅 Book your executive session right after the webinar',
     promise:
-      'A 1-hour exclusive 1:1 call with the founders — we map your full AI integration roadmap, scope out your MVP, and hand you the exact prompts to start coding in under 24 hours.',
+      'A private, high-level 1:1 strategy session with the founders — ex-multinational corporate operators. Go deep on real business opportunities, 7-to-9-figure growth plays, and how to scale your marketing, sales & operations with AI. Boardroom-level thinking, applied to your business.',
     inclusions: [
-      '1-hour exclusive 1:1 call with Kyle & Mikey',
-      'Your full AI integration roadmap',
-      'We map out your MVP',
-      'The exact prompts to start coding',
-      'Get your project started in under 24 hours',
+      'Private 1:1 executive session with the founders',
+      'Learn from ex-multinational operators — marketing, sales & operations',
+      '7-to-9-figure business strategy, mapped to your goals',
+      'Uncover real, fundable business opportunities',
+      'A clear AI-powered growth plan you can act on now',
     ],
-    // Value-stack breakdown for the OTO page — sums to the crossed ₱7,997.
+    // Value-stack breakdown for the OTO page — sums to the crossed ₱11,997.
     valueStack: [
-      { label: '1-hour 1:1 call with Kyle & Mikey', value: '₱5,000' },
-      { label: 'Your full AI integration roadmap', value: '₱1,500' },
-      { label: 'We map out your MVP', value: '₱1,000' },
-      { label: 'Exact prompts + 24-hour start plan', value: '₱497' },
+      { label: 'Private 1:1 executive session with the founders', value: '₱7,000' },
+      { label: '7–9 figure growth & opportunity roadmap', value: '₱2,500' },
+      { label: 'Marketing, sales & operations scale-up plan', value: '₱1,500' },
+      { label: 'AI execution playbook — act within 24 hours', value: '₱997' },
     ],
-    totalValue: '₱7,997',
+    totalValue: '₱11,997',
   },
 };
 

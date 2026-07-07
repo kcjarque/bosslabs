@@ -26,7 +26,7 @@ function Dot({ className }: { className: string }) {
 const offerFor = (p: Product) => (p === 'oto2' ? OFFER.oto2 : OFFER.oto);
 
 export function OrderBumpActions() {
-  // Default to the ₱3,997 1:1 — the post-webinar audit emails link here.
+  // Default to the ₱5,997 1:1 executive session — the post-webinar emails link here.
   const [selected, setSelected] = useState<Product>('oto2');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState<Group | 'FREE' | null>(null);
