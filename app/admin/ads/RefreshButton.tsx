@@ -24,7 +24,7 @@ export function RefreshButton() {
           startTransition(async () => {
             setDone(null);
             const r = await refreshAdsData();
-            setDone(r.ok ? `Updated ${r.synced} day${r.synced === 1 ? '' : 's'}` : (r.error || 'Failed'));
+            setDone(r.ok ? `✓ Refreshed last ${r.synced} day${r.synced === 1 ? '' : 's'}` : (r.error || 'Failed'));
             router.refresh();
           })
         }
