@@ -2143,14 +2143,15 @@ function rowToStep(r: SequenceStepRow): SequenceStep {
 
 /* ─── Events ──────────────────────────────────────────────────────────── */
 
-/** Upcoming active events for the /checkout session picker. Filters out
- *  events whose start is inside the "stop selling" lead-time (default 1h
- *  ahead — matches the existing rollover convention), sorts soonest-first,
- *  and caps by `limit`. Returns [] if the DB is offline so the picker
- *  degrades to no-picker instead of erroring. */
+/** Upcoming active events for the /checkout session picker. Keeps a session
+ *  selectable until 30 min AFTER it starts (negative lead-time = grace), so
+ *  the live session stays registerable right up to the moment the +30-min
+ *  auto-rollover (lib/auto-rollover.ts) advances the site to the next one —
+ *  the picker and the featured event transition together, not ~1.5h apart.
+ *  Sorts soonest-first, caps by `limit`. Returns [] if the DB is offline. */
 export async function getUpcomingCheckoutSessions(
   limit = 2,
-  leadTimeMs = 60 * 60_000,
+  leadTimeMs = -30 * 60_000,
 ): Promise<EventModel[]> {
   if (!isSupabaseConfigured()) return [];
   // NOTE: starts_at_iso is a TEXT column holding local-offset ISO strings
