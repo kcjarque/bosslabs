@@ -9,7 +9,12 @@
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { GREAT_VIBES_B64, INSTRUMENT_SERIF_B64, INSTRUMENT_SERIF_ITALIC_B64 } from './cert-fonts';
+import {
+  GREAT_VIBES_B64,
+  INSTRUMENT_SERIF_B64,
+  INSTRUMENT_SERIF_ITALIC_B64,
+  HEADER_PNG_B64,
+} from './cert-fonts';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 const INK = rgb(0.024, 0.027, 0.039); // #06070A
@@ -43,6 +48,7 @@ export async function generateCertificatePdf(opts: {
   const script = await doc.embedFont(b64(GREAT_VIBES_B64), { subset: true });
   const sans = await doc.embedFont(StandardFonts.HelveticaBold);
   const sansReg = await doc.embedFont(StandardFonts.Helvetica);
+  const headerImg = await doc.embedPng(b64(HEADER_PNG_B64));
 
   const centerAt = (
     text: string,
@@ -80,10 +86,10 @@ export async function generateCertificatePdf(opts: {
   page.drawRectangle({ x: 26, y: 26, width: W - 52, height: H - 52, borderColor: CYAN2, borderWidth: 2, borderOpacity: 0.9 });
   page.drawRectangle({ x: 36, y: 36, width: W - 72, height: H - 72, borderColor: GOLD, borderWidth: 0.8, borderOpacity: 0.65 });
 
-  // ── Header ──────────────────────────────────────────────────────────────
-  centerAt('BOSSLABS AI', sans, 14, C, H - 80, WHITE, 5);
-  centerAt('CERTIFICATE OF PARTICIPATION', sans, 12.5, C, H - 138, CYAN, 3.2);
-  page.drawRectangle({ x: C - 40, y: H - 152, width: 80, height: 1.6, color: CYAN });
+  // ── Brand header — real two-arc mark + Orbitron wordmark + eyebrow (PNG) ──
+  const hW = 500;
+  const hH = (headerImg.height / headerImg.width) * hW;
+  page.drawImage(headerImg, { x: C - hW / 2, y: H - 30 - hH, width: hW, height: hH });
 
   // ── Recipient ───────────────────────────────────────────────────────────
   centerAt('This certificate is proudly presented to', serifIt, 16, C, H - 202, MUTED);
