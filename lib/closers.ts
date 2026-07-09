@@ -221,14 +221,18 @@ export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
   const [{ data }, labels] = await Promise.all([
     sb
       .from('signups')
-      .select('id, first_name, last_name, amount_centavos, created_at, event_id')
+      .select('id, first_name, last_name, amount_centavos, created_at, event_id, metadata')
       .eq('source', 'paid')
       .eq('status', 'registered')
       .order('created_at', { ascending: false }),
     eventLabelMap(),
   ]);
-  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string; event_id: string | null }>)
-    .filter((s) => !taken.has(s.id))
+  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string; event_id: string | null; metadata: { abandonedNotified?: string } | null }>)
+    // Only surface carts the abandoned-cart cron has already flagged (30-min
+    // grace + Telegram ping stamps `abandonedNotified`). This makes the closer
+    // pool appear at the SAME moment the Telegram fires — so closers never
+    // chase someone who's still mid-payment inside the grace window.
+    .filter((s) => !taken.has(s.id) && Boolean(s.metadata?.abandonedNotified))
     .map((s) => ({
       signupId: s.id,
       name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
