@@ -137,6 +137,26 @@ export default function ReplayPage({
           </div>
         </section>
 
+        {/* Certificate of Participation */}
+        <section className="mx-auto mt-16 max-w-2xl sm:mt-20">
+          <div className="rounded-3xl border border-cyan-500/25 bg-gradient-to-b from-cyan-500/[0.08] to-transparent p-8 text-center sm:p-10">
+            <div className="text-4xl">🎓</div>
+            <h2 className="h-sub mt-4">
+              Claim your <span className="accent-italic">certificate.</span>
+            </h2>
+            <p className="lead mx-auto mt-3 max-w-md">
+              You showed up and built — make it official. Grab your signed{' '}
+              <span className="text-white">Certificate of Participation</span>, dated to your session and
+              signed by the founders. Takes 10 seconds.
+            </p>
+            <div className="mt-6">
+              <a href="/certificate" className="btn-primary !px-8 !py-3.5 text-base">
+                🎓 Get my certificate →
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* Order-bump checkout — grab the Vault or a 1:1, right here */}
         <section id="upgrade" className="mx-auto mt-16 max-w-2xl scroll-mt-8 sm:mt-24">
           <div className="text-center">
