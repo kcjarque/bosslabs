@@ -513,6 +513,109 @@ export async function upgradeRecoveryEmailStatus(args: {
  * metadata.recoveryEmailMessageId. Used by the Resend webhook to map
  * delivery/bounce/complaint events back to the signup we sent.
  */
+/* ─────────────────────── Unified email log ───────────────────────
+ * One row per outbound email (any template, any flow), written at the
+ * sendEmail() chokepoint so coverage is 100% + future-proof. The SES/Resend
+ * webhooks stamp delivered→opened→clicked→bounced onto the row by message-id.
+ * All helpers are best-effort and NEVER throw — they run on the send hot path. */
+export type EmailLogStatus = 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained';
+export type EmailLogRow = {
+  id: string;
+  providerMessageId: string;
+  toEmail: string;
+  templateId: string | null;
+  subject: string | null;
+  provider: string | null;
+  status: EmailLogStatus;
+  statusAt: string | null;
+  bounceMessage: string | null;
+  createdAt: string;
+};
+const EMAIL_LOG_RANK: Record<string, number> = {
+  sent: 1, delivered: 2, opened: 3, clicked: 4, bounced: 5, complained: 5,
+};
+
+/** Record one row per outbound email. Best-effort — a logging hiccup must never
+ *  break a send, so all errors are swallowed. */
+export async function logEmailSend(input: {
+  providerMessageId: string;
+  toEmail: string;
+  templateId?: string | null;
+  subject?: string | null;
+  provider?: string | null;
+}): Promise<void> {
+  if (!isSupabaseConfigured() || !input.providerMessageId) return;
+  try {
+    await getSupabase().from('email_log').insert({
+      provider_message_id: input.providerMessageId,
+      to_email: input.toEmail,
+      template_id: input.templateId ?? null,
+      subject: input.subject ?? null,
+      provider: input.provider ?? null,
+      status: 'sent',
+    });
+  } catch (err) {
+    console.warn('[email-log] insert skipped:', err instanceof Error ? err.message : err);
+  }
+}
+
+/** Stamp the real outcome onto the log row. Never downgrades (an out-of-order
+ *  'delivered' after 'clicked' won't clobber it). Best-effort. */
+export async function updateEmailLogStatus(
+  providerMessageId: string,
+  status: EmailLogStatus,
+  statusAt: string,
+  bounceMessage?: string | null,
+): Promise<void> {
+  if (!isSupabaseConfigured() || !providerMessageId) return;
+  try {
+    const sb = getSupabase();
+    const { data } = await sb
+      .from('email_log')
+      .select('id, status')
+      .eq('provider_message_id', providerMessageId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = (data ?? [])[0] as { id: string; status: string } | undefined;
+    if (!row) return;
+    if ((EMAIL_LOG_RANK[status] ?? 0) <= (EMAIL_LOG_RANK[row.status] ?? 0)) return;
+    await sb
+      .from('email_log')
+      .update({ status, status_at: statusAt, ...(bounceMessage ? { bounce_message: bounceMessage } : {}) })
+      .eq('id', row.id);
+  } catch (err) {
+    console.warn('[email-log] status update skipped:', err instanceof Error ? err.message : err);
+  }
+}
+
+/** Recent rows for the admin email-log view. */
+export async function listEmailLog(
+  opts: { limit?: number; status?: string; search?: string } = {},
+): Promise<EmailLogRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  let q = getSupabase()
+    .from('email_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(opts.limit ?? 200);
+  if (opts.status) q = q.eq('status', opts.status);
+  if (opts.search) q = q.ilike('to_email', `%${opts.search}%`);
+  const { data, error } = await q;
+  if (error) return [];
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    providerMessageId: r.provider_message_id as string,
+    toEmail: r.to_email as string,
+    templateId: (r.template_id as string | null) ?? null,
+    subject: (r.subject as string | null) ?? null,
+    provider: (r.provider as string | null) ?? null,
+    status: (r.status as EmailLogStatus) ?? 'sent',
+    statusAt: (r.status_at as string | null) ?? null,
+    bounceMessage: (r.bounce_message as string | null) ?? null,
+    createdAt: r.created_at as string,
+  }));
+}
+
 export async function findSignupByRecoveryMessageId(messageId: string): Promise<Signup | null> {
   if (!messageId) return null;
   if (isSupabaseConfigured()) {

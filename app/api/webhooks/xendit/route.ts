@@ -479,6 +479,10 @@ async function handleOtoPaid(event: XenditEvent) {
       // column with a stale snapshot that doesn't include hubAccount.
       ...(hubAccount ? { hubAccount } : {}),
       otoConfirmed: new Date().toISOString(),
+      // Persist the product ('oto' | 'oto2' | 'both'). The 1-on-1 CRM board
+      // keys off otoProduct — without this, Build-Session buyers pay but never
+      // appear on the board.
+      otoProduct,
       otoInvoiceId: event.id,
       otoExternalId: event.external_id,
       otoAmount: event.amount,
@@ -656,6 +660,8 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
       // — same anti-clobber spread as handleMainPaid / handleOtoPaid.
       ...(hubAccount ? { hubAccount } : {}),
       otoConfirmed: new Date().toISOString(),
+      // Persist the product so the 1-on-1 CRM board sees standalone buyers too.
+      otoProduct: product,
       otoInvoiceId: event.id,
       otoExternalId: externalId,
       otoConfirmationStatus: allEmailsOk ? 'sent' : 'failed_partial',

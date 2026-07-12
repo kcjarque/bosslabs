@@ -28,6 +28,7 @@ import {
   upgradeRecoveryEmailStatus,
   updateAdminSendStatus,
   updateSequenceSendStatus,
+  updateEmailLogStatus,
   type AdminSendStatus,
 } from '@/lib/db';
 
@@ -130,6 +131,15 @@ export async function POST(req: Request) {
     // event type (e.g. email.delivery_delayed).
     return NextResponse.json({ ok: true, ignored: true });
   }
+
+  // Unified email log — stamp EVERY email first (the per-flow matchers below
+  // each early-return on match, so this must run before them for 100% coverage).
+  await updateEmailLogStatus(
+    emailId,
+    newStatus as 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained',
+    event.created_at || new Date().toISOString(),
+    newStatus === 'bounced' ? (event.data?.bounce?.message || event.data?.bounce?.type || 'bounced') : null,
+  );
 
   // Try recovery-email path first (older feature, simpler match).
   const recoverySignup = await findSignupByRecoveryMessageId(emailId);

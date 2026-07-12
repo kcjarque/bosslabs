@@ -34,6 +34,7 @@ import {
   updateConfirmationStatus,
   suppressSignupEmail,
   recordSoftBounce,
+  updateEmailLogStatus,
   type AdminSendStatus,
 } from '@/lib/db';
 
@@ -155,7 +156,16 @@ export async function POST(req: Request) {
     if (!status || !messageId) {
       return NextResponse.json({ ok: true, ignored: true });
     }
-    const matched = await applyStatus(messageId, status, new Date().toISOString());
+    const at = new Date().toISOString();
+    const matched = await applyStatus(messageId, status, at);
+    // Unified email log — stamp the outcome on EVERY email, independent of the
+    // per-flow matchers above, so 100% of sends carry a live status.
+    await updateEmailLogStatus(
+      messageId,
+      status,
+      at,
+      status === 'bounced' ? (ses.bounce?.bouncedRecipients?.[0]?.diagnosticCode ?? 'bounced') : null,
+    );
 
     // HARD bounce (Permanent) or spam complaint → suppress the address so it
     // drops out of every dynamic list and all future sends. Transient (soft)

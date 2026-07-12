@@ -14,7 +14,8 @@ import {
 import { formatPHP, formatPHPWhole, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
 import { getCloserRecoveredSignupIds } from '@/lib/closers';
 import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
-import { sumDfyIncomeCentavos, sumDfyPendingCentavos, sumDfyMonthlyRetainerCentavos } from '@/lib/dfy-crm';
+import { sumDfyIncomeCentavos, sumDfyPendingCentavos, sumDfyMonthlyRetainerCentavos, listDfyRetainerClients } from '@/lib/dfy-crm';
+import { RetainerBreakdown } from '@/components/admin/RetainerBreakdown';
 import { isRecoveredPaid } from '@/lib/recovered';
 import { DailyChart } from '@/components/DailyChart';
 import { AdSpendRoasChart } from '@/components/AdSpendRoasChart';
@@ -75,6 +76,7 @@ const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
 const cachedSumDfyIncome = timed('dfy-income', unstable_cache(sumDfyIncomeCentavos, ['dashboard:dfy-income'], cacheOpts));
 const cachedSumDfyPending = timed('dfy-pending', unstable_cache(sumDfyPendingCentavos, ['dashboard:dfy-pending'], cacheOpts));
 const cachedSumDfyRetainer = timed('dfy-retainer', unstable_cache(sumDfyMonthlyRetainerCentavos, ['dashboard:dfy-retainer'], cacheOpts));
+const cachedListDfyRetainer = timed('dfy-retainer-list', unstable_cache(listDfyRetainerClients, ['dashboard:dfy-retainer-list'], cacheOpts));
 
 /* --------------------------------------------------------------------- */
 /* Analytics helpers                                                     */
@@ -319,6 +321,7 @@ async function DashboardBody({
     dfyIncomeAllCentavos,
     dfyPendingCentavos,
     dfyRetainerCentavos,
+    retainerClients,
   ] = await (async () => {
     const _allStart = performance.now();
     console.log(`[dash] body fetch start · period=${dashRange?.key ?? 'all'}`);
@@ -340,6 +343,7 @@ async function DashboardBody({
       cachedSumDfyIncome(),
       cachedSumDfyPending(),
       cachedSumDfyRetainer(),
+      cachedListDfyRetainer(),
     ]);
     console.log(`[dash] body fetch done in ${(performance.now() - _allStart).toFixed(0)}ms`);
     return result;
@@ -738,12 +742,15 @@ async function DashboardBody({
             sub={dfyPendingCentavos > 0 ? `cash collected · ${formatPHPWhole(dfyPendingCentavos)} still to collect` : 'cash collected'}
             tone={dfyIncomeCentavos > 0 ? 'green' : undefined}
           />
-          <StatCard
-            label="Monthly retainer"
-            value={formatPHPWhole(dfyRetainerCentavos)}
-            sub="recurring /mo · active DFY clients"
-            tone={dfyRetainerCentavos > 0 ? 'green' : undefined}
-          />
+          <RetainerBreakdown clients={retainerClients}>
+            <StatCard
+              label="Monthly retainer"
+              value={formatPHPWhole(dfyRetainerCentavos)}
+              sub="recurring /mo · active DFY clients"
+              action="View clients →"
+              tone={dfyRetainerCentavos > 0 ? 'green' : undefined}
+            />
+          </RetainerBreakdown>
           <StatCard
             label="Overall ROAS"
             value={overallRoas == null ? '—' : `${overallRoas.toFixed(2)}×`}
@@ -1219,6 +1226,7 @@ function StatCard({
   sub,
   tone,
   href,
+  action,
   trend,
 }: {
   label: string;
@@ -1226,6 +1234,9 @@ function StatCard({
   sub?: string;
   tone?: 'green' | 'amber' | 'orange';
   href?: string;
+  /** Interactive hint (e.g. "View clients →") for a card wrapped in a
+   *  client-side click handler; underlines on group-hover. */
+  action?: string;
   /** % change vs the prior period. Renders a ▲/▼ chip. null = no comparison. */
   trend?: number | null;
 }) {
@@ -1256,6 +1267,11 @@ function StatCard({
         </div>
       )}
       {sub && <div className="bl-private mt-2 text-[11px] text-slate-500">{sub}</div>}
+      {action && (
+        <div className="mt-2 text-[11px] font-medium text-cyan-600 group-hover:underline">
+          {action}
+        </div>
+      )}
       {href && (
         <div className="mt-2 text-[11px] text-cyan-600 underline-offset-4 hover:underline">
           View →

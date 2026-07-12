@@ -20,6 +20,7 @@ import {
   renderTemplate,
   isEmailAddressSuppressed,
   recordBlockedEmail,
+  logEmailSend,
   type EmailTemplate,
 } from './db';
 import { signUnsubscribeToken } from './admin-auth';
@@ -173,7 +174,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
     });
-    return r.ok ? { ok: true, id: r.id, provider: 'ses' } : { ok: false, error: `SES: ${r.error}` };
+    if (r.ok) {
+      // Unified email log — one row per send, stamped opened/clicked by the webhook.
+      await logEmailSend({ providerMessageId: r.id, toEmail: args.to, templateId: args.templateId ?? null, subject, provider: 'ses' });
+      return { ok: true, id: r.id, provider: 'ses' };
+    }
+    return { ok: false, error: `SES: ${r.error}` };
   }
 
   // Demo fallback — log redacted info and return ok so the funnel keeps moving.
@@ -221,6 +227,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       return { ok: false, error: `Resend ${res.status}: ${body}` };
     }
     const data = (await res.json()) as { id: string };
+    await logEmailSend({ providerMessageId: data.id, toEmail: args.to, templateId: args.templateId ?? null, subject, provider: 'resend' });
     return { ok: true, id: data.id, provider: 'resend' };
   } catch (err) {
     return {

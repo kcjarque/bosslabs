@@ -7,7 +7,7 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { getSignups } from './db';
 import { DFY_STAGES, type DfyStage, type DfyCard } from './dfy-stages';
-import { createProject } from './dfy';
+import { createProject, listProjects } from './dfy';
 
 export { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from './dfy-stages';
 
@@ -289,6 +289,64 @@ export async function sumDfyMonthlyRetainerCentavos(): Promise<number> {
     mrr += Math.max(0, row.retainer_centavos ?? 0);
   }
   return mrr;
+}
+
+/** One row per active retainer client — the breakdown behind the dashboard's
+ *  "Monthly retainer" MRR stat. Each closed-deal client with a retainer, its
+ *  amount /mo, and the linked DFY Ops project so the UI can deep-link to it.
+ *  Sorted highest retainer first. */
+export type DfyRetainerProject = { id: string; name: string; lane: string };
+export type DfyRetainerClient = {
+  cardId: string;
+  customerName: string;
+  retainerCentavos: number;
+  projects: DfyRetainerProject[];
+};
+
+export async function listDfyRetainerClients(): Promise<DfyRetainerClient[]> {
+  if (!isSupabaseConfigured()) return [];
+  const { data, error } = await getSupabase()
+    .from('dfy_crm_cards')
+    .select('id, name, stage, retainer_centavos, dfy_ops_project_id')
+    .eq('stage', 'closed_deal');
+  if (error) return [];
+  const rows = ((data ?? []) as {
+    id: string;
+    name: string;
+    retainer_centavos: number | null;
+    dfy_ops_project_id: string | null;
+  }[]).filter((r) => (r.retainer_centavos ?? 0) > 0);
+  if (rows.length === 0) return [];
+
+  // Match each retainer client to its DFY Ops project(s). Most cards were never
+  // ID-linked back to the Ops board, so we also match on customer name — that
+  // catches projects created straight in the board, and surfaces ALL of them
+  // when one client runs more than one brand under a single retainer.
+  const projects = await listProjects({ includeArchived: true });
+  const norm = (s: string | null) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+  return rows
+    .map((r) => {
+      const matched = new Map<string, (typeof projects)[number]>();
+      if (r.dfy_ops_project_id) {
+        const linked = projects.find((p) => p.id === r.dfy_ops_project_id);
+        if (linked) matched.set(linked.id, linked);
+      }
+      for (const p of projects) {
+        if (norm(p.customerName) === norm(r.name)) matched.set(p.id, p);
+      }
+      return {
+        cardId: r.id,
+        customerName: r.name || 'DFY client',
+        retainerCentavos: r.retainer_centavos ?? 0,
+        projects: [...matched.values()].map((p) => ({
+          id: p.id,
+          name: p.projectName || p.customerName || 'Project',
+          lane: p.lane,
+        })),
+      };
+    })
+    .sort((a, b) => b.retainerCentavos - a.retainerCentavos);
 }
 
 /** Existing customers (signups) for the "add from existing customer" search. */

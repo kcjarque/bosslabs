@@ -124,6 +124,8 @@ export async function POST(req: Request) {
         metadata: {
           ...(parent.metadata ?? {}),
           otoConfirmed: new Date().toISOString(),
+          // Persist product so a free (100%-off promo) 1-on-1 shows on the board.
+          otoProduct: body.product === 'oto2' ? 'oto2' : 'oto',
           otoExternalId: externalId,
           otoAmount: 0,
           otoPromoCode: promoApplied,
