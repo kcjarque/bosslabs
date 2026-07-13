@@ -539,18 +539,6 @@ export async function upgradeRecoveryEmailStatus(args: {
  * webhooks stamp delivered→opened→clicked→bounced onto the row by message-id.
  * All helpers are best-effort and NEVER throw — they run on the send hot path. */
 export type EmailLogStatus = 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained';
-export type EmailLogRow = {
-  id: string;
-  providerMessageId: string;
-  toEmail: string;
-  templateId: string | null;
-  subject: string | null;
-  provider: string | null;
-  status: EmailLogStatus;
-  statusAt: string | null;
-  bounceMessage: string | null;
-  createdAt: string;
-};
 const EMAIL_LOG_RANK: Record<string, number> = {
   sent: 1, delivered: 2, opened: 3, clicked: 4, bounced: 5, complained: 5,
 };
@@ -606,34 +594,6 @@ export async function updateEmailLogStatus(
   } catch (err) {
     console.warn('[email-log] status update skipped:', err instanceof Error ? err.message : err);
   }
-}
-
-/** Recent rows for the admin email-log view. */
-export async function listEmailLog(
-  opts: { limit?: number; status?: string; search?: string } = {},
-): Promise<EmailLogRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  let q = getSupabase()
-    .from('email_log')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(opts.limit ?? 200);
-  if (opts.status) q = q.eq('status', opts.status);
-  if (opts.search) q = q.ilike('to_email', `%${opts.search}%`);
-  const { data, error } = await q;
-  if (error) return [];
-  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-    id: r.id as string,
-    providerMessageId: r.provider_message_id as string,
-    toEmail: r.to_email as string,
-    templateId: (r.template_id as string | null) ?? null,
-    subject: (r.subject as string | null) ?? null,
-    provider: (r.provider as string | null) ?? null,
-    status: (r.status as EmailLogStatus) ?? 'sent',
-    statusAt: (r.status_at as string | null) ?? null,
-    bounceMessage: (r.bounce_message as string | null) ?? null,
-    createdAt: r.created_at as string,
-  }));
 }
 
 export async function findSignupByRecoveryMessageId(messageId: string): Promise<Signup | null> {
