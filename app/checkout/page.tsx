@@ -2,6 +2,7 @@ import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { CheckoutFlow, type CheckoutSession } from '@/components/CheckoutFlow';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
+import { TestimonialWall } from '@/components/TestimonialWall';
 import { PILLARS, STUDENT_BUILDS } from '@/lib/config';
 import { getWebinarInfo } from '@/lib/webinar';
 import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
@@ -124,6 +125,8 @@ export default async function CheckoutPage({
             </div>
           </div>
         </section>
+
+        <TestimonialWall />
 
         {/* What you'll learn — anchors hesitant buyers near the action */}
         <section className="border-t border-white/[0.05] py-16 sm:py-24">
