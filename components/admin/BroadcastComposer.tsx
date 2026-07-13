@@ -1,16 +1,29 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useState } from 'react';
 import { scheduleBroadcastAction, type BroadcastFormResult } from '@/app/admin/broadcasts/actions';
 
 export function BroadcastComposer({ lists }: { lists: { id: string; name: string }[] }) {
-  const [state, action, pending] = useActionState<BroadcastFormResult, FormData>(
-    scheduleBroadcastAction,
-    null,
-  );
+  // React 18 has no useActionState; drive the server action from a plain
+  // submit handler and track pending/result with useState (bulletproof — no
+  // useTransition async-pending ambiguity). Build FormData synchronously
+  // before the await so e.currentTarget is still live.
+  const [state, setState] = useState<BroadcastFormResult>(null);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    setPending(true);
+    try {
+      setState(await scheduleBroadcastAction(state, fd));
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
         <label className="mb-1 block text-[12px] font-medium text-slate-600">Subject</label>
         <input

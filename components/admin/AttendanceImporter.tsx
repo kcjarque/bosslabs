@@ -1,14 +1,29 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
 import { importAttendanceAction, type ImportResult } from '@/app/admin/attendance/actions';
 
 export function AttendanceImporter({ events }: { events: Array<{ id: string; name: string }> }) {
-  const [state, action, pending] = useActionState<ImportResult, FormData>(importAttendanceAction, null);
+  // React 18 has no useActionState — drive the server action from a plain
+  // submit handler, tracking pending/result with useState. FormData is built
+  // synchronously before the await so e.currentTarget stays live.
+  const [state, setState] = useState<ImportResult>(null);
+  const [pending, setPending] = useState(false);
   const [csv, setCsv] = useState('');
 
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    setPending(true);
+    try {
+      setState(await importAttendanceAction(state, fd));
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <form action={action} className="max-w-xl space-y-4">
+    <form onSubmit={onSubmit} className="max-w-xl space-y-4">
       <div>
         <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wider text-slate-600">Event</label>
         <select
