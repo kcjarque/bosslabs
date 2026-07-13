@@ -20,6 +20,7 @@ import { Logo } from './Logo';
 import { Mark } from './Mark';
 import { AppsStack, StarterPackMockup, TerminalMockup } from './Mockups';
 import { OurAppsShowcase } from './OurAppsShowcase';
+import { TestimonialWall } from './TestimonialWall';
 import { StickyMobileCta } from './StickyMobileCta';
 import {
   AUTHORITY,
@@ -45,6 +46,7 @@ export function OptInPage({ webinar }: { webinar: WebinarInfo }) {
         <AuthorityBar />
         <WhatIsSection />
         <OurAppsShowcase />
+        <TestimonialWall />
         <Pillars />
         <ManifestoBlock />
         <FoundersDetail webinar={webinar} />

@@ -21,22 +21,24 @@ export function TestimonialWall() {
           </p>
         </div>
 
-        <div className="mx-auto mt-10 max-w-5xl gap-4 [column-fill:_balance] columns-2 sm:columns-3 lg:columns-4">
-          {IMAGES.map((src, i) => (
-            <div
-              key={src}
-              className="mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={src}
-                alt={`BOSSLABS AI community result ${i + 1}`}
-                className="block w-full"
-                loading="lazy"
-              />
-            </div>
-          ))}
-        </div>
+      </div>
+
+      {/* Full-bleed masonry — spans the whole page width, like the reference wall. */}
+      <div className="mt-10 gap-3 px-3 [column-fill:_balance] columns-2 sm:columns-3 sm:gap-4 sm:px-4 lg:columns-4 xl:columns-5">
+        {IMAGES.map((src, i) => (
+          <div
+            key={src}
+            className="mb-3 break-inside-avoid overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] sm:mb-4 sm:rounded-2xl"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt={`BOSSLABS AI community result ${i + 1}`}
+              className="block w-full"
+              loading="lazy"
+            />
+          </div>
+        ))}
       </div>
     </section>
   );

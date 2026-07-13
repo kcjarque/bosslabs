@@ -79,6 +79,9 @@ export default async function CheckoutPage({
           />
         </section>
 
+        {/* Community reviews wall — social proof above the systems proof */}
+        <TestimonialWall />
+
         {/* Proof — real builds (bawal hao shao) */}
         <section className="border-t border-white/[0.05] py-14 sm:py-20">
           <div className="container-tight">
@@ -125,8 +128,6 @@ export default async function CheckoutPage({
             </div>
           </div>
         </section>
-
-        <TestimonialWall />
 
         {/* What you'll learn — anchors hesitant buyers near the action */}
         <section className="border-t border-white/[0.05] py-16 sm:py-24">
