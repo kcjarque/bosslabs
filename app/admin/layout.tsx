@@ -59,6 +59,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { href: '/admin/pending-payments', label: 'Pending payments', icon: 'pending' },
       { href: '/admin/crm', label: 'CRM', icon: 'crm' },
       { href: '/admin/contracts', label: 'Contracts', icon: 'crm' },
+      { href: '/admin/proposals', label: 'Proposals', icon: 'crm' },
       { href: '/admin/ndas', label: 'NDAs', icon: 'crm' },
       { href: '/admin/dfy', label: 'DFY Ops', icon: 'crm' },
       { href: '/admin/recordings', label: 'Recordings', icon: 'recordings' },
