@@ -43,6 +43,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
       { href: '/admin/ads', label: 'Ads', icon: 'ads' },
       { href: '/admin/funnels', label: 'Funnels', icon: 'funnels' },
       { href: '/admin/sequences', label: 'Sequences', icon: 'sequences' },
+      { href: '/admin/machine', label: 'The Machine', icon: 'dashboard' },
       { href: '/admin/templates', label: 'Templates', icon: 'templates' },
       { href: '/admin/messages/email', label: 'Email Logs', icon: 'emaillog' },
       { href: '/admin/messages/sms', label: 'SMS Logs', icon: 'smslog' },
