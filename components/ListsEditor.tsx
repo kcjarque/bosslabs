@@ -11,6 +11,8 @@ const FILTER_OPTIONS: { value: ListFilterType; label: string; hint: string }[] =
   { value: 'all_free', label: 'Free signups', hint: 'Source = free (no payment intent)' },
   { value: 'abandoned', label: 'Abandoned checkouts', hint: 'Paid source + still registered (no payment)' },
   { value: 'all_signups', label: 'Everyone', hint: 'Every signup (excludes unsubscribed)' },
+  { value: 'attended', label: 'Attended (after-webinar)', hint: 'Paid + showed up (event-scoped). Falls back to all-paid 14h after the webinar if attendance is never imported.' },
+  { value: 'no_show', label: 'No-show (after-webinar)', hint: 'Paid + registered but did not attend (event-scoped). Empty until Zoom attendance is imported.' },
 ];
 
 export function ListsEditor({

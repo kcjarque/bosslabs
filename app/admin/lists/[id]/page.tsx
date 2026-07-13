@@ -17,6 +17,8 @@ const FILTER_LABELS: Record<ListFilterType, string> = {
   all_free: 'Free signups',
   abandoned: 'Abandoned checkouts',
   all_signups: 'Everyone',
+  attended: 'Attended (after-webinar)',
+  no_show: 'No-show (after-webinar)',
 };
 
 export default async function ListMembersPage({

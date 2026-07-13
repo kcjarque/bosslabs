@@ -25,7 +25,7 @@ export async function getMachineStats(): Promise<MachineStats> {
     sb.from('signups').select('send_state, interest_tags, status'),
     sb.from('engagement_events').select('link_tag, channel').eq('event', 'click').gte('created_at', since),
     sb.from('survey_responses').select('id', { count: 'exact', head: true }),
-    sb.from('events').select('id, name').order('webinar_starts_at_iso', { ascending: false }).limit(4),
+    sb.from('events').select('id, name').order('starts_at_iso', { ascending: false }).limit(4),
   ]);
 
   const sendStates: Record<string, number> = {};

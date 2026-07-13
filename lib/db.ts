@@ -2145,7 +2145,13 @@ export type ListFilterType =
   | 'all_registered'
   | 'all_free'
   | 'all_signups'
-  | 'abandoned';
+  | 'abandoned'
+  // Attendance-split filters for the after-webinar drip (SPEC §1.2). Purpose-built
+  // and event-scoped: they only make sense on a list tied to one webinar. Both
+  // imply "paid" (only paid customers get the after-webinar ladder) and consult
+  // event_attendance. See computeListMembers for the +14h hold/fallback rules.
+  | 'attended'
+  | 'no_show';
 
 export type ListModel = {
   id: string;
@@ -2504,7 +2510,41 @@ export async function computeListMembers(
   }
   if (types.length === 0) return [];
   const all = await getSignups();
-  const predicates = types.map(filterPredicate);
+
+  // Attendance context — only fetched when an attendance-split filter is used.
+  // attended  = paid AND (marked attended  OR  attendance never imported and
+  //             we're >14h past the webinar → fallback: give everyone the full
+  //             ladder rather than let a forgotten import strand paid buyers).
+  // no_show   = paid AND attendance WAS imported AND not in the attended set.
+  //             Holds empty until import, so "you missed it" copy never reaches
+  //             someone who actually showed up.
+  const needsAttendance = types.includes('attended') || types.includes('no_show');
+  let attendedIds = new Set<string>();
+  let attendanceImported = false;
+  let fallbackToAttended = false;
+  if (needsAttendance && eventId && isSupabaseConfigured()) {
+    const sb = getSupabase();
+    const { data: att } = await sb
+      .from('event_attendance')
+      .select('contact_id')
+      .eq('event_id', eventId)
+      .eq('attended', true);
+    attendedIds = new Set((att ?? []).map((r: { contact_id: string }) => r.contact_id));
+    attendanceImported = attendedIds.size > 0;
+    if (!attendanceImported) {
+      const ev = await getEvent(eventId);
+      const startMs = ev?.startsAtIso ? Date.parse(ev.startsAtIso) : NaN;
+      if (!Number.isNaN(startMs)) fallbackToAttended = Date.now() > startMs + 14 * 60 * 60 * 1000;
+    }
+  }
+  const isPaid = (s: Signup) =>
+    s.status === 'paid' || s.status === 'attended' || s.status === 'no-show';
+  const predicates = types.map((t): ((s: Signup) => boolean) => {
+    if (t === 'attended') return (s) => isPaid(s) && (attendedIds.has(s.id) || fallbackToAttended);
+    if (t === 'no_show') return (s) => isPaid(s) && attendanceImported && !attendedIds.has(s.id);
+    return filterPredicate(t);
+  });
+
   return all.filter((s) => {
     // Standalone 1:1 buyers (bought via a shared /oto link, no webinar seat)
     // are not webinar leads — never sweep them into webinar lists/sequences,
