@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { getMachineStats } from '@/lib/machine-stats';
@@ -38,10 +39,15 @@ export default async function MachinePage() {
         <p className="mt-0.5 text-[12px] text-slate-500">Contacts who clicked an offer link — your warm list, tagged automatically.</p>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {offerOrder.map((k) => (
-            <div key={k} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <Link
+              key={k}
+              href={`/admin/machine/clicks?tag=${k}`}
+              className="group rounded-xl border border-slate-200 bg-slate-50/60 p-4 transition hover:border-cyan-300 hover:bg-cyan-50/60"
+            >
               <div className="tnum text-2xl font-semibold text-slate-900">{s.interest[k] ?? 0}</div>
-              <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{OFFER_LABEL[k]}</div>
-            </div>
+              <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500 group-hover:text-cyan-700">{OFFER_LABEL[k]}</div>
+              <div className="mt-1 text-[10px] font-medium text-slate-400 group-hover:text-cyan-600">See who clicked →</div>
+            </Link>
           ))}
         </div>
       </section>
@@ -62,7 +68,7 @@ export default async function MachinePage() {
       {/* Clicks by tag × channel */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-slate-900">Offer-link clicks — last 30 days</h2>
-        <p className="mt-0.5 text-[12px] text-slate-500">Which stories move people, and which channel drives the tap.</p>
+        <p className="mt-0.5 text-[12px] text-slate-500">Which stories move people, and which channel drives the tap. Click a tag to see exactly who tapped it.</p>
         {s.clicks.length === 0 ? (
           <p className="mt-4 text-[13px] text-slate-400">No clicks tracked yet — they&rsquo;ll appear as tagged links get tapped.</p>
         ) : (
@@ -78,8 +84,15 @@ export default async function MachinePage() {
               </thead>
               <tbody>
                 {s.clicks.map((c) => (
-                  <tr key={c.linkTag} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2 pr-4"><code className="text-[12px]">{c.linkTag}</code></td>
+                  <tr key={c.linkTag} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+                    <td className="py-2 pr-4">
+                      <Link
+                        href={`/admin/machine/clicks?tag=${encodeURIComponent(c.linkTag)}`}
+                        className="font-mono text-[12px] text-cyan-700 hover:underline"
+                      >
+                        {c.linkTag}
+                      </Link>
+                    </td>
                     <td className="tnum py-2 pr-4 text-slate-600">{c.email}</td>
                     <td className="tnum py-2 pr-4 text-slate-600">{c.sms}</td>
                     <td className="tnum py-2 font-semibold text-slate-900">{c.total}</td>

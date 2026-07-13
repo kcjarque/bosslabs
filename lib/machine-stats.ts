@@ -72,3 +72,57 @@ export async function getMachineStats(): Promise<MachineStats> {
     attendance,
   };
 }
+
+export type ClickEvent = {
+  contactId: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  linkTag: string;
+  channel: 'email' | 'sms';
+  createdAt: string;
+};
+
+/**
+ * Every click on a tagged link (optionally one tag), newest first, with the
+ * person resolved from signups in a single batched query (no N+1). Powers the
+ * /admin/machine/clicks drill-down — who tapped, exactly when, on which channel.
+ * All-time by default so the list is the complete picture behind a metric.
+ */
+export async function listClickEvents(tag: string | null, limit = 500): Promise<ClickEvent[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  let q = sb
+    .from('engagement_events')
+    .select('contact_id, link_tag, channel, created_at')
+    .eq('event', 'click')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (tag) q = q.eq('link_tag', tag);
+  const { data, error } = await q;
+  if (error || !data) return [];
+  const rows = data as Array<{ contact_id: string | null; link_tag: string | null; channel: string | null; created_at: string }>;
+
+  const ids = [...new Set(rows.map((r) => r.contact_id).filter((x): x is string => Boolean(x)))];
+  const people: Record<string, { name: string; email: string | null; phone: string | null }> = {};
+  if (ids.length) {
+    const { data: sig } = await sb.from('signups').select('id, first_name, last_name, email, phone').in('id', ids);
+    for (const s of (sig ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }>) {
+      const name = [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || 'Unknown';
+      people[s.id] = { name, email: s.email, phone: s.phone };
+    }
+  }
+
+  return rows.map((r) => {
+    const p = r.contact_id ? people[r.contact_id] : undefined;
+    return {
+      contactId: r.contact_id,
+      name: p?.name ?? 'Unknown contact',
+      email: p?.email ?? null,
+      phone: p?.phone ?? null,
+      linkTag: r.link_tag ?? '(untagged)',
+      channel: (r.channel === 'sms' ? 'sms' : 'email') as 'email' | 'sms',
+      createdAt: r.created_at,
+    };
+  });
+}
