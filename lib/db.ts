@@ -855,12 +855,25 @@ export async function getCustomerSequenceSends(
  */
 export const getSignups = cache(async (): Promise<Signup[]> => {
   if (isSupabaseConfigured()) {
-    const { data, error } = await getSupabase()
-      .from('signups')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw new Error(`Supabase getSignups: ${error.message}`);
-    return (data as SignupRow[]).map(rowToSignup);
+    const sb = getSupabase();
+    // Paginate: PostgREST caps a single response (default 1000 rows). Without
+    // this, once signups exceed the cap every audience calc — broadcasts,
+    // lifecycle, sequences, list membership — would silently truncate to the
+    // NEWEST 1000 and drop the oldest (dormant) contacts. Loop until a short page.
+    const PAGE = 1000;
+    const out: SignupRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb
+        .from('signups')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(`Supabase getSignups: ${error.message}`);
+      const rows = (data as SignupRow[]) ?? [];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    return out.map(rowToSignup);
   }
   const list = await readJson<Signup[]>('signups.json', []);
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -2528,16 +2541,20 @@ export async function computeListMembers(
   let fallbackToAttended = false;
   if (needsAttendance && eventId && isSupabaseConfigured()) {
     const sb = getSupabase();
-    const { data: att } = await sb
-      .from('event_attendance')
-      .select('contact_id')
-      .eq('event_id', eventId)
-      .eq('attended', true);
-    attendedIds = new Set((att ?? []).map((r: { contact_id: string }) => r.contact_id));
-    attendanceImported = attendedIds.size > 0;
+    // Read the attended set AND the explicit import flag. Inferring "imported"
+    // from attendedIds.size > 0 was wrong: a zero-MATCH import (Zoom emails that
+    // don't match any signup) looked identical to "never imported", so no_show
+    // never fired and the 14h fallback swept real no-shows into the attended
+    // ladder. events.attendance_imported_at is stamped on every import.
+    const [attRes, evRes] = await Promise.all([
+      sb.from('event_attendance').select('contact_id').eq('event_id', eventId).eq('attended', true),
+      sb.from('events').select('starts_at_iso, attendance_imported_at').eq('id', eventId).maybeSingle(),
+    ]);
+    attendedIds = new Set((attRes.data ?? []).map((r: { contact_id: string }) => r.contact_id));
+    const ev = evRes.data as { starts_at_iso?: string; attendance_imported_at?: string | null } | null;
+    attendanceImported = Boolean(ev?.attendance_imported_at);
     if (!attendanceImported) {
-      const ev = await getEvent(eventId);
-      const startMs = ev?.startsAtIso ? Date.parse(ev.startsAtIso) : NaN;
+      const startMs = ev?.starts_at_iso ? Date.parse(ev.starts_at_iso) : NaN;
       if (!Number.isNaN(startMs)) fallbackToAttended = Date.now() > startMs + 14 * 60 * 60 * 1000;
     }
   }

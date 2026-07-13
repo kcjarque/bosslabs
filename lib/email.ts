@@ -81,16 +81,14 @@ export async function renderEmail(
   const templates = await getEmailTemplates();
   const template = templates.find((t) => t.id === templateId);
   if (!template) return null;
-  // Fallback: if html is empty but markdown body exists, render the body
-  // through the BOSSLABS email shell on the fly. This lets the SQL seed
-  // ship templates with just markdown content — emails still work even
-  // before the admin opens the editor and clicks Save.
-  let html = template.html;
-  if ((!html || !html.trim()) && template.body && template.body.trim()) {
-    // Resolve {{link:*}} / {{screenshot:*}} macros on the MARKDOWN body (before
-    // it becomes HTML) so tracked links flow into <a href> and missing-asset
-    // screenshot blocks drop cleanly. Plain {{offer.*}}/{{firstName}} vars are
-    // still substituted below by renderTemplate.
+  // Prefer the markdown BODY whenever it exists — it's the source of truth AND
+  // the only path that resolves {{link:*}} / {{screenshot:*}} macros. The admin
+  // editor caches a rendered `html` on save; rendering from that stale html
+  // would ship dead href="" links for any macro-based template (renderTemplate
+  // would blank the leftover {{link:…}}). Fall back to html only for legacy
+  // html-only templates that have no body.
+  let html: string;
+  if (template.body && template.body.trim()) {
     let body = template.body;
     if (macro) {
       const resolved = await resolveEmailBodyMacros(body, macro);
@@ -100,6 +98,8 @@ export async function renderEmail(
       }
     }
     html = renderEmailMarkdown(body);
+  } else {
+    html = template.html;
   }
   return {
     template,

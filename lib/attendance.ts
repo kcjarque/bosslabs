@@ -41,6 +41,16 @@ export async function importZoomAttendance(
       unmatched.push(email);
     }
   }
+  // Stamp the event as imported — even on 0 matches. Lets the attendance split
+  // tell "imported, nobody matched" apart from "never imported": without this,
+  // a zero-match import would look un-imported and, 14h later, sweep genuine
+  // no-shows into the "thanks for attending" ladder.
+  if (isSupabaseConfigured()) {
+    await getSupabase()
+      .from('events')
+      .update({ attendance_imported_at: new Date().toISOString() })
+      .eq('id', eventId);
+  }
   return { total: emails.length, matched, unmatched };
 }
 

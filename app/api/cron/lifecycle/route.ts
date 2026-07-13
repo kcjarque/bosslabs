@@ -8,8 +8,15 @@
  *
  * "Dormant" = last_engaged_at (a tracked click) older than the threshold, or —
  * for contacts who never clicked — their signup date. Only LEADS are touched
- * (paid customers are never win-backed), and never the unsubscribed/suppressed
- * or anyone already in a real sequence (send_state != active_broadcast).
+ * (paid customers are excluded from BOTH win-back and sunset), never the
+ * unsubscribed/suppressed, and only those still in the `active_broadcast` state.
+ *
+ * Note: a click-triggered SOS enrollee keeps send_state='active_broadcast'
+ * (enrollByName doesn't touch send_state), so the state check alone doesn't
+ * exclude them — but enrolling in an SOS requires a recent CLICK, which sets
+ * last_engaged_at=now, so they can't be 60d-dormant while an SOS is live. That
+ * (plus the customer guard for the purchase-triggered Vault-onboarding drip)
+ * is what actually prevents a contact getting two concurrent drips.
  *
  * SAFE BY DEFAULT: the whole cron no-ops unless "Win-back · Dormant" is ACTIVE,
  * so nothing changes state (or sends) until Kyle flips win-back on.
@@ -73,9 +80,11 @@ export async function GET(req: Request) {
     if (Number.isNaN(lastMs)) continue;
     const dormantDays = (now - lastMs) / DAY;
 
-    // Sunset the truly dead (>90d) — stop broadcasting. Applies whether they're
-    // still active_broadcast or already in win-back.
-    if (dormantDays > SUNSET_DAYS && (state === 'active_broadcast' || state === 'in_winback')) {
+    // Sunset the truly dead (>90d) — stop broadcasting. LEADS ONLY: a paying
+    // customer is never sunset. last_engaged_at only bumps on a tracked-link
+    // click (not opens/purchases/logins), so a happy customer who simply never
+    // clicks would look "dead" and get silently dropped from every broadcast.
+    if (dormantDays > SUNSET_DAYS && !isCustomer(r.status) && (state === 'active_broadcast' || state === 'in_winback')) {
       await sb.from('signups').update({ send_state: 'sunset' }).eq('id', r.id);
       totals.sunset++;
       continue;
