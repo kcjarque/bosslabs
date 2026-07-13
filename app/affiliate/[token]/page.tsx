@@ -88,8 +88,9 @@ export default async function AffiliateDashboard({
     stats.clicks > 0 ? ((stats.paidConversions / stats.clicks) * 100).toFixed(1) : '0.0';
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
+    <div className="min-h-dvh bg-slate-50 px-4 py-10">
       <div className="mx-auto max-w-2xl">
+        {/* ── Greeting — frames BOTH earning paths ── */}
         <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-700">
           BOSSLABS AI · Affiliate
         </div>
@@ -97,54 +98,12 @@ export default async function AffiliateDashboard({
           Hi {aff.name.split(' ')[0]} 👋
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          You earn <strong className="text-slate-700">{rate}</strong>. You get credited for
-          anyone who buys within 15 days of their first click.
+          Two ways you get paid: the Facebook ads we run for you, and <strong className="text-slate-700">{rate}</strong>{' '}
+          for anyone you refer within 15 days of their first click.
         </p>
 
-        {/* Stats — top priority */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Card label="Clicks" value={String(stats.clicks)} />
-          <Card label="Signups" value={String(stats.referredSignups)} />
-          <Card label="Sales (paid)" value={String(stats.paidConversions)} />
-          <Card label="Conversion" value={`${convRate}%`} />
-          <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
-          <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
-        </div>
-
-        {/* Share link */}
-        <div className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your link</div>
-          <CopyLink url={link} />
-          <p className="mt-2 text-xs text-slate-400">
-            Share it anywhere. The first link someone clicks is the one that gets credited.
-          </p>
-        </div>
-
-        {/* Testimonial videos — affiliate uploads, we run ads to them */}
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-            Your testimonial videos
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Record a short, honest video about your experience. We put real ad budget behind it — and
-            every sale it drives pays you. Your words, our spend, your payday.
-          </p>
-          <div className="mt-3">
-            <AffiliateVideoUpload
-              token={params.token}
-              initialVideos={videos.map((v) => ({
-                id: v.id,
-                originalName: v.originalName,
-                sizeBytes: v.sizeBytes,
-                url: v.url,
-                createdAt: v.createdAt,
-              }))}
-            />
-          </div>
-        </div>
-
-        {/* Your ads — impressions + earnings from the FB ads we run for you */}
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* ── 1. YOUR ADS — the active earner, leads the page ── */}
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your ads</div>
           <p className="mt-1 text-xs text-slate-500">
             The Facebook ads we run for you. You earn{' '}
@@ -155,20 +114,29 @@ export default async function AffiliateDashboard({
           {!adStats ? (
             <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
               <p className="text-[13px] text-slate-500">
-                No ads connected yet. Once we link your Facebook ads, your views, earnings and commission show up
-                here automatically.
+                No ads yet. Upload a testimonial video below — we&rsquo;ll run Facebook ads to it, and you earn{' '}
+                <strong className="text-slate-700">{aff.adCommissionPercent}%</strong> of every peso they generate.
               </p>
             </div>
           ) : (
             <>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {/* commission hero — the money, big */}
+              <div className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
+                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-cyan-700">
+                  Your commission · {adStats.windowLabel.toLowerCase()}
+                </div>
+                <div className="mt-1 font-serif text-4xl tracking-tight text-slate-900">
+                  {formatPHP(Math.round(adStats.totals.commission * 100))}
+                </div>
+                <div className="mt-1 text-[12px] text-slate-500">
+                  {aff.adCommissionPercent}% of {formatPHP(Math.round(adStats.totals.revenue * 100))} in ad revenue
+                </div>
+              </div>
+
+              {/* supporting stats */}
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <Card label="Views" value={compactNum(adStats.totals.impressions)} />
                 <Card label="Ad revenue" value={formatPHP(Math.round(adStats.totals.revenue * 100))} />
-                <Card
-                  label={`Your commission (${aff.adCommissionPercent}%)`}
-                  value={formatPHP(Math.round(adStats.totals.commission * 100))}
-                  accent
-                />
               </div>
 
               <div className="mt-5">
@@ -206,29 +174,72 @@ export default async function AffiliateDashboard({
                 </div>
               )}
               <p className="mt-2 text-[11px] text-slate-400">
-                {adStats.windowLabel} · updates live from Facebook. Commission is on the revenue the pixel
-                attributes to your ads.
+                {adStats.windowLabel} · pulled from Facebook. Commission is on the revenue the pixel attributes to
+                your ads.
               </p>
             </>
           )}
+        </section>
+
+        {/* ── 2. Testimonial videos — the input that feeds the ads ── */}
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+            Your testimonial videos
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Record a short, honest video about your experience. We put real ad budget behind it — every peso it
+            earns pays you. Your words, our spend, your payday.
+          </p>
+          <div className="mt-3">
+            <AffiliateVideoUpload
+              token={params.token}
+              initialVideos={videos.map((v) => ({
+                id: v.id,
+                originalName: v.originalName,
+                sizeBytes: v.sizeBytes,
+                url: v.url,
+                createdAt: v.createdAt,
+              }))}
+            />
+          </div>
+        </section>
+
+        {/* ── 3. Referrals — the second earning path ── */}
+        <div className="mt-8 text-[11px] uppercase tracking-[0.16em] text-slate-400">Referrals</div>
+
+        {/* Share link */}
+        <section className="mt-2 rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your link</div>
+          <CopyLink url={link} />
+          <p className="mt-2 text-xs text-slate-400">
+            Share it anywhere. The first link someone clicks is the one that gets credited.
+          </p>
+        </section>
+
+        {/* Referral numbers */}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Card label="Clicks" value={String(stats.clicks)} />
+          <Card label="Signups" value={String(stats.referredSignups)} />
+          <Card label="Sales (paid)" value={String(stats.paidConversions)} />
+          <Card label="Conversion" value={`${convRate}%`} />
+          <Card label="Pending payout" value={formatPHP(stats.earningsPendingCentavos)} accent />
+          <Card label="Paid out" value={formatPHP(stats.earningsPaidCentavos)} />
         </div>
 
         {/* Link builder — deep links + campaign tags */}
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-            Build a custom link
-          </div>
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Build a custom link</div>
           <p className="mt-1 text-xs text-slate-400">
             Send people to a specific page and tag your campaign — then see which one converts below.
           </p>
           <div className="mt-3">
             <AffiliateLinkBuilder base={PUBLIC_SITE_URL} code={aff.code} />
           </div>
-        </div>
+        </section>
 
         {/* Per-campaign performance */}
         {subRows.length > 0 && (
-          <div className="mt-6">
+          <div className="mt-4">
             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
               Your campaigns — what&rsquo;s converting
             </div>
@@ -257,9 +268,9 @@ export default async function AffiliateDashboard({
           </div>
         )}
 
-        {/* Live events the affiliate is promoting */}
+        {/* ── 4. Resources — events, promo kit, leaderboard ── */}
         {upcoming.length > 0 && (
-          <div className="mt-6">
+          <div className="mt-8">
             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
               What&rsquo;s on — events you&rsquo;re promoting
             </div>
@@ -282,7 +293,6 @@ export default async function AffiliateDashboard({
           </div>
         )}
 
-        {/* Promo kit */}
         {hasResources && (
           <div className="mt-6">
             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
@@ -330,7 +340,6 @@ export default async function AffiliateDashboard({
           </div>
         )}
 
-        {/* Leaderboard */}
         {leaderboard.length > 0 && (
           <div className="mt-6">
             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
@@ -364,8 +373,8 @@ export default async function AffiliateDashboard({
           </div>
         )}
 
-        {/* Get notified */}
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* ── 5. Settings — get notified ── */}
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
             Get notified the moment you earn
           </div>
@@ -400,10 +409,10 @@ export default async function AffiliateDashboard({
             For Telegram alerts: open Telegram, message <span className="font-mono">@userinfobot</span> to get your
             chat ID, then paste it above.
           </p>
-        </div>
+        </section>
 
         <p className="mt-6 text-center text-[11px] text-slate-400">
-          Updated live. Questions about a payout? Message the BOSSLABS team.
+          Questions about a payout? Message the BOSSLABS team.
         </p>
       </div>
     </div>
