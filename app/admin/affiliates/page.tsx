@@ -8,6 +8,9 @@ import {
   PUBLIC_SITE_URL,
   type Affiliate,
 } from '@/lib/affiliates';
+import { listAllAdLinks } from '@/lib/affiliate-ads';
+import { getAdsReportCached } from '@/lib/meta-ads';
+import { AffiliateAdManager, type AdPickItem } from '@/components/admin/AffiliateAdManager';
 import { formatPHP } from '@/lib/config';
 import {
   createAffiliateAction,
@@ -35,6 +38,28 @@ export default async function AffiliatesPage() {
   const videos = await listAllAffiliateVideos();
   const stats = await Promise.all(affiliates.map((a) => getAffiliateStats(a, commissions)));
   const byId = new Map(affiliates.map((a) => [a.id, a]));
+
+  // Meta ads (for the per-affiliate ad picker) + existing links. One shared
+  // cached Meta call; links are a single small query.
+  const [adsReport, allAdLinks] = await Promise.all([getAdsReportCached('all'), listAllAdLinks()]);
+  const adPickItems: AdPickItem[] = adsReport.configured
+    ? adsReport.ads
+        .map((ad) => ({
+          id: ad.id,
+          name: ad.name,
+          active: ad.active,
+          thumbnailUrl: ad.thumbnailUrl ?? null,
+          impressions: ad.impressions,
+          revenue: ad.spend * (ad.roas ?? 0),
+        }))
+        .sort((x, y) => y.revenue - x.revenue)
+    : [];
+  const linkedByAff: Record<string, string[]> = {};
+  const affsByAd: Record<string, string[]> = {};
+  for (const l of allAdLinks) {
+    (linkedByAff[l.affiliateId] ??= []).push(l.adId);
+    (affsByAd[l.adId] ??= []).push(l.affiliateId);
+  }
 
   const totalPending = commissions
     .filter((c) => c.status === 'pending')
@@ -196,6 +221,14 @@ export default async function AffiliatesPage() {
             const s = stats[i];
             const share = `${base}/r/${a.code}`;
             const dash = `${base}/affiliate/${a.dashboardToken}`;
+            const linkedAdIds = linkedByAff[a.id] ?? [];
+            const takenByOther: Record<string, string[]> = {};
+            for (const adId of Object.keys(affsByAd)) {
+              const others = affsByAd[adId]
+                .filter((id) => id !== a.id)
+                .map((id) => byId.get(id)?.name ?? 'another');
+              if (others.length) takenByOther[adId] = others;
+            }
             return (
               <div key={a.id} className="card">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -232,6 +265,13 @@ export default async function AffiliatesPage() {
                   <Stat label="Pending ₱" value={formatPHP(s.earningsPendingCentavos)} />
                   <Stat label="Paid out ₱" value={formatPHP(s.earningsPaidCentavos)} />
                 </div>
+                <AffiliateAdManager
+                  affiliateId={a.id}
+                  adCommissionPercent={a.adCommissionPercent}
+                  ads={adPickItems}
+                  linkedAdIds={linkedAdIds}
+                  takenByOther={takenByOther}
+                />
               </div>
             );
           })}

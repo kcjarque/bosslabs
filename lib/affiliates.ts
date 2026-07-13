@@ -58,6 +58,8 @@ export type Affiliate = {
   telegramChatId: string;
   notifyEmail: boolean;
   notifyTelegram: boolean;
+  /** % of linked-ad pixel revenue this affiliate earns (default 5). */
+  adCommissionPercent: number;
 };
 
 type AffiliateRow = {
@@ -73,6 +75,7 @@ type AffiliateRow = {
   telegram_chat_id: string | null;
   notify_email: boolean | null;
   notify_telegram: boolean | null;
+  ad_commission_percent: number | string | null;
 };
 
 function rowToAffiliate(r: AffiliateRow): Affiliate {
@@ -89,6 +92,7 @@ function rowToAffiliate(r: AffiliateRow): Affiliate {
     telegramChatId: r.telegram_chat_id ?? '',
     notifyEmail: r.notify_email ?? true,
     notifyTelegram: r.notify_telegram ?? false,
+    adCommissionPercent: r.ad_commission_percent != null ? Number(r.ad_commission_percent) : 5,
   };
 }
 
@@ -258,6 +262,7 @@ export async function updateAffiliate(
     commissionType: CommissionType;
     commissionValue: number;
     active: boolean;
+    adCommissionPercent: number;
   }>,
 ): Promise<void> {
   if (!isSupabaseConfigured()) return;
@@ -267,6 +272,7 @@ export async function updateAffiliate(
   if (patch.commissionType !== undefined) row.commission_type = patch.commissionType;
   if (patch.commissionValue !== undefined) row.commission_value = patch.commissionValue;
   if (patch.active !== undefined) row.active = patch.active;
+  if (patch.adCommissionPercent !== undefined) row.ad_commission_percent = patch.adCommissionPercent;
   const { error } = await getSupabase().from('affiliates').update(row).eq('id', id);
   if (error) throw new Error(`updateAffiliate: ${error.message}`);
 }

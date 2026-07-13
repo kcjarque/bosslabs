@@ -387,3 +387,65 @@ export async function syncAdSpendDaily(
     return { synced, error: String(err) };
   }
 }
+
+/** One ad's metrics for a single day. Revenue = pixel-tracked purchase value
+ *  (action_values, which equals spend × purchase_roas). Amounts in pesos. */
+export type AdDailyRow = {
+  date: string; // YYYY-MM-DD
+  adId: string;
+  adName: string;
+  impressions: number;
+  spend: number;
+  revenue: number;
+};
+
+/**
+ * Per-AD daily insights for a specific set of ads (level=ad, time_increment=1),
+ * filtered server-side to the given ad ids. Powers the affiliate dashboard's
+ * "your ads" view: daily impressions + pixel-tracked revenue for the ads linked
+ * to that affiliate. Live (no storage) — returns [] if the token is missing or
+ * no ids are given. Follows Graph paging.
+ */
+export async function getAdDailyInsights(
+  adIds: string[],
+  preset: 'last_7d' | 'last_30d' | 'last_90d' | 'maximum' = 'last_30d',
+): Promise<AdDailyRow[]> {
+  const token = process.env.META_ADS_TOKEN;
+  if (!token || adIds.length === 0) return [];
+  const filtering = JSON.stringify([{ field: 'ad.id', operator: 'IN', value: adIds }]);
+  const fields = 'ad_id,ad_name,impressions,spend,action_values';
+  let url =
+    `https://graph.facebook.com/${GRAPH_VERSION}/${CAMPAIGN_ID}/insights` +
+    `?level=ad&time_increment=1&date_preset=${preset}` +
+    `&fields=${encodeURIComponent(fields)}` +
+    `&filtering=${encodeURIComponent(filtering)}` +
+    `&limit=500&access_token=${encodeURIComponent(token)}`;
+  const out: AdDailyRow[] = [];
+  try {
+    for (let guard = 0; guard < 25 && url; guard++) {
+      const res = await fetch(url, { cache: 'no-store' });
+      const j = (await res.json()) as {
+        data?: Array<Record<string, unknown>>;
+        paging?: { next?: string };
+        error?: unknown;
+      };
+      if (j.error || !Array.isArray(j.data)) break;
+      for (const r of j.data) {
+        const av = r.action_values as Array<{ action_type?: string; value?: unknown }> | undefined;
+        const purchase = av?.find((x) => x.action_type === 'purchase' || x.action_type === 'omni_purchase');
+        out.push({
+          date: String(r.date_start ?? ''),
+          adId: String(r.ad_id ?? ''),
+          adName: String(r.ad_name ?? r.ad_id ?? ''),
+          impressions: num(r.impressions),
+          spend: num(r.spend),
+          revenue: purchase ? num(purchase.value) : 0,
+        });
+      }
+      url = j.paging?.next ?? '';
+    }
+  } catch {
+    /* live fetch failed — return whatever we gathered (possibly []) */
+  }
+  return out;
+}

@@ -11,6 +11,8 @@ import {
   getAffiliateProgram,
   type CommissionType,
 } from '@/lib/affiliates';
+import { setAffiliateAds } from '@/lib/affiliate-ads';
+import { getAdsReportCached } from '@/lib/meta-ads';
 
 export async function saveAffiliateProgramAction(formData: FormData): Promise<void> {
   requireAdmin();
@@ -65,5 +67,25 @@ export async function toggleAffiliateAction(formData: FormData): Promise<void> {
 export async function markCommissionPaidAction(formData: FormData): Promise<void> {
   requireAdmin();
   await markCommissionPaid(String(formData.get('id') ?? ''));
+  revalidatePath('/admin/affiliates');
+}
+
+/** Link the checked Meta ads to an affiliate + save their ad-commission rate.
+ *  We resolve ad names from the live (cached) report so each link snapshots a
+ *  readable name. */
+export async function saveAffiliateAdsAction(formData: FormData): Promise<void> {
+  requireAdmin();
+  const affiliateId = String(formData.get('affiliateId') ?? '');
+  if (!affiliateId) throw new Error('affiliateId required');
+  const adCommissionPercent = Math.max(0, Number(formData.get('adCommissionPercent') ?? 5));
+  const checkedIds = formData.getAll('adId').map(String).filter(Boolean);
+
+  const report = await getAdsReportCached('all');
+  const nameById = new Map<string, string>();
+  if (report.configured) for (const ad of report.ads) nameById.set(ad.id, ad.name);
+  const ads = checkedIds.map((adId) => ({ adId, adName: nameById.get(adId) ?? adId }));
+
+  await setAffiliateAds(affiliateId, ads);
+  await updateAffiliate(affiliateId, { adCommissionPercent });
   revalidatePath('/admin/affiliates');
 }

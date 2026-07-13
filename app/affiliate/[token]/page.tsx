@@ -9,12 +9,14 @@ import {
   listAffiliateVideos,
   PUBLIC_SITE_URL,
 } from '@/lib/affiliates';
+import { listAffiliateAdLinks, getAffiliateAdStats } from '@/lib/affiliate-ads';
 import { getEvents } from '@/lib/db';
 import { formatPHP } from '@/lib/config';
 import { CopyLink } from '@/components/CopyLink';
 import { CopyButton } from '@/components/CopyButton';
 import { AffiliateLinkBuilder } from '@/components/AffiliateLinkBuilder';
 import { AffiliateVideoUpload } from '@/components/AffiliateVideoUpload';
+import { AffiliateAdsChart } from '@/components/AffiliateAdsChart';
 import { updateAffiliateContactAction } from './actions';
 
 function formatEventDate(iso: string): string {
@@ -56,6 +58,14 @@ export default async function AffiliateDashboard({
   const hasResources = Boolean(program.swipeCopy || program.assetsUrl || program.onePagerUrl);
   const leaderboard = await getLeaderboard(5);
   const videos = await listAffiliateVideos(aff.id);
+
+  // Linked Meta ads → live impressions + pixel revenue + their commission.
+  const adLinks = await listAffiliateAdLinks(aff.id);
+  const adStats = adLinks.length
+    ? await getAffiliateAdStats(adLinks.map((l) => l.adId), aff.adCommissionPercent)
+    : null;
+  const compactNum = (n: number) =>
+    new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 
   // Per-campaign (sub-id) performance from this affiliate's own sales.
   const myCommissions = await listCommissions(aff.id);
@@ -131,6 +141,76 @@ export default async function AffiliateDashboard({
               }))}
             />
           </div>
+        </div>
+
+        {/* Your ads — impressions + earnings from the FB ads we run for you */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Your ads</div>
+          <p className="mt-1 text-xs text-slate-500">
+            The Facebook ads we run for you. You earn{' '}
+            <strong className="text-slate-700">{aff.adCommissionPercent}%</strong> of the revenue they generate,
+            tracked by the FB pixel.
+          </p>
+
+          {!adStats ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+              <p className="text-[13px] text-slate-500">
+                No ads connected yet. Once we link your Facebook ads, your views, earnings and commission show up
+                here automatically.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Card label="Views" value={compactNum(adStats.totals.impressions)} />
+                <Card label="Ad revenue" value={formatPHP(Math.round(adStats.totals.revenue * 100))} />
+                <Card
+                  label={`Your commission (${aff.adCommissionPercent}%)`}
+                  value={formatPHP(Math.round(adStats.totals.commission * 100))}
+                  accent
+                />
+              </div>
+
+              <div className="mt-5">
+                <AffiliateAdsChart daily={adStats.daily} />
+              </div>
+
+              {adStats.perAd.length > 0 && (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-left text-[12.5px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[10.5px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1.5 pr-3 font-medium">Ad</th>
+                        <th className="py-1.5 pr-3 text-right font-medium">Views</th>
+                        <th className="py-1.5 pr-3 text-right font-medium">Revenue</th>
+                        <th className="py-1.5 text-right font-medium">Your cut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adStats.perAd.map((ad) => (
+                        <tr key={ad.adId} className="border-b border-slate-50 last:border-0">
+                          <td className="py-1.5 pr-3 text-slate-700">{ad.adName}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
+                            {ad.impressions.toLocaleString()}
+                          </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
+                            {formatPHP(Math.round(ad.revenue * 100))}
+                          </td>
+                          <td className="py-1.5 text-right font-semibold tabular-nums text-emerald-700">
+                            {formatPHP(Math.round(ad.commission * 100))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-slate-400">
+                {adStats.windowLabel} · updates live from Facebook. Commission is on the revenue the pixel
+                attributes to your ads.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Link builder — deep links + campaign tags */}
