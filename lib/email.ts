@@ -196,7 +196,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   // Retrofit offer/funnel links → tracked redirects (§5.2). Non-offer links and
   // the unsubscribe link are left untouched; a missing contactId is a no-op.
-  html = rewriteEmailLinks(html, contactId, siteUrl());
+  html = rewriteEmailLinks(html, contactId, siteUrl(), args.templateId ?? null);
 
   // ---- Provider: Amazon SES (opt-in via settings.emailProvider = 'ses') ----
   // Same from identity + deliverability headers as the Resend path; the AWS

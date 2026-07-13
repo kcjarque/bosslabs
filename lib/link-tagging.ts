@@ -60,15 +60,23 @@ export function matchTag(rawUrl: string): string | null {
 }
 
 /** Rewrite offer/funnel <a href> links in a rendered email to tracked links.
- *  No contactId → leave links direct (can't attribute a click to nobody). */
-export function rewriteEmailLinks(html: string, contactId: string | null, siteUrl: string): string {
+ *  No contactId → leave links direct (can't attribute a click to nobody).
+ *  templateKey (when known) rides along as `&k=` so a click records which
+ *  email it came from — powering the "From email" column on the click log. */
+export function rewriteEmailLinks(
+  html: string,
+  contactId: string | null,
+  siteUrl: string,
+  templateKey?: string | null,
+): string {
   if (!contactId) return html;
+  const kParam = templateKey ? `&k=${encodeURIComponent(templateKey)}` : '';
   return html.replace(/href="([^"]+)"/g, (whole, url: string) => {
     // Don't double-wrap already-tracked links.
     if (url.includes('/api/l/') || url.includes('/l/')) return whole;
     const tag = matchTag(url);
     if (!tag) return whole;
-    return `href="${siteUrl}/api/l/${tag}?c=${encodeURIComponent(contactId)}&u=${encodeURIComponent(url)}"`;
+    return `href="${siteUrl}/api/l/${tag}?c=${encodeURIComponent(contactId)}&u=${encodeURIComponent(url)}${kParam}"`;
   });
 }
 

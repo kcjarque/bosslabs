@@ -16,12 +16,13 @@ export async function GET(req: Request, { params }: { params: { tag: string } })
   const tag = params.tag;
   const sp = new URL(req.url).searchParams;
   const contactId = sp.get('c');
+  const templateKey = sp.get('k'); // which email carried the link (see rewriteEmailLinks)
   // Preserve the exact destination when it's on our allow-list; else fall back
   // to the tag's canonical target (so a link can never point at a stale price).
   const target = safeRedirectU(sp.get('u')) ?? (await resolveTagTarget(tag));
   // Await the writes — the tracking IS the point of this hop; a small delay on a
   // click redirect is fine, and both helpers are best-effort (never throw).
-  await logEngagementEvent({ contactId, channel: 'email', event: 'click', linkTag: tag });
+  await logEngagementEvent({ contactId, channel: 'email', event: 'click', linkTag: tag, templateKey });
   if (contactId) {
     await tagContactFromClick(contactId, tag);
     // Click-triggered SOS enrollment (§6-9). No-op unless the offer's SOS

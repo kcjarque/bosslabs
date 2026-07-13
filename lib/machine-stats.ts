@@ -5,6 +5,7 @@
  * vault-downsell / reviews land as those features ship.
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { getEmailTemplates } from './db';
 
 export type MachineStats = {
   sendStates: Record<string, number>;
@@ -79,6 +80,10 @@ export type ClickEvent = {
   email: string | null;
   phone: string | null;
   linkTag: string;
+  /** The email this link was clicked from — template key + friendly name.
+   *  Null for clicks logged before source-template capture, or for SMS. */
+  templateKey: string | null;
+  templateName: string | null;
   channel: 'email' | 'sms';
   createdAt: string;
 };
@@ -94,14 +99,20 @@ export async function listClickEvents(tag: string | null, limit = 500): Promise<
   const sb = getSupabase();
   let q = sb
     .from('engagement_events')
-    .select('contact_id, link_tag, channel, created_at')
+    .select('contact_id, link_tag, template_key, channel, created_at')
     .eq('event', 'click')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (tag) q = q.eq('link_tag', tag);
   const { data, error } = await q;
   if (error || !data) return [];
-  const rows = data as Array<{ contact_id: string | null; link_tag: string | null; channel: string | null; created_at: string }>;
+  const rows = data as Array<{
+    contact_id: string | null;
+    link_tag: string | null;
+    template_key: string | null;
+    channel: string | null;
+    created_at: string;
+  }>;
 
   const ids = [...new Set(rows.map((r) => r.contact_id).filter((x): x is string => Boolean(x)))];
   const people: Record<string, { name: string; email: string | null; phone: string | null }> = {};
@@ -113,6 +124,14 @@ export async function listClickEvents(tag: string | null, limit = 500): Promise<
     }
   }
 
+  // Resolve template keys to friendly names (best-effort; unknown keys show raw).
+  const tmplName: Record<string, string> = {};
+  try {
+    for (const t of await getEmailTemplates()) tmplName[t.id] = t.name;
+  } catch {
+    /* templates unavailable — fall back to raw key */
+  }
+
   return rows.map((r) => {
     const p = r.contact_id ? people[r.contact_id] : undefined;
     return {
@@ -121,8 +140,86 @@ export async function listClickEvents(tag: string | null, limit = 500): Promise<
       email: p?.email ?? null,
       phone: p?.phone ?? null,
       linkTag: r.link_tag ?? '(untagged)',
+      templateKey: r.template_key ?? null,
+      templateName: r.template_key ? tmplName[r.template_key] ?? r.template_key : null,
       channel: (r.channel === 'sms' ? 'sms' : 'email') as 'email' | 'sms',
       createdAt: r.created_at,
     };
   });
+}
+
+export type DripRow = {
+  templateId: string;
+  name: string;
+  subject: string;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  /** opened / delivered — subject-line health. */
+  openRate: number;
+  /** clicked / delivered — body/CTA health. */
+  clickRate: number;
+};
+
+const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, opened: 3, clicked: 4 };
+
+/**
+ * Per-email drip funnel from email_log: for each template, how many were sent,
+ * delivered, opened and clicked (SES lifecycle, never-downgraded so the row's
+ * status is the furthest it reached). Powers /admin/machine/drip so a weak
+ * subject (low open rate) or weak body (low click rate) is obvious at a glance.
+ * Aggregated in JS over paged reads — email_log is 2 tiny columns here.
+ */
+export async function getDripPerformance(): Promise<DripRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const agg: Record<string, { sent: number; delivered: number; opened: number; clicked: number; bounced: number }> = {};
+  for (let from = 0; from <= 100_000; from += 1000) {
+    const { data, error } = await sb
+      .from('email_log')
+      .select('template_id, status')
+      .order('created_at', { ascending: false })
+      .range(from, from + 999);
+    if (error || !data || data.length === 0) break;
+    for (const r of data as Array<{ template_id: string | null; status: string | null }>) {
+      const id = r.template_id;
+      if (!id) continue; // skip untemplated raw sends / broadcasts
+      const a = (agg[id] ??= { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 });
+      a.sent++;
+      const st = r.status ?? 'sent';
+      if (st === 'bounced') {
+        a.bounced++;
+        continue;
+      }
+      const rank = STATUS_RANK[st] ?? 1;
+      if (rank >= 2) a.delivered++;
+      if (rank >= 3) a.opened++;
+      if (rank >= 4) a.clicked++;
+    }
+    if (data.length < 1000) break;
+  }
+
+  const nameById: Record<string, { name: string; subject: string }> = {};
+  try {
+    for (const t of await getEmailTemplates()) nameById[t.id] = { name: t.name, subject: t.subject };
+  } catch {
+    /* templates unavailable — fall back to the raw id */
+  }
+
+  return Object.entries(agg)
+    .map(([templateId, a]) => ({
+      templateId,
+      name: nameById[templateId]?.name ?? templateId,
+      subject: nameById[templateId]?.subject ?? '',
+      sent: a.sent,
+      delivered: a.delivered,
+      opened: a.opened,
+      clicked: a.clicked,
+      bounced: a.bounced,
+      openRate: a.delivered ? a.opened / a.delivered : 0,
+      clickRate: a.delivered ? a.clicked / a.delivered : 0,
+    }))
+    .sort((x, y) => y.sent - x.sent);
 }

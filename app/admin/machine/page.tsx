@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { PageHeader } from '@/components/admin/PageHeader';
+import { MachineTabs } from '@/components/admin/MachineTabs';
 import { getMachineStats } from '@/lib/machine-stats';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,8 @@ export default async function MachinePage() {
         title="The Machine"
         subtitle="Live vitals of the email machine — so we never argue “is it working” from vibes. Rolling 30 days for clicks; all-time for the rest. (SOS / DFY apps / vault-downsell / reviews land as those phases ship.)"
       />
+
+      <MachineTabs active="overview" />
 
       {/* Interested leads — the click-driven buying signal */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

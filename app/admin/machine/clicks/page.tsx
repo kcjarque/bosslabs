@@ -71,6 +71,7 @@ export default async function ClickDrilldownPage({
                 <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-2.5 font-semibold">Person</th>
                   <th className="px-4 py-2.5 font-semibold">Clicked</th>
+                  <th className="px-4 py-2.5 font-semibold">From email</th>
                   <th className="px-4 py-2.5 font-semibold">Channel</th>
                   <th className="px-4 py-2.5 font-semibold">Exact time (Manila)</th>
                 </tr>
@@ -102,6 +103,15 @@ export default async function ClickDrilldownPage({
                       </code>
                       {!tag && TAG_LABEL[e.linkTag] && (
                         <span className="ml-2 text-[12px] text-slate-500">{TAG_LABEL[e.linkTag]}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {e.templateName ? (
+                        <span title={e.templateKey ?? undefined}>{e.templateName}</span>
+                      ) : (
+                        <span className="text-slate-300" title="Clicked before source-email tracking, or an SMS link">
+                          —
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-2.5">
