@@ -36,6 +36,7 @@ import {
   getSequenceSendRecipients,
   getSequenceSubscriptions,
   getSignupById,
+  getSignupIdsInSendStates,
   recordSequenceSend,
   type Signup,
   type SequenceStep,
@@ -139,6 +140,16 @@ export async function GET(req: Request) {
         const s = await getSignupById(sub.signupId);
         if (s) audience.set(sub.signupId, { signup: s, subscribedAt: sub.subscribedAt });
       }
+    }
+
+    // Newsletter pause (SPEC: Daily Seinfeld Newsletter). The home-base daily
+    // drip skips anyone parked in a paused lane — in an SOS, win-back, or sunset
+    // — so a click-triggered soap-opera gets a clean run. The newsletter router
+    // (/api/cron/newsletter) re-anchors their subscribed_at on resume so the
+    // story continues on the exact beat. Finite flows + SOS are never paused.
+    if (sequence.name === 'Daily Seinfeld Newsletter') {
+      const paused = await getSignupIdsInSendStates(['in_sos', 'in_winback', 'sunset']);
+      for (const id of paused) audience.delete(id);
     }
 
     for (const step of steps) {

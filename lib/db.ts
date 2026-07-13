@@ -2512,6 +2512,14 @@ function filterPredicate(filterType: ListFilterType): (s: Signup) => boolean {
  * since that picks up the event_id scope automatically). Older single-arg
  * callers still work.
  */
+/** Signup ids currently in any of the given send_states. Used to pause the
+ *  newsletter drip for paused lanes (in_sos / in_winback / sunset). */
+export async function getSignupIdsInSendStates(states: string[]): Promise<Set<string>> {
+  if (!isSupabaseConfigured() || states.length === 0) return new Set();
+  const { data } = await getSupabase().from('signups').select('id').in('send_state', states);
+  return new Set(((data ?? []) as Array<{ id: string }>).map((r) => r.id));
+}
+
 export async function computeListMembers(
   input: ListFilterType | ListFilterType[] | ListModel,
 ): Promise<Signup[]> {
