@@ -66,6 +66,9 @@ export type SendEmailArgs = {
   templateId?: string;
   subject?: string;
   html?: string;
+  /** Inline markdown body (broadcasts) — rendered through the same macro + offer
+   *  + markdown pipeline as a saved template, per recipient. Pair with `subject`. */
+  markdownBody?: string;
   vars?: Record<string, string | number | undefined>;
 };
 
@@ -169,6 +172,22 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     }
     subject = rendered.subject;
     html = rendered.html;
+  } else if (args.markdownBody) {
+    // Inline markdown (broadcasts) — same pipeline as a saved template body:
+    // resolve {{link:*}}/{{screenshot:*}} macros, render markdown, substitute vars.
+    const resolved = await resolveEmailBodyMacros(args.markdownBody, {
+      contactId,
+      siteUrl: siteUrl(),
+      surveyUrl,
+    });
+    const vars = withDefaultVars(args.to, {
+      ...offerVars,
+      surveyUrl,
+      ...(args.vars ?? {}),
+      contactId: contactId ?? '',
+    });
+    subject = renderTemplate(args.subject ?? '', vars);
+    html = renderTemplate(renderEmailMarkdown(resolved.body), vars, { escapeHtml: true });
   }
 
   if (!subject || !html) {

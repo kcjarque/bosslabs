@@ -34,19 +34,33 @@ async function findActiveSequenceByName(name: string): Promise<{ id: string; act
   return (data as { id: string; active: boolean } | null) ?? null;
 }
 
-export async function enrollFromOfferClick(contactId: string | null, offerTag: string): Promise<void> {
-  if (!isSupabaseConfigured() || !contactId) return;
-  const map = SOS_MAP[offerTag];
-  if (!map) return;
+/**
+ * Enroll a contact into a sequence by exact name. Shared by the SOS click
+ * trigger, the vault-onboarding purchase hook, and the lifecycle cron.
+ * Returns true only when a NEW subscription was created. No-op (returns false)
+ * when: Supabase off, no contact, sequence missing/INACTIVE (dormant until Kyle
+ * flips it on → no enrollment backlog), or the contact is already subscribed
+ * (idempotent — never restarts a drip). Best-effort — never throws.
+ */
+export async function enrollByName(sequenceName: string, contactId: string | null): Promise<boolean> {
+  if (!isSupabaseConfigured() || !contactId) return false;
   try {
-    const offer = await getOffer(offerTag);
-    const open = !offer || offer.status === 'open';
-    const target = await findActiveSequenceByName(open ? map.sos : map.waitlist);
-    if (!target || !target.active) return; // dormant until Kyle activates it
+    const target = await findActiveSequenceByName(sequenceName);
+    if (!target || !target.active) return false;
     const subs = await getSequenceSubscriptions(target.id);
-    if (subs.some((s) => s.signupId === contactId)) return; // already in — no restart
+    if (subs.some((s) => s.signupId === contactId)) return false;
     await subscribeToSequence(target.id, contactId);
+    return true;
   } catch (err) {
-    console.warn('[sos] enroll skipped:', err instanceof Error ? err.message : err);
+    console.warn('[enroll] skipped:', err instanceof Error ? err.message : err);
+    return false;
   }
+}
+
+export async function enrollFromOfferClick(contactId: string | null, offerTag: string): Promise<void> {
+  const map = SOS_MAP[offerTag];
+  if (!map) return; // only retreat/dfy/vault have soap-operas
+  const offer = await getOffer(offerTag);
+  const open = !offer || offer.status === 'open';
+  await enrollByName(open ? map.sos : map.waitlist, contactId);
 }

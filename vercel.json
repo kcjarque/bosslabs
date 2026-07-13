@@ -32,6 +32,14 @@
     {
       "path": "/api/cron/reconcile-payments",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/lifecycle",
+      "schedule": "3 16 * * *"
+    },
+    {
+      "path": "/api/cron/broadcasts",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

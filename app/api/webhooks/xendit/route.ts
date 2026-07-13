@@ -32,6 +32,7 @@ import { syncCrmCardForSignup } from '@/lib/crm';
 import { closeLeadAndRecordCommission, getCloserForSignup } from '@/lib/closers';
 import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { parseOtoExternalId, parseStandaloneOtoProduct } from '@/lib/oto-external';
+import { enrollByName } from '@/lib/sos';
 import { logRetreatCardPayment } from '@/lib/retreat-crm';
 import { applyBootcampPayment, getBootcampReservation, tierById } from '@/lib/bootcamp';
 import { provisionHubAccount } from '@/lib/hub-provision';
@@ -431,6 +432,9 @@ async function handleOtoPaid(event: XenditEvent) {
       lastName: signup.lastName,
       metadata: signup.metadata,
     });
+    // Vault buyers enter the onboarding drip (Day 1/3/7). No-op unless the
+    // 'Vault Onboarding' sequence is active + they're not already enrolled.
+    await enrollByName('Vault Onboarding', signup.id).catch(() => {});
   }
 
   // Product-specific confirmation email + SMS (Vault = instant access, 1:1 =
