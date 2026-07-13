@@ -6,6 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { logEngagementEvent, tagContactFromClick, resolveShortLink } from '@/lib/engagement';
+import { enrollFromOfferClick } from '@/lib/sos';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,9 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
     event: 'click',
     linkTag: link.linkTag,
   });
-  if (link.contactId) await tagContactFromClick(link.contactId, link.linkTag);
+  if (link.contactId) {
+    await tagContactFromClick(link.contactId, link.linkTag);
+    if (link.linkTag) await enrollFromOfferClick(link.contactId, link.linkTag);
+  }
   return NextResponse.redirect(link.targetUrl, 302);
 }

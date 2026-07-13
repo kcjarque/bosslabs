@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { logEngagementEvent, tagContactFromClick, resolveTagTarget } from '@/lib/engagement';
 import { safeRedirectU } from '@/lib/link-tagging';
+import { enrollFromOfferClick } from '@/lib/sos';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,11 @@ export async function GET(req: Request, { params }: { params: { tag: string } })
   // Await the writes — the tracking IS the point of this hop; a small delay on a
   // click redirect is fine, and both helpers are best-effort (never throw).
   await logEngagementEvent({ contactId, channel: 'email', event: 'click', linkTag: tag });
-  if (contactId) await tagContactFromClick(contactId, tag);
+  if (contactId) {
+    await tagContactFromClick(contactId, tag);
+    // Click-triggered SOS enrollment (§6-9). No-op unless the offer's SOS
+    // sequence is active + the contact isn't already enrolled.
+    await enrollFromOfferClick(contactId, tag);
+  }
   return NextResponse.redirect(target, 302);
 }
