@@ -11,9 +11,9 @@ export function TestimonialWall() {
   return (
     <section className="border-t border-white/[0.05] py-14 sm:py-20">
       <div className="container-tight">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-5xl text-center">
           <div className="eyebrow justify-center">Totoong tao · totoong resulta</div>
-          <h2 className="h-section mt-4">
+          <h2 className="mt-4 font-serif font-normal leading-[1.1] tracking-[-0.01em] text-white text-[26px] sm:text-4xl lg:text-[38px] lg:whitespace-nowrap">
             Hindi namin &rsquo;to sinulat — <span className="accent-italic">sila</span> ang nagsalita.
           </h2>
           <p className="lead mt-4">
