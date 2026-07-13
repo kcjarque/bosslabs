@@ -44,6 +44,14 @@
     {
       "path": "/api/cron/newsletter",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/affiliate-ads",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/affiliate-ads",
+      "schedule": "0 16 * * *"
     }
   ]
 }
