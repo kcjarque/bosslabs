@@ -449,6 +449,47 @@ export function ContractMaker({
                 </div>
               )}
             </div>
+
+            {/* Exit Fee toggle — controls whether Section 6 emits the full
+                source-code-handover Exit Fee clause + its buyout amount. Off =
+                a short "no buyout, data-portability-only" clause instead. */}
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={data.exitFeeEnabled}
+                  onChange={(e) => setData({ ...data, exitFeeEnabled: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-400 text-cyan-600 focus:ring-cyan-400"
+                />
+                <span className="flex-1">
+                  <span className="text-[13px] font-semibold text-slate-800">
+                    Include the Exit Fee (full code handover) clause
+                  </span>
+                  <span className="mt-0.5 block text-[11.5px] text-slate-500">
+                    Section 6: Client may buy out the full Source Code for the Exit Fee. Uncheck for a no-buyout, data-portability-only exit.
+                  </span>
+                </span>
+              </label>
+              {data.exitFeeEnabled && (
+                <div className="mt-3 flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-slate-600">Exit Fee ₱</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={5000}
+                    value={Math.round(data.exitFeeCentavos / 100)}
+                    onChange={(e) =>
+                      setData({
+                        ...data,
+                        exitFeeCentavos: Math.max(0, Math.round(Number(e.target.value) || 0)) * 100,
+                      })
+                    }
+                    className={`${inputCls} w-36`}
+                  />
+                  <span className="text-[12px] text-slate-500">one-time · full code ownership</span>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

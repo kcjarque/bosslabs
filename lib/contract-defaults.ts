@@ -181,6 +181,14 @@ export type ContractFormData = {
   downpaymentPercent: number;
   /** Fixed downpayment in centavos. Used when downpaymentMode === 'fixed'. */
   downpaymentFixedCentavos: number;
+  /** If true, Section 6 includes the full-code-handover Exit Fee clause (the
+   *  Client may buy out the Source Code for the Exit Fee). When false, Section 6
+   *  collapses to a short "no buyout — data portability on exit" clause and no
+   *  fee is stated. */
+  exitFeeEnabled: boolean;
+  /** The one-time Exit Fee in centavos, shown in §6.2. Used when
+   *  exitFeeEnabled is true. */
+  exitFeeCentavos: number;
 };
 
 export const DEFAULT_CONTRACT_FORM: ContractFormData = {
@@ -196,4 +204,6 @@ export const DEFAULT_CONTRACT_FORM: ContractFormData = {
   downpaymentMode: 'percent',
   downpaymentPercent: 50,
   downpaymentFixedCentavos: 25_000_00, // ₱25,000 — typical PH SMB downpayment
+  exitFeeEnabled: true,
+  exitFeeCentavos: 100_000_00, // ₱100,000 — the standing full-handover Exit Fee
 };

@@ -433,8 +433,11 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
         </Numbered>
       </Section>
 
-      {/* 6. Exit */}
-      <Section n="6" title="Exit Clause (Full Code Handover)">
+      {/* 6. Exit — the full-handover Exit Fee clause is optional per contract
+          (data.exitFeeEnabled). When off, it collapses to a no-buyout clause. */}
+      <Section n="6" title={data.exitFeeEnabled ? 'Exit Clause (Full Code Handover)' : 'Exit and Data Handling'}>
+        {data.exitFeeEnabled ? (
+        <>
         <Numbered n="6.1">
           <strong>Why an Exit Clause.</strong> Unlike traditional software development, the Platform
           incorporates AI- and agent-driven components — including system prompts, agent configurations,
@@ -446,7 +449,8 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
         <Numbered n="6.2">
           <strong>Option to Fully Handover.</strong> The Client may, at its option, fully acquire
           ownership of the Source Code together with all accounts and materials used to operate the
-          Platform by paying the Provider a one-time Exit Fee of <strong>PHP 100,000.00</strong>, in
+          Platform by paying the Provider a one-time Exit Fee of{' '}
+          <strong>{fmtPHP(data.exitFeeCentavos)}</strong>, in
           addition to settling all amounts then due.
         </Numbered>
         <Numbered n="6.3">
@@ -475,6 +479,17 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
           shall cease, unless the Parties separately agree in writing for the Provider to continue
           providing any such services.
         </Numbered>
+        </>
+        ) : (
+        <Numbered n="6.1">
+          <strong>No Source-Code Buyout.</strong> This Agreement does not include an option for the
+          Client to acquire ownership of the Source Code. The Client&rsquo;s rights are limited to the
+          license to use the Platform under Section 5.2. Upon termination of this Agreement, or upon the
+          Client&rsquo;s reasonable written request, the Provider shall export the Client Data in a usable
+          XLSX (Excel) or Google Sheets format as provided in Section 7.2, which the Client may freely use,
+          print, and retain.
+        </Numbered>
+        )}
       </Section>
 
       {/* 7. Client Data */}

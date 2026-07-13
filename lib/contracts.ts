@@ -22,6 +22,8 @@ export type Contract = {
   downpaymentMode: 'percent' | 'fixed';
   downpaymentPercent: number;
   downpaymentFixedCentavos: number;
+  exitFeeEnabled: boolean;
+  exitFeeCentavos: number;
   oneTimeTotalCentavos: number;
   monthlyTotalCentavos: number;
   status: ContractStatus;
@@ -45,6 +47,8 @@ type ContractRow = {
   downpayment_mode: 'percent' | 'fixed';
   downpayment_percent: number | null;
   downpayment_fixed_centavos: number | null;
+  exit_fee_enabled: boolean | null;
+  exit_fee_centavos: number | null;
   one_time_total_centavos: number;
   monthly_total_centavos: number;
   status: ContractStatus;
@@ -69,6 +73,8 @@ function rowToContract(r: ContractRow): Contract {
     downpaymentMode: r.downpayment_mode,
     downpaymentPercent: r.downpayment_percent ?? 50,
     downpaymentFixedCentavos: r.downpayment_fixed_centavos ?? 0,
+    exitFeeEnabled: r.exit_fee_enabled ?? true,
+    exitFeeCentavos: r.exit_fee_centavos ?? 100_000_00,
     oneTimeTotalCentavos: r.one_time_total_centavos,
     monthlyTotalCentavos: r.monthly_total_centavos,
     status: r.status,
@@ -113,6 +119,8 @@ function toRowPatch(form: Partial<ContractFormData> & { signupId?: string | null
   if (form.downpaymentMode !== undefined) patch.downpayment_mode = form.downpaymentMode;
   if (form.downpaymentPercent !== undefined) patch.downpayment_percent = form.downpaymentPercent;
   if (form.downpaymentFixedCentavos !== undefined) patch.downpayment_fixed_centavos = form.downpaymentFixedCentavos;
+  if (form.exitFeeEnabled !== undefined) patch.exit_fee_enabled = form.exitFeeEnabled;
+  if (form.exitFeeCentavos !== undefined) patch.exit_fee_centavos = form.exitFeeCentavos;
   if (form.status !== undefined) patch.status = form.status;
   if (form.notes !== undefined) patch.notes = form.notes || null;
   patch.updated_at = new Date().toISOString();

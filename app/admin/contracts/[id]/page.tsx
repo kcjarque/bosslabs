@@ -37,6 +37,8 @@ export default async function ContractEditPage({ params }: { params: { id: strin
     downpaymentMode: contract.downpaymentMode,
     downpaymentPercent: contract.downpaymentPercent,
     downpaymentFixedCentavos: contract.downpaymentFixedCentavos,
+    exitFeeEnabled: contract.exitFeeEnabled,
+    exitFeeCentavos: contract.exitFeeCentavos,
   };
 
   // If linked to a customer, hydrate the picker chip from the signup row.
