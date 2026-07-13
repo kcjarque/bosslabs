@@ -53,7 +53,9 @@ export function matchTag(rawUrl: string): string | null {
   if (/^\/replay/.test(path)) return 'replay';
   if (/^\/survey/.test(path)) return 'survey';
   if (/^\/systems/.test(path)) return 'systems';
+  if (u.hostname.includes('facebook.com') && /review/i.test(path)) return 'review';
   if (u.hostname.includes('facebook.com') && /\/share\/g\//.test(path)) return 'community';
+  if (u.hostname.includes('bosslabsai.com')) return 'freebie';
   return null;
 }
 
