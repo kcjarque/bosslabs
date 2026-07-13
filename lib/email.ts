@@ -21,11 +21,14 @@ import {
   isEmailAddressSuppressed,
   recordBlockedEmail,
   logEmailSend,
+  findSignupByEmail,
   type EmailTemplate,
 } from './db';
-import { signUnsubscribeToken } from './admin-auth';
+import { signUnsubscribeToken, signContactToken } from './admin-auth';
 import { renderEmailMarkdown } from './email-markdown';
 import { validateRecipient } from './email-validation';
+import { offerTemplateVars } from './offers';
+import { rewriteEmailLinks } from './link-tagging';
 
 export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'ses' | 'demo' }
@@ -125,6 +128,13 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   const settings = await getSettings();
 
+  // Price truth (§1.5) + click attribution (§5.2): every send gets the live offer
+  // vars ({{offer.retreat.price_display}} etc.) and, when the recipient resolves
+  // to a signup, a contactId used to tag their link clicks.
+  const offerVars = await offerTemplateVars();
+  const contactId = (await findSignupByEmail(args.to).catch(() => null))?.id ?? null;
+  const surveyUrl = contactId ? `${siteUrl()}/survey?c=${signContactToken(contactId)}` : '';
+
   let subject = args.subject ?? '';
   let html = args.html ?? '';
 
@@ -137,7 +147,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   if (args.templateId) {
     const rendered = await renderEmail(
       args.templateId,
-      withDefaultVars(args.to, args.vars ?? {}),
+      withDefaultVars(args.to, { ...offerVars, surveyUrl, ...(args.vars ?? {}), contactId: contactId ?? '' }),
     );
     if (!rendered) {
       return { ok: false, error: `Email template "${args.templateId}" not found` };
@@ -149,6 +159,10 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   if (!subject || !html) {
     return { ok: false, error: 'subject and html are required' };
   }
+
+  // Retrofit offer/funnel links → tracked redirects (§5.2). Non-offer links and
+  // the unsubscribe link are left untouched; a missing contactId is a no-op.
+  html = rewriteEmailLinks(html, contactId, siteUrl());
 
   // ---- Provider: Amazon SES (opt-in via settings.emailProvider = 'ses') ----
   // Same from identity + deliverability headers as the Resend path; the AWS

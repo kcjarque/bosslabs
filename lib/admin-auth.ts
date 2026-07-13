@@ -75,6 +75,31 @@ export function verifyUnsubscribeToken(token: string | null | undefined): string
   }
 }
 
+/**
+ * Signed contact token for public, no-login token-gated pages (survey §2.1,
+ * Manus 101 freebie access §6.4). Maps a link back to a signup for tracking
+ * without exposing a raw id. Format: `<base64url(signupId)>.<hmac>` passed as `c`.
+ */
+export function signContactToken(signupId: string): string {
+  const c = Buffer.from(String(signupId), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', secret()).update(`contact:${c}`).digest('base64url');
+  return `${c}.${sig}`;
+}
+
+export function verifyContactToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  const [c, sig] = token.split('.');
+  if (!c || !sig) return null;
+  const expected = crypto.createHmac('sha256', secret()).update(`contact:${c}`).digest('base64url');
+  if (!safeEqual(sig, expected)) return null;
+  try {
+    const id = Buffer.from(c, 'base64url').toString('utf8');
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Constant-time string equality — defends against timing-attack on password + signature compares. */
 export function safeEqual(a: string, b: string): boolean {
   // Equalize lengths first; timingSafeEqual throws on unequal buffer sizes.

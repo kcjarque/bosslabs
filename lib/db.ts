@@ -438,6 +438,26 @@ export async function findSignupByEmail(email: string): Promise<Signup | null> {
   return list.find((s) => s.email.toLowerCase() === e) ?? null;
 }
 
+/** Lightweight: find a signup id by phone (best-effort, for SMS click attribution).
+ *  Matches on the trailing 10 digits so +63 / 0 / 63 prefixes all resolve. */
+export async function findSignupIdByPhone(phone: string): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const last10 = (phone || '').replace(/\D/g, '').slice(-10);
+  if (last10.length < 10) return null;
+  try {
+    const { data } = await getSupabase()
+      .from('signups')
+      .select('id')
+      .ilike('phone', `%${last10}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ? (data as { id: string }).id : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Find a single signup by the externalId stashed in metadata. Used by the
  * Xendit webhook + thank-you page — both hot paths that previously did a

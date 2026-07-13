@@ -8,7 +8,9 @@
  * Falls back to a "demo" no-op when credentials are missing.
  */
 
-import { getSettings, getSmsTemplates, renderTemplate } from './db';
+import { getSettings, getSmsTemplates, renderTemplate, findSignupIdByPhone } from './db';
+import { offerTemplateVars } from './offers';
+import { rewriteSmsLinks } from './link-tagging';
 export { smsPartCount } from './sms-counter';
 
 export type SendSmsResult =
@@ -44,16 +46,21 @@ export function normalizePhPhone(raw: string): string {
 
 export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
   const settings = await getSettings();
+  const offerVars = await offerTemplateVars();
 
   let body = args.body ?? '';
   if (args.templateId) {
-    const rendered = await renderSms(args.templateId, args.vars);
+    const rendered = await renderSms(args.templateId, { ...offerVars, ...(args.vars ?? {}) });
     if (!rendered) {
       return { ok: false, error: `SMS template "${args.templateId}" not found` };
     }
     body = rendered.body;
   }
   if (!body) return { ok: false, error: 'body is required' };
+
+  // Retrofit funnel URLs → per-contact short links (§1.3.1) for click tracking.
+  const contactId = await findSignupIdByPhone(args.to).catch(() => null);
+  body = await rewriteSmsLinks(body, contactId);
 
   const phone = normalizePhPhone(args.to);
 
