@@ -617,6 +617,22 @@ async function DashboardBody({
     funnelStarts > 0 ? (funnelPaid / funnelStarts) * 100 : 0;
   const visitToPaidPct =
     viewsAll.uniqueSessions > 0 ? (funnelPaid / viewsAll.uniqueSessions) * 100 : 0;
+
+  // Conversion-rate-over-time: paid signups (by createdAt) / visit sessions,
+  // bucketed onto the SAME grid as the visits chart. The <ConversionSparkline>
+  // smooths this into a rolling rate + fits a trend line (shift vs stable).
+  const paidPerBucket = new Array(visitsBuckets.length).fill(0) as number[];
+  for (const s of paid) {
+    const t = new Date(s.createdAt).getTime();
+    if (t < funnelSinceMs || t > rangeEnd) continue;
+    const idx = Math.floor((t - funnelSinceMs) / bucketMs);
+    if (idx >= 0 && idx < paidPerBucket.length) paidPerBucket[idx]++;
+  }
+  const conversionBuckets = visitsBuckets.map((b, i) => ({
+    bucketStart: b.bucketStart,
+    visits: b.uniqueSessions,
+    paid: paidPerBucket[i],
+  }));
   // For the first few days after the tracker ships, signups in the
   // window outnumber visits (the signups existed before page_views did),
   // so the % comes out > 100%. Render "—" in that case so the dashboard
@@ -893,6 +909,38 @@ async function DashboardBody({
             prevAverage={prevAvgPerBucket}
             bucketMs={bucketMs}
           />
+        </div>
+
+        {/* Conversion-rate over time (visits → paid %) + trend line */}
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Conversion rate over time
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Visits → paid, {bucketMs === 3600_000 ? '24h' : '3-day'} rolling ·
+                dashed line = trend (shift vs stable)
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3 bg-emerald-500" />
+                Conversion
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-3"
+                  style={{
+                    background:
+                      'repeating-linear-gradient(to right, #94a3b8 0, #94a3b8 3px, transparent 3px, transparent 6px)',
+                  }}
+                />
+                Trend
+              </span>
+            </div>
+          </div>
+          <ConversionSparkline buckets={conversionBuckets} bucketMs={bucketMs} />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
@@ -1645,6 +1693,166 @@ function VisitsSparkline({
         {/* Y-axis max label */}
         <text x={padX} y={padY + 2} fontSize="9" fill="#94a3b8" textAnchor="start">
           {Math.round(yMax)}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Conversion-rate-over-time (visits → paid %). Raw per-bucket conversion is 0/spike
+ * noise at ~1 paid/hour, so the line is a trailing rolling rate (24h hourly / 3-day
+ * daily). A least-squares TREND line shows whether the rate is shifting or stable.
+ */
+function ConversionSparkline({
+  buckets,
+  bucketMs,
+}: {
+  buckets: Array<{ bucketStart: string; visits: number; paid: number }>;
+  bucketMs: number;
+}) {
+  if (buckets.length === 0) {
+    return <p className="mt-4 text-[11px] text-slate-500">No conversion data in this window.</p>;
+  }
+  const hourly = bucketMs === 3600_000;
+  const win = hourly ? 24 : 3; // trailing window
+
+  // Rolling conversion % per bucket (trailing `win` buckets).
+  const series = buckets.map((_, i) => {
+    let v = 0;
+    let p = 0;
+    for (let j = Math.max(0, i - win + 1); j <= i; j++) {
+      v += buckets[j].visits;
+      p += buckets[j].paid;
+    }
+    return v > 0 ? (p / v) * 100 : 0;
+  });
+
+  // Pooled average (label) + least-squares trend over the rolling series.
+  const totV = buckets.reduce((a, b) => a + b.visits, 0);
+  const totP = buckets.reduce((a, b) => a + b.paid, 0);
+  const avgPct = totV > 0 ? (totP / totV) * 100 : 0;
+  const n = series.length;
+  let si = 0;
+  let sy = 0;
+  let sii = 0;
+  let siy = 0;
+  for (let i = 0; i < n; i++) {
+    si += i;
+    sy += series[i];
+    sii += i * i;
+    siy += i * series[i];
+  }
+  const denom = n * sii - si * si;
+  const slope = denom !== 0 ? (n * siy - si * sy) / denom : 0;
+  const intercept = n > 0 ? (sy - slope * si) / n : 0;
+  const trendAt = (i: number) => intercept + slope * i;
+  const deltaPP = trendAt(n - 1) - trendAt(0); // change across the window, percentage points
+  const trendLabel =
+    Math.abs(deltaPP) < 0.2 ? 'stable' : deltaPP > 0 ? `rising +${deltaPP.toFixed(1)}pp` : `falling ${deltaPP.toFixed(1)}pp`;
+
+  const W = 720;
+  const H = 140;
+  const padX = 8;
+  const padY = 14;
+  const innerW = W - padX * 2;
+  const innerH = H - padY * 2;
+  // Robust y-scale: 95th percentile so a lone early-data spike (signups that
+  // predate page_views) doesn't flatten the 1-3% band. Line clamps on overshoot.
+  const sorted = [...series].sort((a, b) => a - b);
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+  const yMax = Math.max(1, p95, trendAt(0), trendAt(n - 1)) * 1.2;
+  const slotW = innerW / Math.max(1, n - 1);
+  const px = (i: number) => padX + slotW * i;
+  const py = (v: number) => padY + innerH * (1 - Math.min(1, Math.max(0, v) / yMax));
+
+  const linePath = series.map((y, i) => `${i === 0 ? 'M' : 'L'} ${px(i).toFixed(1)} ${py(y).toFixed(1)}`).join(' ');
+  const areaPath = [
+    `M ${px(0)} ${padY + innerH}`,
+    ...series.map((y, i) => `L ${px(i).toFixed(1)} ${py(y).toFixed(1)}`),
+    `L ${px(n - 1)} ${padY + innerH}`,
+    'Z',
+  ].join(' ');
+
+  function fmtBucket(iso: string): string {
+    const d = new Date(iso);
+    return hourly
+      ? d.toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', hour12: true, timeZone: 'Asia/Manila' })
+      : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+  }
+
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full text-slate-300">
+        {[0.25, 0.5, 0.75, 1].map((t) => (
+          <line
+            key={t}
+            x1={padX}
+            x2={W - padX}
+            y1={padY + innerH * (1 - t)}
+            y2={padY + innerH * (1 - t)}
+            stroke="currentColor"
+            strokeWidth="0.5"
+            opacity="0.3"
+            strokeDasharray="2 3"
+          />
+        ))}
+
+        {/* Area under conversion line */}
+        <path d={areaPath} fill="#10b981" opacity="0.08" />
+
+        {/* Trend line (least-squares fit) */}
+        <line
+          x1={px(0)}
+          y1={py(trendAt(0))}
+          x2={px(n - 1)}
+          y2={py(trendAt(n - 1))}
+          stroke="#94a3b8"
+          strokeWidth="1.25"
+          strokeDasharray="4 4"
+        />
+        <text x={W - padX - 2} y={Math.max(padY + 8, py(trendAt(n - 1)) - 3)} fontSize="9" fill="#64748b" textAnchor="end">
+          trend · {trendLabel}
+        </text>
+
+        {/* Conversion line */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Hover targets */}
+        {buckets.map((b, i) => (
+          <g key={b.bucketStart}>
+            <title>{`${fmtBucket(b.bucketStart)} · ${series[i].toFixed(2)}% (${win}${hourly ? 'h' : 'd'} rolling)`}</title>
+            <circle cx={px(i)} cy={py(series[i])} r="1.6" fill="#10b981" opacity={series[i] > 0 ? 0.9 : 0} />
+            <rect x={px(i) - slotW / 2} y={padY} width={slotW} height={innerH} fill="transparent" />
+          </g>
+        ))}
+
+        {/* X-axis labels */}
+        <text x={padX} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="start">
+          {fmtBucket(buckets[0].bucketStart)}
+        </text>
+        {buckets.length > 4 && (
+          <text x={W / 2} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="middle">
+            {fmtBucket(buckets[Math.floor(buckets.length / 2)].bucketStart)}
+          </text>
+        )}
+        <text x={W - padX} y={H - 2} fontSize="9" fill="#94a3b8" textAnchor="end">
+          {fmtBucket(buckets[buckets.length - 1].bucketStart)}
+        </text>
+
+        {/* Y-max + average labels */}
+        <text x={padX} y={padY + 2} fontSize="9" fill="#94a3b8" textAnchor="start">
+          {yMax.toFixed(1)}%
+        </text>
+        <text x={W / 2} y={padY + 2} fontSize="9" fill="#64748b" textAnchor="middle">
+          avg {avgPct.toFixed(2)}%
         </text>
       </svg>
     </div>
