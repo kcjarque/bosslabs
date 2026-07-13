@@ -1735,7 +1735,11 @@ export function renderTemplate(
   vars: Record<string, string | number | undefined>,
   opts?: { escapeHtml?: boolean },
 ): string {
-  return template.replace(/{{\s*(\w+)\s*}}/g, (_, key) => {
+  // Key charset includes `.` and `:` so nested/namespaced vars resolve:
+  // {{offer.retreat.price_display}} (offers table) and {{link:retreat}} /
+  // {{screenshot:A1}} (macros). Plain {{firstName}} still matches. Without the
+  // dot, dotted offer vars silently rendered LITERALLY in every send.
+  return template.replace(/{{\s*([\w.:]+)\s*}}/g, (_, key) => {
     const v = vars[key];
     if (v === undefined || v === null) return '';
     const s = String(v);

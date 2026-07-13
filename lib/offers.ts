@@ -66,6 +66,15 @@ export function seatsLeft(o: Offer): number | null {
   return Math.max(0, o.seatsTotal - (o.seatsTaken ?? 0));
 }
 
+/** Format an ISO date (YYYY-MM-DD) as a human phrase for copy, e.g. "July 31".
+ *  Falls back to the raw value if it doesn't parse. Kept date-only + tz-agnostic
+ *  (append T00:00 so it isn't shifted a day by the local zone). */
+function formatOfferDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+
 /** Flat map of `offer.<key>.<field>` → value, for injecting into template vars
  *  so copy can write {{offer.retreat.price_display}} etc. */
 export async function offerTemplateVars(): Promise<Record<string, string>> {
@@ -73,7 +82,12 @@ export async function offerTemplateVars(): Promise<Record<string, string>> {
   const vars: Record<string, string> = {};
   for (const [key, o] of Object.entries(offers)) {
     if (o.priceDisplay) vars[`offer.${key}.price_display`] = o.priceDisplay;
-    if (o.nextInstanceDate) vars[`offer.${key}.next_instance_date`] = o.nextInstanceDate;
+    if (o.nextInstanceDate) vars[`offer.${key}.next_instance_date`] = formatOfferDate(o.nextInstanceDate);
+    if (o.seatsTotal != null) {
+      vars[`offer.${key}.seats_total`] = String(o.seatsTotal);
+      // DFY copy refers to monthly build slots; we store that cap in seats_total.
+      vars[`offer.${key}.slots_monthly`] = String(o.seatsTotal);
+    }
     const left = seatsLeft(o);
     if (left != null) vars[`offer.${key}.seats_left`] = String(left);
     if (o.targetUrl) vars[`offer.${key}.url`] = o.targetUrl;

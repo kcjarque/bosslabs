@@ -29,6 +29,7 @@ import { renderEmailMarkdown } from './email-markdown';
 import { validateRecipient } from './email-validation';
 import { offerTemplateVars } from './offers';
 import { rewriteEmailLinks } from './link-tagging';
+import { resolveEmailBodyMacros, type EmailMacroCtx } from './email-macros';
 
 export type SendEmailResult =
   | { ok: true; id: string; provider: 'resend' | 'ses' | 'demo' }
@@ -72,6 +73,7 @@ export type SendEmailArgs = {
 export async function renderEmail(
   templateId: string,
   vars: Record<string, string | number | undefined> = {},
+  macro?: EmailMacroCtx,
 ): Promise<{ template: EmailTemplate; subject: string; html: string } | null> {
   const templates = await getEmailTemplates();
   const template = templates.find((t) => t.id === templateId);
@@ -82,7 +84,19 @@ export async function renderEmail(
   // before the admin opens the editor and clicks Save.
   let html = template.html;
   if ((!html || !html.trim()) && template.body && template.body.trim()) {
-    html = renderEmailMarkdown(template.body);
+    // Resolve {{link:*}} / {{screenshot:*}} macros on the MARKDOWN body (before
+    // it becomes HTML) so tracked links flow into <a href> and missing-asset
+    // screenshot blocks drop cleanly. Plain {{offer.*}}/{{firstName}} vars are
+    // still substituted below by renderTemplate.
+    let body = template.body;
+    if (macro) {
+      const resolved = await resolveEmailBodyMacros(body, macro);
+      body = resolved.body;
+      if (resolved.missingScreenshots.length) {
+        console.warn(`[email] ${templateId}: dropped screenshots w/o asset:`, resolved.missingScreenshots.join(', '));
+      }
+    }
+    html = renderEmailMarkdown(body);
   }
   return {
     template,
@@ -148,6 +162,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     const rendered = await renderEmail(
       args.templateId,
       withDefaultVars(args.to, { ...offerVars, surveyUrl, ...(args.vars ?? {}), contactId: contactId ?? '' }),
+      { contactId, siteUrl: siteUrl(), surveyUrl },
     );
     if (!rendered) {
       return { ok: false, error: `Email template "${args.templateId}" not found` };

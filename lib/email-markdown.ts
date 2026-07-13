@@ -184,6 +184,8 @@ export function renderEmailMarkdown(markdown: string): string {
   const blocks: string[] = [];
   let paragraph: string[] = [];
 
+  let listItems: string[] = [];
+
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
     const joined = paragraph.join(' ').trim();
@@ -197,8 +199,25 @@ export function renderEmailMarkdown(markdown: string): string {
     paragraph = [];
   };
 
+  // Bullet list: consecutive `- ` (or `* `) lines → a styled <ul>. Copy leans on
+  // these for "what's inside" blocks; without this they'd render as literal dashes.
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    const lis = listItems
+      .map(
+        (it) =>
+          `<li style="font-size:17px;line-height:1.6;margin:0 0 8px;color:#1F2330">${renderInline(it)}</li>`,
+      )
+      .join('');
+    blocks.push(`<ul style="margin:0 0 22px;padding-left:22px">${lis}</ul>`);
+    listItems = [];
+  };
+
   for (const rawLine of lines) {
     const line = rawLine.trim();
+
+    // Any non-bullet line closes an open list (bullets are contiguous blocks).
+    if (!/^[-*]\s+/.test(line)) flushList();
 
     if (line === '') {
       flushParagraph();
@@ -274,9 +293,18 @@ export function renderEmailMarkdown(markdown: string): string {
       continue;
     }
 
+    // Bullet list item: `- text` or `* text`. (`---` is handled above as an hr.)
+    const bullet = /^[-*]\s+(.+)$/.exec(line);
+    if (bullet) {
+      flushParagraph();
+      listItems.push(bullet[1]);
+      continue;
+    }
+
     paragraph.push(line);
   }
   flushParagraph();
+  flushList();
 
   return renderShell(blocks.join('\n'));
 }

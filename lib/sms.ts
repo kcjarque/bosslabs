@@ -11,7 +11,11 @@
 import { getSettings, getSmsTemplates, renderTemplate, findSignupIdByPhone } from './db';
 import { offerTemplateVars } from './offers';
 import { rewriteSmsLinks } from './link-tagging';
+import { resolveSmsBodyMacros } from './email-macros';
+import { signContactToken } from './admin-auth';
 export { smsPartCount } from './sms-counter';
+
+const SMS_SITE = 'https://www.bosslabs.live';
 
 export type SendSmsResult =
   | { ok: true; id: string; provider: 'onewaysms' | 'demo' }
@@ -58,8 +62,11 @@ export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
   }
   if (!body) return { ok: false, error: 'body is required' };
 
-  // Retrofit funnel URLs → per-contact short links (§1.3.1) for click tracking.
+  // Resolve {{link:*}} macros → per-contact short links, and strip {{screenshot:*}}
+  // (no images in SMS). Then retrofit any remaining raw funnel URLs the same way.
   const contactId = await findSignupIdByPhone(args.to).catch(() => null);
+  const surveyUrl = contactId ? `${SMS_SITE}/survey?c=${signContactToken(contactId)}` : '';
+  body = await resolveSmsBodyMacros(body, contactId, surveyUrl);
   body = await rewriteSmsLinks(body, contactId);
 
   const phone = normalizePhPhone(args.to);
