@@ -166,6 +166,14 @@ export type DripRow = {
 const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, opened: 3, clicked: 4 };
 
 /**
+ * Date open/click tracking (SES event webhook → email_log status) went live.
+ * Emails sent before this were never measured, so the drip funnel only counts
+ * sends from here forward — otherwise old, untracked sends would drag open/click
+ * rates toward zero. Bump this if tracking ever breaks and is re-fixed.
+ */
+export const EMAIL_TRACKING_SINCE = '2026-07-12';
+
+/**
  * Per-email drip funnel from email_log: for each template, how many were sent,
  * delivered, opened and clicked (SES lifecycle, never-downgraded so the row's
  * status is the furthest it reached). Powers /admin/machine/drip so a weak
@@ -180,6 +188,7 @@ export async function getDripPerformance(): Promise<DripRow[]> {
     const { data, error } = await sb
       .from('email_log')
       .select('template_id, status')
+      .gte('created_at', EMAIL_TRACKING_SINCE)
       .order('created_at', { ascending: false })
       .range(from, from + 999);
     if (error || !data || data.length === 0) break;

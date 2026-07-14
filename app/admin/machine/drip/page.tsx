@@ -1,7 +1,13 @@
 import { requireAdmin } from '@/lib/admin-auth';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { MachineTabs } from '@/components/admin/MachineTabs';
-import { getDripPerformance } from '@/lib/machine-stats';
+import { getDripPerformance, EMAIL_TRACKING_SINCE } from '@/lib/machine-stats';
+
+const trackingSinceLabel = new Date(`${EMAIL_TRACKING_SINCE}T00:00:00`).toLocaleDateString('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Drip performance · The Machine · BOSSLABS AI' };
@@ -50,7 +56,8 @@ export default async function DripPerformancePage() {
         <h2 className="text-base font-semibold text-slate-900">Every email in the drip — how it performs</h2>
         <p className="mt-0.5 text-[12px] text-slate-500">
           Low <strong>open rate</strong> → the subject line isn&rsquo;t landing. Low <strong>click rate</strong> → the
-          body / CTA needs work. All-time, most-sent first.
+          body / CTA needs work. Counted from <strong>{trackingSinceLabel}</strong> (when open/click tracking went
+          live), most-sent first.
         </p>
 
         {rows.length === 0 ? (
