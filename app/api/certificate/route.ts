@@ -36,8 +36,12 @@ export async function POST(req: Request) {
   if (!isSameOrigin(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const body = (await req.json().catch(() => ({}))) as { email?: string };
+  const body = (await req.json().catch(() => ({}))) as { email?: string; name?: string };
   const email = (body.email ?? '').trim().toLowerCase();
+  // Name the attendee typed for the certificate — the registered name is often
+  // wrong/incomplete, so this is what actually prints. Sanitized + capped so it
+  // can't overflow or break the PDF; falls back to the registered name if blank.
+  const typedName = (body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ ok: false, error: 'Please enter a valid email.' });
   }
@@ -102,8 +106,10 @@ export async function POST(req: Request) {
   }
 
   const s = chosen.row;
-  const name = `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'BossLabs Attendee';
-  const firstName = (s.first_name ?? '').trim() || 'there';
+  const registeredName = `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim();
+  // Certificate prints the name the attendee typed; registered name is the fallback.
+  const name = typedName || registeredName || 'BossLabs Attendee';
+  const firstName = (typedName ? typedName.split(' ')[0] : s.first_name ?? '').trim() || 'there';
   const dateLabel = fmtDate(chosen.dateIso);
   const webinarName = chosen.webinarName;
 

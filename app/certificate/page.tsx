@@ -35,10 +35,10 @@ export default function CertificatePage() {
             Claim your <span className="accent-italic">certificate.</span>
           </h1>
           <p className="lead mx-auto mt-5">
-            Joined <span className="text-white">AI Vibe Coding 101</span>? Enter the email you registered
-            with and we&rsquo;ll generate your official <span className="text-white">Certificate of
-            Participation</span> — signed by the founders and dated to your session — then email it
-            straight to you.
+            Joined <span className="text-white">AI Vibe Coding 101</span>? Enter your name and the email you
+            registered with — we&rsquo;ll generate your official <span className="text-white">Certificate of
+            Participation</span> printed with the name you give, signed by the founders and dated to your
+            session, then email it straight to you.
           </p>
         </div>
 

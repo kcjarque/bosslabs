@@ -3,20 +3,21 @@
 import { useState } from 'react';
 
 export function CertificateForm() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || loading) return;
+    if (!email.trim() || !name.trim() || loading) return;
     setLoading(true);
     setResult(null);
     try {
       const res = await fetch('/api/certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), name: name.trim() }),
       });
       const data = await res.json();
       setResult(
@@ -41,6 +42,7 @@ export function CertificateForm() {
           onClick={() => {
             setResult(null);
             setEmail('');
+            setName('');
           }}
           className="mt-6 text-[11px] uppercase tracking-[0.22em] text-ink-300 underline-offset-4 transition hover:text-white hover:underline"
         >
@@ -52,7 +54,25 @@ export function CertificateForm() {
 
   return (
     <form onSubmit={submit} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7">
-      <label htmlFor="cert-email" className="block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
+      <label htmlFor="cert-name" className="block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
+        Full name for your certificate
+      </label>
+      <input
+        id="cert-name"
+        type="text"
+        autoComplete="name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="e.g. Erlbert T. Besar"
+        disabled={loading}
+        className="mt-2.5 w-full rounded-full border border-cyan-500/30 bg-[#06070A]/60 px-5 py-3.5 text-[15px] text-white outline-none transition placeholder:text-ink-400 focus:border-cyan-400 disabled:opacity-60"
+      />
+      <p className="mt-2 px-1 text-[11px] leading-relaxed text-ink-300">
+        This prints <span className="text-ink-100">exactly</span> as you type it — check your spelling and
+        capitalization.
+      </p>
+
+      <label htmlFor="cert-email" className="mt-5 block text-[11px] uppercase tracking-[0.22em] text-cyan-400">
         Email you registered with
       </label>
       <input
@@ -75,7 +95,7 @@ export function CertificateForm() {
 
       <button
         type="submit"
-        disabled={loading || !email.trim()}
+        disabled={loading || !email.trim() || !name.trim()}
         className="btn-primary mt-5 w-full !py-4 text-center text-base disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? 'Generating your certificate…' : 'Email my certificate →'}
