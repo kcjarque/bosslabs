@@ -21,6 +21,7 @@ export async function saveTrackedCampaignsAction(
 ): Promise<{ ok: boolean }> {
   requireAdmin();
   await saveTrackedCampaigns(campaigns);
+  revalidateTag('ads-report');
   revalidatePath('/admin/ads');
   revalidatePath('/admin');
   return { ok: true };

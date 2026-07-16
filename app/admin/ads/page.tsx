@@ -150,6 +150,11 @@ export default async function AdsPage({
   const report = await getAdsReportCached(rangeKey);
 
   // Active-only filters the table rows (the summary stays campaign-level).
+  const campaigns = report.configured
+    ? activeOnly
+      ? report.campaigns.filter((c) => c.active)
+      : report.campaigns
+    : [];
   const adsets = report.configured
     ? activeOnly
       ? report.adsets.filter((a) => a.active)
@@ -161,13 +166,20 @@ export default async function AdsPage({
       : report.ads
     : [];
 
+  const campaignSubtitle =
+    report.configured && report.campaigns.length > 0
+      ? report.campaigns.length === 1
+        ? report.campaigns[0].name
+        : `${report.campaigns.length} tracked campaigns`
+      : 'your tracked campaigns';
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Ads</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Live Meta performance for <strong>BOSSLABS AI | SALES</strong> — campaign, ad sets, and
+            Live Meta performance for <strong>{campaignSubtitle}</strong> — campaign, ad sets, and
             ads. Pulled directly from Meta; no data stored.
           </p>
         </div>
@@ -234,12 +246,13 @@ export default async function AdsPage({
             </div>
           )}
 
-          <AdsDashboard campaign={report.campaign} adCount={ads.length} activeOnly={activeOnly} />
+          <AdsDashboard totals={report.totals} adCount={ads.length} activeOnly={activeOnly} />
 
           <AdsTable
-            campaign={report.campaign}
+            campaigns={campaigns}
             adsets={adsets}
             ads={ads}
+            benchmark={report.totals?.costPerResult ?? null}
             sort={sortKey}
             dir={sortDir}
             sortHref={sortHref}
@@ -252,22 +265,22 @@ export default async function AdsPage({
 
 /* ── summary dashboard (campaign totals) ─────────────────────────────────── */
 function AdsDashboard({
-  campaign,
+  totals,
   adCount,
   activeOnly,
 }: {
-  campaign: AdEntity | null;
+  totals: AdEntity | null;
   adCount: number;
   activeOnly: boolean;
 }) {
-  if (!campaign) {
+  if (!totals) {
     return (
       <div className="card text-center text-sm text-slate-500">
         No campaign data in this period.
       </div>
     );
   }
-  const c = campaign;
+  const c = totals;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-4">
       <Stat label="Ad spend" value={peso(c.spend)} />
@@ -311,22 +324,31 @@ function Stat({
 
 /* ── hierarchical table: campaign → ad sets → ads ────────────────────────── */
 function AdsTable({
-  campaign,
+  campaigns,
   adsets,
   ads,
+  benchmark,
   sort,
   dir,
   sortHref,
 }: {
-  campaign: AdEntity | null;
+  campaigns: AdEntity[];
   adsets: AdEntity[];
   ads: AdEntity[];
+  benchmark: number | null;
   sort: SortKey;
   dir: 'asc' | 'desc';
   sortHref: (col: SortKey) => string;
 }) {
-  const benchmark = campaign?.costPerResult ?? null;
-  const sortedAdsets = [...adsets].sort((a, b) => cmpBy(a, b, sort, dir));
+  const sortedCampaigns = [...campaigns].sort((a, b) => cmpBy(a, b, sort, dir));
+  const adsetsByCampaign = new Map<string, AdEntity[]>();
+  for (const aset of adsets) {
+    const key = aset.parentId ?? 'orphan';
+    const list = adsetsByCampaign.get(key) ?? [];
+    list.push(aset);
+    adsetsByCampaign.set(key, list);
+  }
+  for (const list of adsetsByCampaign.values()) list.sort((a, b) => cmpBy(a, b, sort, dir));
   const adsByParent = new Map<string, AdEntity[]>();
   for (const ad of ads) {
     const key = ad.parentId ?? 'orphan';
@@ -368,17 +390,28 @@ function AdsTable({
             </tr>
           </thead>
           <tbody>
-            {campaign && <Row e={campaign} benchmark={benchmark} indent={0} bold tint="bg-slate-50" />}
-            {sortedAdsets.map((aset) => (
-              <Fragment key={aset.id}>
-                <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" />
-                {(adsByParent.get(aset.id) ?? []).map((ad) => (
-                  <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} />
+            {sortedCampaigns.map((camp) => (
+              <Fragment key={camp.id}>
+                <Row e={camp} benchmark={benchmark} indent={0} bold tint="bg-slate-50" />
+                {(adsetsByCampaign.get(camp.id) ?? []).map((aset) => (
+                  <Fragment key={aset.id}>
+                    <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" />
+                    {(adsByParent.get(aset.id) ?? []).map((ad) => (
+                      <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} />
+                    ))}
+                  </Fragment>
                 ))}
               </Fragment>
             ))}
             {orphans.length > 0 &&
               orphans.map((ad) => <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} />)}
+            {campaigns.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-3 py-6 text-center text-sm text-slate-400">
+                  No campaign data in this period.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

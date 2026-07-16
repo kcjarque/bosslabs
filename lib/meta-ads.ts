@@ -1,11 +1,13 @@
 /**
- * Meta Ads — live insights for the BOSSLABS AI | SALES campaign.
+ * Meta Ads — live insights for every tracked campaign (see tracked_campaigns
+ * in lib/db.ts, managed from the Ads → Settings tab).
  *
- * Server-only. Fetches the campaign + its ad sets + its ads from the Graph API
- * (one call per level, entity attributes + nested insights via field expansion)
- * and normalises every metric the dashboard/table shows. No data is stored —
- * the page reads this live, so it's always current. Matches how BrandHub pulls
- * Meta, minus all the AI/advisor/recommendation logic.
+ * Server-only. Fetches each tracked campaign + its ad sets + its ads from the
+ * Graph API (one call per level, entity attributes + nested insights via field
+ * expansion) and normalises every metric the dashboard/table shows, then sums
+ * across campaigns for the summary cards. No data is stored — the page reads
+ * this live, so it's always current. Matches how BrandHub pulls Meta, minus
+ * all the AI/advisor/recommendation logic.
  *
  * Needs META_ADS_TOKEN (System-User token, ads_read on the SSA Back up 2
  * account). Without it, getAdsReport returns { configured: false } and the page
@@ -13,13 +15,14 @@
  */
 
 import { unstable_cache } from 'next/cache';
-import { upsertAdSpendDay } from './db';
+import { upsertAdSpendDay, getTrackedCampaigns } from './db';
 
 /**
  * Cached view of getAdsReport for the /admin/ads page. The raw report fires 3
- * live Graph API calls (1–3s each); without caching, every nav to the page paid
- * that cost. Cached 120s per range and tagged 'ads-report' so the page's Refresh
- * button (which calls revalidateTag) still forces a fresh pull on demand.
+ * live Graph API calls per tracked campaign (1–3s each); without caching,
+ * every nav to the page paid that cost. Cached 120s per range and tagged
+ * 'ads-report' so the page's Refresh button and the Settings save action
+ * (which both call revalidateTag) still force a fresh pull on demand.
  */
 export function getAdsReportCached(rangeKey: AdsRangeKey = 'all'): Promise<AdsReport> {
   return unstable_cache(() => getAdsReport(rangeKey), ['ads-report', rangeKey], {
@@ -76,8 +79,13 @@ export type AdsReport =
   | { configured: false }
   | {
       configured: true;
-      campaign: AdEntity | null;
+      /** One row per tracked campaign (Ads → Settings). */
+      campaigns: AdEntity[];
+      /** Aggregate across all tracked campaigns, for the summary cards. */
+      totals: AdEntity | null;
+      /** adset.parentId = campaign id */
       adsets: AdEntity[];
+      /** ad.parentId = adset id */
       ads: AdEntity[];
       rangeLabel: string;
       error?: string;
@@ -144,6 +152,36 @@ function metricsFrom(insights: RawInsights | undefined): AdMetrics {
   };
 }
 
+/** Combine several campaigns' metrics into one total. Rates (CTR, CPM,
+ *  frequency, ROAS) are recomputed from the summed raw numbers rather than
+ *  averaged, so the result matches what a single combined campaign would
+ *  report — not just a mean of means. */
+function sumMetrics(list: AdMetrics[]): AdMetrics {
+  const spend = list.reduce((s, m) => s + m.spend, 0);
+  const impressions = list.reduce((s, m) => s + m.impressions, 0);
+  const reach = list.reduce((s, m) => s + m.reach, 0);
+  const clicks = list.reduce((s, m) => s + m.clicks, 0);
+  const results = list.reduce((s, m) => s + m.results, 0);
+  const revenue = list.reduce((s, m) => s + (m.roas != null ? m.roas * m.spend : 0), 0);
+  const linkClicksWeighted = list.reduce(
+    (s, m) => s + (m.linkCtr != null ? m.linkCtr * m.impressions : 0),
+    0,
+  );
+  return {
+    spend,
+    impressions,
+    reach,
+    clicks,
+    results,
+    costPerResult: results > 0 ? spend / results : null,
+    linkCtr: impressions > 0 ? linkClicksWeighted / impressions : null,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : null,
+    cpm: impressions > 0 ? (spend / impressions) * 1000 : null,
+    frequency: reach > 0 ? impressions / reach : null,
+    roas: spend > 0 ? revenue / spend : null,
+  };
+}
+
 const INSIGHT_FIELDS =
   'spend,impressions,reach,clicks,ctr,cpm,frequency,inline_link_click_ctr,results,cost_per_result,purchase_roas';
 
@@ -192,83 +230,123 @@ export async function getCampaignBudget(): Promise<{
   }
 }
 
+/** Tracked campaigns (Ads → Settings), or the legacy single campaign when
+ *  none are configured yet / everything got unchecked. */
+async function resolveTrackedTargets(): Promise<{ id: string; name: string }[]> {
+  const tracked = await getTrackedCampaigns();
+  const on = tracked.filter((c) => c.tracked).map((c) => ({ id: c.campaignId, name: c.campaignName }));
+  return on.length > 0 ? on : [{ id: CAMPAIGN_ID, name: CAMPAIGN_NAME }];
+}
+
 /**
- * Live report for the BOSSLABS campaign at the given window. Best-effort: any
- * Graph failure returns { configured:true, error } with whatever resolved, so
- * the page degrades instead of 500-ing.
+ * Live report across all tracked campaigns at the given window. Best-effort:
+ * a single campaign's Graph failure doesn't blank out the others — it's
+ * skipped and surfaced via `error`, so the page degrades instead of 500-ing.
  */
 export async function getAdsReport(rangeKey: AdsRangeKey = 'all'): Promise<AdsReport> {
   if (!process.env.META_ADS_TOKEN) return { configured: false };
 
   const range = ADS_RANGES.find((r) => r.key === rangeKey) ?? ADS_RANGES[ADS_RANGES.length - 1];
   const win = `insights.date_preset(${range.preset}){${INSIGHT_FIELDS}}`;
+  const targets = await resolveTrackedTargets();
 
   try {
-    const [campRaw, adsetsRaw, adsRaw] = await Promise.all([
-      graph(CAMPAIGN_ID, `id,name,effective_status,${win}`),
-      graph(`${CAMPAIGN_ID}/adsets`, `id,name,effective_status,${win}`),
-      graph(
-        `${CAMPAIGN_ID}/ads`,
-        `id,name,effective_status,adset{id,name},creative{thumbnail_url,image_url},${win}`,
-      ),
-    ]);
+    const perCampaign = await Promise.all(
+      targets.map(async (t) => {
+        try {
+          const [campRaw, adsetsRaw, adsRaw] = await Promise.all([
+            graph(t.id, `id,name,effective_status,${win}`),
+            graph(`${t.id}/adsets`, `id,name,effective_status,${win}`),
+            graph(
+              `${t.id}/ads`,
+              `id,name,effective_status,adset{id,name},creative{thumbnail_url,image_url},${win}`,
+            ),
+          ]);
+          return { target: t, campRaw, adsetsRaw, adsRaw, fetchError: undefined as string | undefined };
+        } catch (err) {
+          return { target: t, campRaw: null, adsetsRaw: null, adsRaw: null, fetchError: String(err) };
+        }
+      }),
+    );
 
-    const firstError =
-      (campRaw as { error?: { message?: string } })?.error?.message ||
-      (adsetsRaw as { error?: { message?: string } })?.error?.message ||
-      (adsRaw as { error?: { message?: string } })?.error?.message;
+    let firstError: string | undefined;
+    const campaigns: AdEntity[] = [];
+    const adsets: AdEntity[] = [];
+    const ads: AdEntity[] = [];
 
-    const c = campRaw as {
-      id?: string;
-      name?: string;
-      effective_status?: string;
-      insights?: RawInsights;
-    };
-    const campaign: AdEntity | null = c?.id
-      ? {
+    for (const { target, campRaw, adsetsRaw, adsRaw, fetchError } of perCampaign) {
+      firstError =
+        firstError ||
+        fetchError ||
+        (campRaw as { error?: { message?: string } } | null)?.error?.message ||
+        (adsetsRaw as { error?: { message?: string } } | null)?.error?.message ||
+        (adsRaw as { error?: { message?: string } } | null)?.error?.message;
+      if (!campRaw) continue;
+
+      const c = campRaw as {
+        id?: string;
+        name?: string;
+        effective_status?: string;
+        insights?: RawInsights;
+      };
+      if (c?.id) {
+        campaigns.push({
           level: 'campaign',
           id: c.id,
-          name: c.name || CAMPAIGN_NAME,
+          name: c.name || target.name,
           status: c.effective_status || '',
           active: (c.effective_status || '').toUpperCase() === 'ACTIVE',
           ...metricsFrom(c.insights),
-        }
-      : null;
+        });
+      }
 
-    const adsets: AdEntity[] = (
-      (adsetsRaw as { data?: Array<Record<string, unknown>> })?.data ?? []
-    ).map((a) => ({
-      level: 'adset' as const,
-      id: String(a.id),
-      name: String(a.name ?? ''),
-      status: String(a.effective_status ?? ''),
-      active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
-      ...metricsFrom(a.insights as RawInsights | undefined),
-    }));
+      for (const a of (adsetsRaw as { data?: Array<Record<string, unknown>> } | null)?.data ?? []) {
+        adsets.push({
+          level: 'adset',
+          id: String(a.id),
+          name: String(a.name ?? ''),
+          status: String(a.effective_status ?? ''),
+          active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+          parentId: target.id,
+          ...metricsFrom(a.insights as RawInsights | undefined),
+        });
+      }
 
-    const ads: AdEntity[] = (
-      (adsRaw as { data?: Array<Record<string, unknown>> })?.data ?? []
-    ).map((a) => {
-      const creative = a.creative as { thumbnail_url?: string; image_url?: string } | undefined;
-      return {
-        level: 'ad' as const,
-        id: String(a.id),
-        name: String(a.name ?? ''),
-        status: String(a.effective_status ?? ''),
-        active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
-        parentId: (a.adset as { id?: string } | undefined)?.id,
-        // Prefer the small thumbnail; fall back to the full image_url when
-        // Meta doesn't ship a thumbnail (some creatives skip it).
-        thumbnailUrl: creative?.thumbnail_url ?? creative?.image_url ?? null,
-        ...metricsFrom(a.insights as RawInsights | undefined),
-      };
-    });
+      for (const a of (adsRaw as { data?: Array<Record<string, unknown>> } | null)?.data ?? []) {
+        const creative = a.creative as { thumbnail_url?: string; image_url?: string } | undefined;
+        ads.push({
+          level: 'ad',
+          id: String(a.id),
+          name: String(a.name ?? ''),
+          status: String(a.effective_status ?? ''),
+          active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+          parentId: (a.adset as { id?: string } | undefined)?.id,
+          // Prefer the small thumbnail; fall back to the full image_url when
+          // Meta doesn't ship a thumbnail (some creatives skip it).
+          thumbnailUrl: creative?.thumbnail_url ?? creative?.image_url ?? null,
+          ...metricsFrom(a.insights as RawInsights | undefined),
+        });
+      }
+    }
 
-    return { configured: true, campaign, adsets, ads, rangeLabel: range.label, error: firstError };
+    const totals: AdEntity | null =
+      campaigns.length > 0
+        ? {
+            level: 'campaign',
+            id: 'totals',
+            name: campaigns.length === 1 ? campaigns[0].name : `${campaigns.length} tracked campaigns`,
+            status: '',
+            active: campaigns.some((c) => c.active),
+            ...sumMetrics(campaigns),
+          }
+        : null;
+
+    return { configured: true, campaigns, totals, adsets, ads, rangeLabel: range.label, error: firstError };
   } catch (err) {
     return {
       configured: true,
-      campaign: null,
+      campaigns: [],
+      totals: null,
       adsets: [],
       ads: [],
       rangeLabel: range.label,
