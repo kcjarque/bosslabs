@@ -55,12 +55,15 @@ export function CountdownBar({
   const [target] = useState(() => getTarget(startsAtIso));
   const { mounted, days, hours, mins, secs } = useCountdown(target);
 
-  // Never show the urgency bar inside the admin or the affiliate dashboard —
-  // it's a public-funnel signal, not for those internal/partner views.
+  // Never show the urgency bar inside the admin, affiliate dashboard, or
+  // post-purchase confirmation pages — already converted, no need to push.
   if (
     pathname?.startsWith('/admin') ||
     pathname?.startsWith('/affiliate') ||
-    pathname?.startsWith('/closer')
+    pathname?.startsWith('/closer') ||
+    pathname?.startsWith('/accepted') ||
+    pathname?.startsWith('/thank-you') ||
+    pathname?.includes('/done')
   ) {
     return null;
   }
