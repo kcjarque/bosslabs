@@ -20,6 +20,9 @@ export type ExpenseSource = 'single' | 'project' | 'recurring';
 /** People who can front an expense — the Accounts Payable is owed to one of these. */
 export const PAYERS = ['Kyle', 'Mikey'] as const;
 
+/** How an expense was actually paid — independent of who fronted it. */
+export const PAYMENT_METHODS = ['Credit Card', 'Cash', 'Bank Transfer'] as const;
+
 export type Category = { id: string; name: string };
 
 export type Project = {
@@ -72,6 +75,8 @@ export type Expense = {
   abonoSettled: boolean;
   /** Public Supabase Storage URL of an attached receipt/screenshot. */
   receiptUrl: string | null;
+  /** How it was paid — Credit Card / Cash / Bank Transfer / a custom value. */
+  paymentMethod: string | null;
 };
 
 /** One open/settled Accounts-Payable line — a stored abono expense OR a
@@ -220,6 +225,37 @@ export async function deletePayer(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('finance_payers').delete().eq('id', id);
   if (error) throw new Error(`deletePayer: ${error.message}`);
+}
+
+// ─── Payment methods (how an expense was paid) ──────────────────────────────
+
+export type PaymentMethod = { id: string; name: string };
+
+/** Falls back to the default Credit Card / Cash / Bank Transfer list when the
+ *  table doesn't exist yet (pre-migration) — mirrors getTrackedCampaigns. */
+export async function listPaymentMethods(): Promise<PaymentMethod[]> {
+  const fallback = PAYMENT_METHODS.map((name) => ({ id: name, name }));
+  if (!isSupabaseConfigured()) return fallback;
+  const { data, error } = await getSupabase()
+    .from('finance_payment_methods')
+    .select('id, name')
+    .order('name', { ascending: true });
+  if (error || !data) return fallback;
+  return data as PaymentMethod[];
+}
+
+export async function addPaymentMethod(name: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const { error } = await getSupabase().from('finance_payment_methods').insert({ name: clean });
+  if (error && !/duplicate/i.test(error.message)) throw new Error(`addPaymentMethod: ${error.message}`);
+}
+
+export async function deletePaymentMethod(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await getSupabase().from('finance_payment_methods').delete().eq('id', id);
+  if (error) throw new Error(`deletePaymentMethod: ${error.message}`);
 }
 
 // ─── Projects + BOM line items ──────────────────────────────────────────────
@@ -492,6 +528,7 @@ export async function listExpenses(filters?: {
     paidBy: r.paid_by ?? null,
     abonoSettled: Boolean(r.abono_settled),
     receiptUrl: r.receipt_url ?? null,
+    paymentMethod: r.payment_method ?? null,
   }));
 }
 
@@ -506,6 +543,8 @@ export async function addExpense(input: {
   paidBy?: string | null;
   /** Optional public Storage URL of an uploaded receipt/screenshot. */
   receiptUrl?: string | null;
+  /** How it was paid — Credit Card / Cash / Bank Transfer / a custom value. */
+  paymentMethod?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const clean = input.description.trim();
@@ -521,6 +560,7 @@ export async function addExpense(input: {
     is_abono: Boolean(input.isAbono),
     paid_by: input.paidBy ?? null,
     receipt_url: input.receiptUrl ?? null,
+    payment_method: input.paymentMethod ?? null,
   });
   if (error) throw new Error(`addExpense: ${error.message}`);
 }
@@ -989,6 +1029,7 @@ type ExpenseRow = {
   abono_settled?: boolean;
   abono_settled_at?: string | null;
   receipt_url?: string | null;
+  payment_method?: string | null;
 };
 type OverrideRow = {
   recurring_id: string;

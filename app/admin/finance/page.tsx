@@ -6,11 +6,13 @@ import { ConfirmButton } from '@/components/finance/ConfirmButton';
 import { EditableAmount } from '@/components/finance/EditableAmount';
 import { EditableText } from '@/components/finance/EditableText';
 import { PaidBySelect } from '@/components/finance/PaidBySelect';
+import { PaymentMethodSelect } from '@/components/finance/PaymentMethodSelect';
 import { ReceiptUploadField } from '@/components/admin/ReceiptUploadField';
 import {
   getMonthlyConsolidation,
   listCategories,
   listPayers,
+  listPaymentMethods,
   manilaToday,
   manilaYearMonth,
 } from '@/lib/finance';
@@ -53,10 +55,11 @@ export default async function FinanceExpensesPage({
 }) {
   requireAdmin();
   const { year, month } = parseYm(searchParams.ym);
-  const [data, categories, payers] = await Promise.all([
+  const [data, categories, payers, paymentMethods] = await Promise.all([
     getMonthlyConsolidation(year, month),
     listCategories(),
     listPayers(),
+    listPaymentMethods(),
   ]);
   const prev = shiftMonth(year, month, -1);
   const next = shiftMonth(year, month, 1);
@@ -256,6 +259,7 @@ export default async function FinanceExpensesPage({
                 ))}
               </select>
             </div>
+            <PaymentMethodSelect methods={paymentMethods.map((m) => m.name)} />
             <PaidBySelect
               payers={payers.map((p) => p.name)}
               directLabel="— Business paid directly —"

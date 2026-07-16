@@ -18,6 +18,8 @@ import {
   deleteCategory,
   addPayer,
   deletePayer,
+  addPaymentMethod,
+  deletePaymentMethod,
   addProject,
   deleteProject,
   addProjectItem,
@@ -60,6 +62,7 @@ export async function addExpenseAction(fd: FormData) {
     isAbono: Boolean(paidBy),
     paidBy,
     receiptUrl: nullable(fd, 'receiptUrl'),
+    paymentMethod: nullable(fd, 'paymentMethod'),
   });
   refresh();
 }
@@ -185,6 +188,23 @@ export async function deletePayerAction(fd: FormData) {
   requireAdmin();
   const id = str(fd, 'id');
   if (id) await deletePayer(id);
+  refresh();
+}
+
+// ─── Payment methods ─────────────────────────────────────────────────────────
+// addPaymentMethodAction is FormData-based so it serves both the settings <form>
+// and the inline "+ Add payment method" in PaymentMethodSelect.
+
+export async function addPaymentMethodAction(fd: FormData) {
+  requireAdmin();
+  await addPaymentMethod(str(fd, 'name'));
+  refresh();
+}
+
+export async function deletePaymentMethodAction(fd: FormData) {
+  requireAdmin();
+  const id = str(fd, 'id');
+  if (id) await deletePaymentMethod(id);
   refresh();
 }
 
