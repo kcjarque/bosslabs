@@ -4,6 +4,19 @@ import { useState } from 'react';
 
 type Row = { date: string; spendCentavos: number; revCentavos: number; roas: number | null };
 
+function linearTrend(vals: number[]): { slope: number; intercept: number } {
+  const n = vals.length;
+  if (n < 2) return { slope: 0, intercept: vals[0] ?? 0 };
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i; sumY += vals[i];
+    sumXY += i * vals[i]; sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  return { slope, intercept };
+}
+
 const peso = (centavos: number) =>
   new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -45,6 +58,7 @@ export function AdSpendRoasChart({ rows }: { rows: Row[] }) {
 
   const spend = days.map((d) => d.spendCentavos / 100);
   const rev = days.map((d) => d.revCentavos / 100);
+  const trend = linearTrend(rev);
   const leftMax = Math.max(1, ...spend, ...rev) * 1.12;
   const roasVals = days.map((d) => d.roas).filter((r): r is number => r != null);
   const rightMax = Math.max(2, Math.ceil(Math.max(1, ...roasVals)));
@@ -98,6 +112,16 @@ export function AdSpendRoasChart({ rows }: { rows: Row[] }) {
             }}
           />
           1× breakeven
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-0.5 w-3"
+            style={{
+              background:
+                'repeating-linear-gradient(to right,#7c3aed 0,#7c3aed 4px,transparent 4px,transparent 7px)',
+            }}
+          />
+          Revenue trend
         </span>
       </div>
 
@@ -168,6 +192,26 @@ export function AdSpendRoasChart({ rows }: { rows: Row[] }) {
               />
             ),
           )}
+
+          {/* Revenue trend line (linear regression) */}
+          {N >= 2 && (() => {
+            const y0 = trend.intercept;
+            const y1 = trend.slope * (N - 1) + trend.intercept;
+            const x0 = cx(0);
+            const x1 = cx(N - 1);
+            const yT = (v: number) => padTop + innerH * (1 - Math.max(0, v) / leftMax);
+            return (
+              <line
+                x1={x0} y1={yT(y0)}
+                x2={x1} y2={yT(y1)}
+                stroke="#7c3aed"
+                strokeWidth="1.8"
+                strokeDasharray="5 4"
+                strokeLinecap="round"
+                opacity="0.85"
+              />
+            );
+          })()}
 
           {/* x-axis date labels */}
           {days.map((d, i) =>
