@@ -232,3 +232,149 @@ export async function getDripPerformance(): Promise<DripRow[]> {
     }))
     .sort((x, y) => y.sent - x.sent);
 }
+
+/* ── Survey analytics (/admin/machine/survey) ────────────────────────────── */
+
+// Mirrors the option labels shown in components/SurveyForm.tsx (q1/q2), with
+// "Iba pa" rendered as "Other" for the admin (internal) view.
+export const SURVEY_INDUSTRY_LABEL: Record<string, string> = {
+  food_retail: 'Food / Retail',
+  services: 'Services',
+  logistics_ops: 'Logistics / Operations',
+  agency_freelance: 'Agency / Freelance',
+  manufacturing: 'Manufacturing',
+  other: 'Other',
+};
+export const SURVEY_PAIN_LABEL: Record<string, string> = {
+  orders_tracking: 'Orders / tracking',
+  manual_reports: 'Manual reports',
+  followups: 'Follow-ups',
+  team_visibility: 'Team visibility',
+  other: 'Other',
+};
+export const SURVEY_INTENT_LABEL: Record<string, string> = {
+  diy: 'DIY — wants to learn',
+  dfy: 'DFY — wants it done for them',
+};
+
+export type SurveyBreakdown = { key: string; label: string; count: number; pct: number };
+
+export type SurveyResponseRow = {
+  id: string;
+  contactId: string | null;
+  name: string;
+  email: string | null;
+  eventName: string;
+  industryLabel: string;
+  painLabel: string;
+  /** Elaboration when q2_pain = 'other'. */
+  painFreetext: string | null;
+  /** "If you had a custom system tomorrow, what's the first thing you'd build?" */
+  ideaFreetext: string | null;
+  intent: string | null;
+  intentLabel: string;
+  createdAt: string;
+};
+
+export type SurveyData = {
+  total: number;
+  industry: SurveyBreakdown[];
+  pain: SurveyBreakdown[];
+  intent: SurveyBreakdown[];
+  byEvent: Array<{ eventName: string; count: number }>;
+  responses: SurveyResponseRow[];
+};
+
+const EMPTY_SURVEY: SurveyData = { total: 0, industry: [], pain: [], intent: [], byEvent: [], responses: [] };
+
+function tally(values: Array<string | null>, labels: Record<string, string>): SurveyBreakdown[] {
+  const counts: Record<string, number> = {};
+  for (const v of values) {
+    const k = v ?? 'unknown';
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  const total = values.length;
+  return Object.entries(counts)
+    .map(([key, count]) => ({ key, label: labels[key] ?? 'Unknown', count, pct: total ? Math.round((count / total) * 100) : 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Every survey response (SPEC §1.4) — industry / pain / intent breakdowns for
+ * the admin Survey tab's charts, plus the full list newest-first with the
+ * respondent and event resolved in two batched queries (no N+1). All-time,
+ * capped at `limit`: survey volume is one row per attendee per event, so this
+ * is generous headroom for a long while.
+ */
+export async function getSurveyData(limit = 1000): Promise<SurveyData> {
+  if (!isSupabaseConfigured()) return EMPTY_SURVEY;
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('survey_responses')
+    .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error || !data || data.length === 0) return EMPTY_SURVEY;
+
+  const rows = data as Array<{
+    id: string;
+    contact_id: string | null;
+    event_id: string | null;
+    q1_industry: string | null;
+    q2_pain: string | null;
+    q2_freetext: string | null;
+    q3_freetext: string | null;
+    q4_intent: string | null;
+    created_at: string;
+  }>;
+
+  const contactIds = [...new Set(rows.map((r) => r.contact_id).filter((x): x is string => Boolean(x)))];
+  const people: Record<string, { name: string; email: string | null }> = {};
+  if (contactIds.length) {
+    const { data: sig } = await sb.from('signups').select('id, first_name, last_name, email').in('id', contactIds);
+    for (const s of (sig ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>) {
+      const name = [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || 'Unknown';
+      people[s.id] = { name, email: s.email };
+    }
+  }
+
+  const eventIds = [...new Set(rows.map((r) => r.event_id).filter((x): x is string => Boolean(x)))];
+  const eventNames: Record<string, string> = {};
+  if (eventIds.length) {
+    const { data: ev } = await sb.from('events').select('id, name').in('id', eventIds);
+    for (const e of (ev ?? []) as Array<{ id: string; name: string }>) eventNames[e.id] = e.name;
+  }
+
+  const responses: SurveyResponseRow[] = rows.map((r) => {
+    const person = r.contact_id ? people[r.contact_id] : undefined;
+    return {
+      id: r.id,
+      contactId: r.contact_id,
+      name: person?.name ?? 'Unknown contact',
+      email: person?.email ?? null,
+      eventName: r.event_id ? eventNames[r.event_id] ?? 'Unknown event' : '—',
+      industryLabel: SURVEY_INDUSTRY_LABEL[r.q1_industry ?? 'other'] ?? 'Other',
+      painLabel: SURVEY_PAIN_LABEL[r.q2_pain ?? 'other'] ?? 'Other',
+      painFreetext: r.q2_freetext,
+      ideaFreetext: r.q3_freetext,
+      intent: r.q4_intent,
+      intentLabel: r.q4_intent ? SURVEY_INTENT_LABEL[r.q4_intent] ?? r.q4_intent : '—',
+      createdAt: r.created_at,
+    };
+  });
+
+  const eventCounts: Record<string, number> = {};
+  for (const r of responses) eventCounts[r.eventName] = (eventCounts[r.eventName] ?? 0) + 1;
+  const byEvent = Object.entries(eventCounts)
+    .map(([eventName, count]) => ({ eventName, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    total: responses.length,
+    industry: tally(rows.map((r) => r.q1_industry), SURVEY_INDUSTRY_LABEL),
+    pain: tally(rows.map((r) => r.q2_pain), SURVEY_PAIN_LABEL),
+    intent: tally(rows.map((r) => r.q4_intent), SURVEY_INTENT_LABEL),
+    byEvent,
+    responses,
+  };
+}
