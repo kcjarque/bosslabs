@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { syncAdSpendDaily } from '@/lib/meta-ads';
+import { getTrackedCampaigns } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const result = await syncAdSpendDaily(3);
+  const tracked = await getTrackedCampaigns();
+  const campaignIds = tracked.filter((c) => c.tracked).map((c) => c.campaignId);
+  const result = await syncAdSpendDaily(3, campaignIds);
   if (result.error) {
     if (result.error.includes('not configured')) {
       return NextResponse.json({ ok: true, skipped: result.error });

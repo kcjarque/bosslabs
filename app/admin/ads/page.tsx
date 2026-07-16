@@ -90,6 +90,7 @@ function AdsTabs({ view }: { view: 'live' | 'results' }) {
   const tabs = [
     { key: 'live' as const, label: 'Live (Meta)', href: '/admin/ads' },
     { key: 'results' as const, label: 'Results over time', href: '/admin/ads?view=results' },
+    { key: 'settings' as const, label: 'Settings', href: '/admin/ads/settings' },
   ];
   return (
     <div className="flex flex-wrap gap-2 border-b border-slate-200">

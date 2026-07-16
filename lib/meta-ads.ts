@@ -31,6 +31,7 @@ export function getAdsReportCached(rangeKey: AdsRangeKey = 'all'): Promise<AdsRe
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
 const CAMPAIGN_ID = process.env.META_ADS_CAMPAIGN_ID || '120247301997590236';
 const CAMPAIGN_NAME = 'BOSSLABS AI | SALES';
+const ACCOUNT_ID = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
 
 /** Date windows the page can request → Graph date_preset. */
 export const ADS_RANGES = [
@@ -327,48 +328,48 @@ function manilaDate(ms: number): string {
   return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
 }
 
-/**
- * Pull daily campaign spend for the last `daysBack` days THROUGH today and
- * upsert into ad_spend_daily, OVERWRITING each day. Re-running corrects a
- * partial day (today, or a yesterday that was synced before midnight) to the
- * full day's total — that's why the Refresh button re-pulls a wide window.
- * Shared by the nightly cron and the Refresh button. Best-effort.
- */
-export async function syncAdSpendDaily(
-  daysBack = 3,
-): Promise<{ synced: string[]; error?: string }> {
-  const token = process.env.META_ADS_TOKEN;
-  if (!token) return { synced: [], error: 'META_ADS_TOKEN not configured' };
+/** List all campaigns in the ad account for the Settings picker. */
+export type CampaignSummary = { id: string; name: string; status: string };
 
-  const now = Date.now();
-  const since = manilaDate(now - daysBack * 86400_000);
-  const until = manilaDate(now); // include today so partial days get refreshed
+export async function getAccountCampaigns(): Promise<CampaignSummary[]> {
+  const token = process.env.META_ADS_TOKEN;
+  if (!token) return [];
+  try {
+    const url =
+      `https://graph.facebook.com/${GRAPH_VERSION}/act_${ACCOUNT_ID}/campaigns` +
+      `?fields=id,name,effective_status&limit=50&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = (await res.json()) as {
+      data?: Array<{ id: string; name: string; effective_status: string }>;
+      error?: { message: string };
+    };
+    if (json.error) return [];
+    return (json.data ?? []).map((c) => ({ id: c.id, name: c.name, status: c.effective_status }));
+  } catch {
+    return [];
+  }
+}
+
+/** Pull daily spend for one campaign and upsert rows. Returns synced dates. */
+async function syncOneCampaign(
+  campaignId: string,
+  token: string,
+  since: string,
+  until: string,
+): Promise<string[]> {
   const url =
-    `https://graph.facebook.com/${GRAPH_VERSION}/${CAMPAIGN_ID}/insights` +
+    `https://graph.facebook.com/${GRAPH_VERSION}/${campaignId}/insights` +
     `?fields=spend,impressions,clicks,reach&level=campaign&time_increment=1` +
     `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
     `&access_token=${encodeURIComponent(token)}`;
-
-  // Snapshot the CURRENT set budget so each synced (recent) day records what was
-  // configured. Meta has no per-day budget history, so this captures it forward:
-  // every nightly run stamps the live budget onto the recent days it overwrites.
-  const _b = await getCampaignBudget().catch(() => ({ dailyCentavos: null, lifetimeCentavos: null }));
-  const budgetSetCentavos = _b.dailyCentavos ?? _b.lifetimeCentavos;
-
-  const synced: string[] = [];
   try {
     const res = await fetch(url, { cache: 'no-store' });
     const json = (await res.json()) as {
-      data?: Array<{
-        date_start?: string;
-        spend?: string;
-        impressions?: string;
-        clicks?: string;
-        reach?: string;
-      }>;
+      data?: Array<{ date_start?: string; spend?: string; impressions?: string; clicks?: string; reach?: string }>;
       error?: { message?: string };
     };
-    if (json.error) return { synced, error: json.error.message };
+    if (json.error) return [];
+    const synced: string[] = [];
     for (const row of json.data ?? []) {
       if (!row.date_start) continue;
       const ok = await upsertAdSpendDay({
@@ -377,15 +378,45 @@ export async function syncAdSpendDaily(
         impressions: parseInt(row.impressions ?? '0', 10) || 0,
         clicks: parseInt(row.clicks ?? '0', 10) || 0,
         reach: parseInt(row.reach ?? '0', 10) || 0,
-        campaignId: CAMPAIGN_ID,
-        budgetSetCentavos,
+        campaignId,
       });
       if (ok) synced.push(row.date_start);
     }
-    return { synced };
-  } catch (err) {
-    return { synced, error: String(err) };
+    return synced;
+  } catch {
+    return [];
   }
+}
+
+/**
+ * Pull daily campaign spend for the last `daysBack` days THROUGH today and
+ * upsert into ad_spend_daily, OVERWRITING each day. Loops over all provided
+ * campaignIds (or falls back to the default env campaign). Shared by the
+ * nightly cron and the Refresh button. Best-effort.
+ */
+export async function syncAdSpendDaily(
+  daysBack = 3,
+  campaignIds: string[] = [],
+): Promise<{ synced: string[]; error?: string }> {
+  const token = process.env.META_ADS_TOKEN;
+  if (!token) return { synced: [], error: 'META_ADS_TOKEN not configured' };
+
+  const ids = campaignIds.length > 0 ? campaignIds : [CAMPAIGN_ID];
+  const now = Date.now();
+  const since = manilaDate(now - daysBack * 86400_000);
+  const until = manilaDate(now);
+
+  const allSynced: string[] = [];
+  let firstError: string | undefined;
+  for (const id of ids) {
+    try {
+      const dates = await syncOneCampaign(id, token, since, until);
+      allSynced.push(...dates);
+    } catch (err) {
+      firstError = firstError ?? String(err);
+    }
+  }
+  return { synced: allSynced, ...(firstError ? { error: firstError } : {}) };
 }
 
 /** One ad's metrics for a single day. Revenue = pixel-tracked purchase value

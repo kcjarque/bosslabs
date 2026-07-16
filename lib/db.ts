@@ -2023,30 +2023,89 @@ export type AdSpendDay = {
   budgetSetCentavos: number | null;
 };
 
-/** All recorded daily ad-spend rows, ascending by date. Empty in demo mode
- *  (no Supabase) — the dashboard then renders the ROAS card as "no data yet". */
+export type TrackedCampaign = { campaignId: string; campaignName: string; tracked: boolean };
+
+/** All campaigns the admin has opted in/out of tracking. Falls back to the
+ *  original single campaign when the table doesn't exist yet (pre-migration). */
+export async function getTrackedCampaigns(): Promise<TrackedCampaign[]> {
+  if (!isSupabaseConfigured()) {
+    return [{ campaignId: '120247301997590236', campaignName: 'BOSSLABS AI | SALES', tracked: true }];
+  }
+  const { data, error } = await getSupabase()
+    .from('tracked_campaigns')
+    .select('campaign_id, campaign_name, tracked')
+    .order('created_at', { ascending: true });
+  if (error || !data) {
+    return [{ campaignId: '120247301997590236', campaignName: 'BOSSLABS AI | SALES', tracked: true }];
+  }
+  return (data as Array<{ campaign_id: string; campaign_name: string; tracked: boolean }>).map(
+    (r) => ({ campaignId: r.campaign_id, campaignName: r.campaign_name, tracked: r.tracked }),
+  );
+}
+
+/** Upsert a batch of campaigns (from the Meta account list) and set their
+ *  tracked flag. Any campaign_id already in the table keeps its existing
+ *  tracked value unless explicitly passed. */
+export async function saveTrackedCampaigns(
+  campaigns: { campaignId: string; campaignName: string; tracked: boolean }[],
+): Promise<void> {
+  if (!isSupabaseConfigured() || campaigns.length === 0) return;
+  await getSupabase()
+    .from('tracked_campaigns')
+    .upsert(
+      campaigns.map((c) => ({
+        campaign_id: c.campaignId,
+        campaign_name: c.campaignName,
+        tracked: c.tracked,
+      })),
+      { onConflict: 'campaign_id' },
+    );
+}
+
+/** All recorded daily ad-spend rows, ascending by date. Aggregates across all
+ *  tracked campaigns so the dashboard always shows a combined total. */
 export async function getAdSpendByDay(): Promise<AdSpendDay[]> {
   if (!isSupabaseConfigured()) return [];
+  const tracked = await getTrackedCampaigns();
+  const trackedIds = tracked.filter((c) => c.tracked).map((c) => c.campaignId);
+  if (trackedIds.length === 0) return [];
+
   const { data, error } = await getSupabase()
     .from('ad_spend_daily')
-    .select('date, spend_centavos, impressions, clicks, reach, budget_set_centavos')
+    .select('date, spend_centavos, impressions, clicks, reach, budget_set_centavos, campaign_id')
+    .in('campaign_id', trackedIds)
     .order('date', { ascending: true });
   if (error) return [];
-  return ((data ?? []) as Array<{
+
+  // Sum all tracked campaigns into one row per date.
+  const byDate = new Map<string, AdSpendDay>();
+  for (const r of (data ?? []) as Array<{
     date: string;
     spend_centavos: number | null;
     impressions: number | null;
     clicks: number | null;
     reach: number | null;
     budget_set_centavos: number | null;
-  }>).map((r) => ({
-    date: r.date,
-    spendCentavos: r.spend_centavos ?? 0,
-    impressions: r.impressions ?? 0,
-    clicks: r.clicks ?? 0,
-    reach: r.reach ?? 0,
-    budgetSetCentavos: r.budget_set_centavos ?? null,
-  }));
+    campaign_id: string;
+  }>) {
+    const existing = byDate.get(r.date);
+    if (existing) {
+      existing.spendCentavos += r.spend_centavos ?? 0;
+      existing.impressions += r.impressions ?? 0;
+      existing.clicks += r.clicks ?? 0;
+      existing.reach += r.reach ?? 0;
+    } else {
+      byDate.set(r.date, {
+        date: r.date,
+        spendCentavos: r.spend_centavos ?? 0,
+        impressions: r.impressions ?? 0,
+        clicks: r.clicks ?? 0,
+        reach: r.reach ?? 0,
+        budgetSetCentavos: r.budget_set_centavos ?? null,
+      });
+    }
+  }
+  return [...byDate.values()];
 }
 
 /** Upsert one day's ad spend (used by the daily ads-sync cron). Idempotent on
@@ -2074,7 +2133,7 @@ export async function upsertAdSpendDay(row: {
   // Only write the budget when we have it, so a spend-only sync never nulls an
   // existing value.
   if (row.budgetSetCentavos != null) payload.budget_set_centavos = row.budgetSetCentavos;
-  const { error } = await getSupabase().from('ad_spend_daily').upsert(payload, { onConflict: 'date' });
+  const { error } = await getSupabase().from('ad_spend_daily').upsert(payload, { onConflict: 'date,campaign_id' });
   return !error;
 }
 
