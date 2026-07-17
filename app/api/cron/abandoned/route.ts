@@ -7,7 +7,8 @@
  *   - createdAt > 15 minutes ago (gives Xendit + buyer time to clear)
  *   - metadata.abandonedNotified is not yet set (idempotent)
  *
- * Fires a Telegram notification per matching signup, then writes
+ * Fires a Telegram notification per matching signup (all-sales chat +
+ * closer-team chat, NOT the main "Team Updates" chat), then writes
  * `abandonedNotified=<iso>` into metadata so we don't ping again.
  *
  * GRACE_MINUTES must match the pending→abandoned cutoff in
@@ -18,7 +19,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSignups, updateSignup, sessionHasRecording } from '@/lib/db';
-import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
+import { sendSalesTeam, sendAbandonedTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -86,8 +87,10 @@ export async function GET(req: Request) {
       `Amount: <b>${amt}</b>${s.bumped ? ' (with bump)' : ''}\n` +
       `Stuck for ${ageMin} min` +
       replayLine;
-    const res = await sendTelegram(msg);
-    // Mirror to the abandoned-cart sales team chat (best-effort add-on; never
+    // Primary send is the all-sales chat, not the main ("Team Updates") chat —
+    // abandoned-cart volume would otherwise drown out everything else there.
+    const res = await sendSalesTeam(msg);
+    // Mirror to the abandoned-cart closer team chat (best-effort add-on; never
     // affects the main send or the notified marker).
     await sendAbandonedTeam(msg).catch(() => {});
 
