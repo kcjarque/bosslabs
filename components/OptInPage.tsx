@@ -166,7 +166,17 @@ function Hero({ webinar }: { webinar: WebinarInfo }) {
   const facts = [
     {
       k: 'WHEN',
-      v: webinar.date,
+      // Two live sessions on offer right now — the active webinar (dynamic)
+      // plus the Thursday July 23 date, so prospects see both dates and can
+      // pick either. Both run 7:00 PM PHT (shared time line below). NOTE:
+      // "Thursday July 23" is hard-coded for this promo push — remove/update
+      // it once these two sessions have passed.
+      v: (
+        <>
+          <span className="block">{webinar.date}</span>
+          <span className="mt-0.5 block">Thursday July 23</span>
+        </>
+      ),
       s: `${webinar.time} ${webinar.timezone}`,
       icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
