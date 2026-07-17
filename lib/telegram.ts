@@ -154,12 +154,13 @@ export async function sendTelegramTo(
 }
 
 /**
- * Second Telegram chat for the ABANDONED-CART sales team. Receives ONLY
- * abandoned-cart + recovered-sale alerts — a pure add-on alongside the main
- * chat (which still gets everything). Configurable via env; falls back to the
- * team's chat id so it works without extra setup. Uses the same bot token.
+ * Second Telegram chat for the ABANDONED-CART sales team ("Bosslabs |
+ * Closers"). Receives ONLY abandoned-cart + recovered-sale alerts — a pure
+ * add-on alongside the main chat (which still gets everything). Configurable
+ * via env; falls back to the team's chat id so it works without extra setup.
+ * Uses the same bot token.
  */
-const ABANDONED_TEAM_CHAT_ID = process.env.TELEGRAM_ABANDONED_CHAT_ID || '-1003782640449';
+const ABANDONED_TEAM_CHAT_ID = process.env.TELEGRAM_ABANDONED_CHAT_ID || '-5337635626';
 
 export async function sendAbandonedTeam(
   text: string,
