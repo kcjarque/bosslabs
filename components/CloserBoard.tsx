@@ -4,7 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { MarkPaidButton } from '@/components/MarkPaidButton';
 import { toE164Ph } from '@/lib/phone';
 
-type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string; sessionLabel: string };
+type PoolLead = {
+  signupId: string;
+  name: string;
+  amountDueCentavos: number;
+  createdAt: string;
+  sessionLabel: string;
+  ageMinutes: number;
+  pending: boolean;
+};
 type Lead = {
   leadId: string;
   signupId: string;
@@ -31,6 +39,24 @@ function SessionChip({ label }: { label: string }) {
         <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
       {label}
+    </span>
+  );
+}
+
+/** Age-based status pill on each pool card: amber "Pending" under 15 min
+ *  (still might complete payment on its own — not yet worth chasing), rose
+ *  "Abandoned" at 15+ min (the same age the Telegram cron pings on). */
+function StatusPill({ pending, ageMinutes }: { pending: boolean; ageMinutes: number }) {
+  if (pending) {
+    return (
+      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium text-amber-700">
+        {ageMinutes} min{ageMinutes === 1 ? '' : 's'} · Pending
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-700">
+      Abandoned
     </span>
   );
 }
@@ -102,7 +128,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
       <div className="grid gap-3 md:grid-cols-3">
         {/* Unassigned pool */}
         <Column
-          title="Unassigned · abandoned carts"
+          title="Unassigned · pending & abandoned"
           dot="bg-slate-400"
           count={pool.length}
           highlight={over === 'pool'}
@@ -126,6 +152,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               className="cursor-grab rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm"
             >
               <div className="text-sm font-medium text-slate-900">{p.name}</div>
+              <StatusPill pending={p.pending} ageMinutes={p.ageMinutes} />
               <div className="text-[11px] text-slate-400">🔒 Phone hidden — claim to reveal</div>
               <div className="mt-1 text-[11px] font-medium text-slate-600">Cart: {peso(p.amountDueCentavos)}</div>
               <SessionChip label={p.sessionLabel} />
@@ -138,7 +165,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               </button>
             </div>
           ))}
-          {pool.length === 0 && <Empty>No unclaimed abandoned carts.</Empty>}
+          {pool.length === 0 && <Empty>No unclaimed carts.</Empty>}
         </Column>
 
         {/* My leads */}

@@ -209,9 +209,24 @@ export async function getCloserForSignup(
   return closer ? (closer as { id: string; name: string; username: string }) : null;
 }
 
+/** Age (minutes) a cart must reach before it's "Abandoned" rather than
+ *  "Pending" — must match GRACE_MINUTES in app/api/cron/abandoned/route.ts
+ *  so the pool and the Telegram ping flip at the same moment. */
+const PENDING_CUTOFF_MIN = 15;
+
 /** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
  *  No phone is returned — the pool is intentionally private until claimed. */
-export type PoolLead = { signupId: string; name: string; amountDueCentavos: number; createdAt: string; sessionLabel: string };
+export type PoolLead = {
+  signupId: string;
+  name: string;
+  amountDueCentavos: number;
+  createdAt: string;
+  sessionLabel: string;
+  ageMinutes: number;
+  /** true = still inside the grace window (shown as "Pending"), false = past
+   *  it (shown as "Abandoned" — the same age the Telegram cron fires on). */
+  pending: boolean;
+};
 
 export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
   if (!isSupabaseConfigured()) return [];
@@ -227,19 +242,23 @@ export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
       .order('created_at', { ascending: false }),
     eventLabelMap(),
   ]);
-  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string; event_id: string | null; metadata: { abandonedNotified?: string } | null }>)
-    // Only surface carts the abandoned-cart cron has already flagged (30-min
-    // grace + Telegram ping stamps `abandonedNotified`). This makes the closer
-    // pool appear at the SAME moment the Telegram fires — so closers never
-    // chase someone who's still mid-payment inside the grace window.
-    .filter((s) => !taken.has(s.id) && Boolean(s.metadata?.abandonedNotified))
-    .map((s) => ({
-      signupId: s.id,
-      name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
-      amountDueCentavos: s.amount_centavos ?? 99900,
-      createdAt: s.created_at,
-      sessionLabel: (s.event_id && labels.get(s.event_id)) || '',
-    }));
+  const now = Date.now();
+  return ((data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; amount_centavos: number | null; created_at: string; event_id: string | null; metadata: { standaloneOto?: boolean } | null }>)
+    // Standalone 1:1 leads (shared /oto link, expected high abandon rate)
+    // aren't webinar cart-abandons — same exclusion as the Telegram cron.
+    .filter((s) => !taken.has(s.id) && !s.metadata?.standaloneOto)
+    .map((s) => {
+      const ageMinutes = Math.max(0, Math.floor((now - new Date(s.created_at).getTime()) / 60000));
+      return {
+        signupId: s.id,
+        name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim() || 'Customer',
+        amountDueCentavos: s.amount_centavos ?? 99900,
+        createdAt: s.created_at,
+        sessionLabel: (s.event_id && labels.get(s.event_id)) || '',
+        ageMinutes,
+        pending: ageMinutes < PENDING_CUTOFF_MIN,
+      };
+    });
 }
 
 /** A closer's own leads — phone REVEALED (only ever fetched for the owner). */

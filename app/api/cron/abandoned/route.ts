@@ -4,11 +4,16 @@
  * Runs every 10 min. A signup is "abandoned" when:
  *   - source = 'paid' (intent to buy, not a free registration)
  *   - status = 'registered' (Xendit invoice created, payment not received)
- *   - createdAt > 30 minutes ago (gives Xendit + buyer time to clear)
+ *   - createdAt > 15 minutes ago (gives Xendit + buyer time to clear)
  *   - metadata.abandonedNotified is not yet set (idempotent)
  *
  * Fires a Telegram notification per matching signup, then writes
  * `abandonedNotified=<iso>` into metadata so we don't ping again.
+ *
+ * GRACE_MINUTES must match the pending→abandoned cutoff in
+ * lib/closers.ts (listUnclaimedAbandoned) — the closer pool relabels a
+ * lead "Abandoned" at the same age this cron notifies on, so a closer
+ * never chases someone who's still mid-payment inside the grace window.
  */
 
 import { NextResponse } from 'next/server';
@@ -17,7 +22,7 @@ import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
-const GRACE_MINUTES = 30;
+const GRACE_MINUTES = 15;
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization');
