@@ -125,7 +125,7 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { sendCapiEvent } from '@/lib/meta';
 import { OFFER } from '@/lib/config';
-import { sendTelegram, sendAbandonedTeam, esc } from '@/lib/telegram';
+import { sendTelegram, sendAbandonedTeam, sendSalesTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -361,7 +361,10 @@ async function handleMainPaid(event: XenditEvent) {
     (event.id ? `Xendit invoice: <code>${esc(event.id)}</code>\n` : '') +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
     (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
-  await sendTelegram(paymentMsg);
+  // Webinar-ticket sales go ONLY to the all-sales chat now — the main
+  // ("Team Updates") chat keeps OTO/Vault/1-on-1/retreat/bootcamp but not
+  // these, since they're the highest-volume sale type.
+  await sendSalesTeam(paymentMsg);
   // Mirror RECOVERED sales (and only those — never regular new payments) to the
   // abandoned-cart sales team chat. Best-effort add-on.
   if (isRecovered) await sendAbandonedTeam(paymentMsg).catch(() => {});
@@ -534,16 +537,17 @@ async function handleOtoPaid(event: XenditEvent) {
     },
   });
 
-  // AWAITED — see note in handleMainPaid.
-  await sendTelegram(
+  const otoMsg =
     `💰 <b>OTO upsell paid!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
     `Product: ${esc(productLabel)}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
-    `OTO invoice: <code>${event.external_id}</code>`,
-  );
+    `OTO invoice: <code>${event.external_id}</code>`;
+  // AWAITED — see note in handleMainPaid.
+  await sendTelegram(otoMsg);
+  await sendSalesTeam(otoMsg).catch(() => {});
 
   return NextResponse.json({ ok: true, oto: true });
 }
@@ -708,7 +712,7 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     },
   });
 
-  await sendTelegram(
+  const standaloneMsg =
     `💰 <b>${product === 'both' ? 'Bundle' : product === 'oto' ? OFFER.oto.name : OFFER.oto2.name} paid (standalone)!</b>\n\n` +
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
@@ -716,8 +720,9 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
     `Product: ${esc(productLabel)}\n` +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>` +
     (meta.otoPromoCode ? `\nPromo: <code>${esc(meta.otoPromoCode)}</code>` : '') +
-    `\nInvoice: <code>${externalId}</code>`,
-  );
+    `\nInvoice: <code>${externalId}</code>`;
+  await sendTelegram(standaloneMsg);
+  await sendSalesTeam(standaloneMsg).catch(() => {});
 
   return NextResponse.json({ ok: true, standaloneOto: true });
 }
@@ -775,15 +780,16 @@ async function handleRetreatPaid(event: XenditEvent) {
     event.id ?? event.external_id ?? '',
   ).catch(() => undefined);
 
-  // AWAITED — void promises can be killed when the serverless fn returns.
-  await sendTelegram(
+  const retreatMsg =
     `🏕️ <b>VibeCode Retreat — card payment confirmed!</b>\n\n` +
       `<b>${esc(r.name)}</b>\n` +
       `${esc(r.email)}\n` +
       `📱 ${r.phone ? esc(r.phone) : '—'}\n` +
       `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
-      `Invoice: <code>${esc(event.external_id ?? '')}</code>`,
-  );
+      `Invoice: <code>${esc(event.external_id ?? '')}</code>`;
+  // AWAITED — void promises can be killed when the serverless fn returns.
+  await sendTelegram(retreatMsg);
+  await sendSalesTeam(retreatMsg).catch(() => {});
 
   return NextResponse.json({ ok: true, retreat: true });
 }
@@ -859,7 +865,7 @@ ${balanceLine}
     }).catch(() => null);
   }
 
-  await sendTelegram(
+  const bootcampMsg =
     `🎯 <b>AI Founder's Bootcamp — ${isFullyPaid ? 'FULLY PAID' : 'downpayment'} confirmed!</b>\n\n` +
       `<b>${esc(r.name)}</b>${r.company ? ` (${esc(r.company)})` : ''}\n` +
       `${esc(r.email)}\n` +
@@ -868,8 +874,9 @@ ${balanceLine}
       `💰 Paid: <b>₱${amountPhp.toLocaleString('en-PH')}</b> (${paidLabel})\n` +
       `📋 Balance due: ₱${(remainingBalanceCentavos / 100).toLocaleString('en-PH')}\n` +
       `Order: <code>${esc(event.external_id ?? '')}</code>\n` +
-      `Xendit invoice: <code>${esc(event.id ?? '')}</code>`,
-  );
+      `Xendit invoice: <code>${esc(event.id ?? '')}</code>`;
+  await sendTelegram(bootcampMsg);
+  await sendSalesTeam(bootcampMsg).catch(() => {});
 
   return NextResponse.json({ ok: true, bootcamp: true });
 }

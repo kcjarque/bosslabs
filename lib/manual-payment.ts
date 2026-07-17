@@ -12,7 +12,7 @@ import { getSignupById, updateSignup, countPaidOrders, getSettings, getEvent } f
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
-import { sendTelegram, sendTelegramPhoto, sendAbandonedTeam, esc } from './telegram';
+import { sendAbandonedTeam, sendSalesTeam, sendSalesTeamPhoto, esc } from './telegram';
 import { getWebinarInfo, templateVarsForSignup } from './webinar';
 import { syncCrmCardForSignup } from './crm';
 import { closeLeadAndRecordCommission } from './closers';
@@ -156,10 +156,12 @@ export async function markAbandonedCartPaid(
     `Confirmed by: <b>${esc(opts.paidBy ?? 'admin')}</b>${opts.method ? ` · ${esc(opts.method)}` : ''}\n` +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
       (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
+  // Manually-recovered abandoned carts are webinar-ticket sales — all-sales
+  // chat only, same as every other webinar sale (see handleMainPaid).
   if (opts.proofBytes) {
-    await sendTelegramPhoto(opts.proofBytes, opts.proofFilename || 'payment-proof.jpg', caption);
+    await sendSalesTeamPhoto(opts.proofBytes, opts.proofFilename || 'payment-proof.jpg', caption);
   } else {
-    await sendTelegram(caption + (opts.proofUrl ? `\n📎 <a href="${esc(opts.proofUrl)}">View proof</a>` : ''));
+    await sendSalesTeam(caption + (opts.proofUrl ? `\n📎 <a href="${esc(opts.proofUrl)}">View proof</a>` : ''));
   }
   // A manual payment confirms an abandoned cart → it's a RECOVERED sale. Mirror
   // it to the abandoned-cart sales team chat (best-effort add-on).

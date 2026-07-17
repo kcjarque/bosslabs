@@ -24,7 +24,7 @@ import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { getWebinarInfo } from '@/lib/webinar';
 import { siteUrl } from '@/lib/site';
-import { sendTelegram, esc } from '@/lib/telegram';
+import { sendSalesTeam, esc } from '@/lib/telegram';
 import { syncCrmCardForSignup } from '@/lib/crm';
 
 export const runtime = 'nodejs';
@@ -279,10 +279,12 @@ export async function POST(req: Request) {
         email: body.email,
       });
 
-      // TG notification — free-seat promo purchase (already marked paid).
+      // TG notification — free-seat promo purchase (already marked paid). A
+      // webinar-ticket sale, so it goes to the all-sales chat only (same as
+      // every other webinar sale — see handleMainPaid in the Xendit webhook).
       // Awaited to guarantee delivery before the serverless function exits.
       const orders = await countPaidOrders();
-      await sendTelegram(
+      await sendSalesTeam(
         `💰 <b>Free promo purchase!</b>\n\n` +
         `<b>${esc(firstName)} ${esc(rest.join(' '))}</b>\n` +
         `${esc(body.email)}\n` +

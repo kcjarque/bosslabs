@@ -29,7 +29,7 @@ import { getWebinarInfo, templateVarsForSignup } from '@/lib/webinar';
 import { recordCommission } from '@/lib/affiliates';
 import { sendCapiEvent } from '@/lib/meta';
 import { OFFER } from '@/lib/config';
-import { sendTelegram, esc } from '@/lib/telegram';
+import { sendSalesTeam, esc } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -204,7 +204,9 @@ export async function GET(req: Request) {
 
   if (healed.length) {
     const lines = healed.map((h) => `• ${esc(h.name)} — ₱${h.amount.toLocaleString()}`).join('\n');
-    await sendTelegram(
+    // These are webinar-ticket sales (this cron only reconciles the main
+    // flow) — all-sales chat only, same as every other webinar sale.
+    await sendSalesTeam(
       `🛟 <b>Payment auto-reconciled: ${healed.length}</b>\n` +
         `Paid at Xendit but the webhook never confirmed them — auto-fixed (marked paid + confirmation sent):\n${lines}`,
     ).catch(() => {});

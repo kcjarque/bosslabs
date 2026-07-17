@@ -82,6 +82,26 @@ export async function sendTelegram(
   }
 }
 
+/** Shared multipart POST for sendPhoto — used by both the main-chat sender
+ *  (which auto-heals on supergroup migration) and the arbitrary-chat sender
+ *  (which doesn't, since migration only applies to the settings-tracked chat). */
+function postPhoto(
+  token: string,
+  cid: string,
+  bytes: ArrayBuffer,
+  filename: string,
+  caption: string,
+): Promise<TgResponse> {
+  const form = new FormData();
+  form.append('chat_id', cid);
+  form.append('caption', caption);
+  form.append('parse_mode', 'HTML');
+  form.append('photo', new Blob([bytes]), filename);
+  return fetch(`${BASE}${token}/sendPhoto`, { method: 'POST', body: form }).then(
+    (r) => r.json() as Promise<TgResponse>,
+  );
+}
+
 /**
  * Send a photo (e.g. a payment-proof screenshot) to the configured chat.
  * Forwards the raw bytes via multipart. Never throws.
@@ -97,23 +117,12 @@ export async function sendTelegramPhoto(
     const chatId = settings.telegramChatId;
     if (!token || !chatId) return { ok: false, reason: 'telegram not configured' };
 
-    const post = (cid: string) => {
-      const form = new FormData();
-      form.append('chat_id', cid);
-      form.append('caption', caption);
-      form.append('parse_mode', 'HTML');
-      form.append('photo', new Blob([bytes]), filename);
-      return fetch(`${BASE}${token}/sendPhoto`, { method: 'POST', body: form }).then(
-        (r) => r.json() as Promise<TgResponse>,
-      );
-    };
-
-    let json = await post(chatId);
+    let json = await postPhoto(token, chatId, bytes, filename, caption);
     if (!json.ok && json.parameters?.migrate_to_chat_id) {
       const newId = String(json.parameters.migrate_to_chat_id);
       console.warn(`[telegram] group upgraded to supergroup ${newId} — updating chat_id + retrying (photo)`);
       await saveSettings({ telegramChatId: newId }).catch(() => {});
-      json = await post(newId);
+      json = await postPhoto(token, newId, bytes, filename, caption);
     }
     if (!json.ok) {
       console.warn('[telegram] sendPhoto failed:', json.description);
@@ -124,6 +133,30 @@ export async function sendTelegramPhoto(
     const msg = err instanceof Error ? err.message : 'Network error';
     console.warn('[telegram] sendPhoto error:', msg);
     return { ok: false, reason: msg };
+  }
+}
+
+/**
+ * Send a photo to a SPECIFIC chat id (e.g. the sales-team chat), using the
+ * configured bot token. No migration auto-heal — that only applies to the
+ * primary settings-tracked chat. Never throws.
+ */
+export async function sendTelegramPhotoTo(
+  chatId: string,
+  bytes: ArrayBuffer,
+  filename: string,
+  caption: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    if (!chatId) return { ok: false, reason: 'no chat id' };
+    const settings = await getSettings();
+    const token = settings.telegramBotToken;
+    if (!token) return { ok: false, reason: 'telegram not configured' };
+    const json = await postPhoto(token, chatId, bytes, filename, caption);
+    if (!json.ok) return { ok: false, reason: json.description };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : 'error' };
   }
 }
 
@@ -166,6 +199,30 @@ export async function sendAbandonedTeam(
   text: string,
 ): Promise<{ ok: boolean; reason?: string }> {
   return sendTelegramTo(ABANDONED_TEAM_CHAT_ID, text);
+}
+
+/**
+ * Third Telegram chat for ALL sales confirmations ("Bosslabs | Sales
+ * Updates") — every paid webinar / OTO (Vault, 1:1) / retreat / bootcamp
+ * sale lands here. Webinar-ticket sales land ONLY here (removed from the
+ * main chat); every other sale type mirrors here in addition to wherever
+ * else it's routed. Configurable via env; falls back to the team's chat id.
+ * Uses the same bot token.
+ */
+const SALES_TEAM_CHAT_ID = process.env.TELEGRAM_SALES_CHAT_ID || '-5345976120';
+
+export async function sendSalesTeam(
+  text: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  return sendTelegramTo(SALES_TEAM_CHAT_ID, text);
+}
+
+export async function sendSalesTeamPhoto(
+  bytes: ArrayBuffer,
+  filename: string,
+  caption: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  return sendTelegramPhotoTo(SALES_TEAM_CHAT_ID, bytes, filename, caption);
 }
 
 /** Escape HTML special chars for Telegram HTML parse mode. */
