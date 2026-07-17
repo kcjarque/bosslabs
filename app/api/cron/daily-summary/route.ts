@@ -20,6 +20,7 @@ import {
 } from '@/lib/db';
 import { syncAdSpendDaily } from '@/lib/meta-ads';
 import { sendTelegram } from '@/lib/telegram';
+import { deleteRecordingBlobs } from '@/lib/recordings-s3';
 
 export const runtime = 'nodejs';
 
@@ -139,8 +140,11 @@ export async function GET(req: Request) {
   // Daily storage hygiene — delete idle non-purchase recordings (tabs left
   // open) AND enforce a 5-day retention on non-purchase recordings so storage
   // plateaus instead of growing. Paid customers' replays are always kept.
-  const purged = await purgeIdleRecordings(10).catch(() => ({ sessions: 0, bytes: 0 }));
-  const purgedOld = await purgeOldRecordings(5).catch(() => ({ sessions: 0, bytes: 0 }));
+  const purged = await purgeIdleRecordings(10).catch(() => ({ sessions: 0, bytes: 0, keys: [] as string[] }));
+  const purgedOld = await purgeOldRecordings(5).catch(() => ({ sessions: 0, bytes: 0, keys: [] as string[] }));
+  // Delete the matching S3 blobs for whatever the purge removed (no-op before
+  // the backfill, when purged rows have no s3_key). Best-effort.
+  await deleteRecordingBlobs([...purged.keys, ...purgedOld.keys]).catch(() => {});
 
   return NextResponse.json({
     ok: true,

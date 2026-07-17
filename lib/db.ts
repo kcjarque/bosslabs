@@ -22,6 +22,13 @@ import crypto from 'crypto';
 import * as React from 'react';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { isRecoveredPaid, paymentDayOf } from './recovered';
+import {
+  isRecordingsS3Configured,
+  putRecordingBlob,
+  getRecordingBlob,
+  getRecordingBlobs,
+  recordingKey,
+} from './recordings-s3';
 
 /**
  * Request-scoped caching wrapper.
@@ -1744,6 +1751,9 @@ type RecordingRow = {
   events: unknown[];
   size_bytes: number;
   created_at: string;
+  /** S3 object key when the blob lives in S3; null/absent for legacy jsonb rows
+   *  (dual-read during and after the Postgres→S3 migration). */
+  s3_key?: string | null;
 };
 
 function rowToRecording(r: RecordingRow): SessionRecording {
@@ -1757,6 +1767,27 @@ function rowToRecording(r: RecordingRow): SessionRecording {
   };
 }
 
+/** Hydrate one row's events from S3 when it has an s3_key, else use the inline
+ *  jsonb (legacy rows). */
+async function hydrateRecording(r: RecordingRow): Promise<SessionRecording> {
+  const rec = rowToRecording(r);
+  if (r.s3_key) rec.events = await getRecordingBlob(r.s3_key);
+  return rec;
+}
+
+/** Hydrate many rows, fetching all S3-backed blobs in parallel (heatmap pulls
+ *  up to ~150 chunks; full replay up to 60). Legacy jsonb rows pass through. */
+async function hydrateRecordings(rows: RecordingRow[]): Promise<SessionRecording[]> {
+  const s3Rows = rows.filter((r) => r.s3_key);
+  const blobs = s3Rows.length ? await getRecordingBlobs(s3Rows.map((r) => r.s3_key as string)) : [];
+  const byId = new Map(s3Rows.map((r, i) => [r.id, blobs[i]]));
+  return rows.map((r) => {
+    const rec = rowToRecording(r);
+    if (r.s3_key) rec.events = byId.get(r.id) ?? [];
+    return rec;
+  });
+}
+
 export async function saveRecording(data: {
   sessionId: string;
   page: string;
@@ -1765,6 +1796,33 @@ export async function saveRecording(data: {
   const json = JSON.stringify(data.events);
   const sizeBytes = Buffer.byteLength(json, 'utf8');
   if (isSupabaseConfigured()) {
+    // Preferred path: blob → S3, Postgres keeps only the metadata row + s3_key.
+    // We mint the id up front so the S3 key and the row id line up, then insert
+    // a metadata-only row (empty events jsonb). If the S3 PUT fails for any
+    // reason we fall through to the legacy jsonb insert so a chunk is never lost.
+    if (isRecordingsS3Configured()) {
+      try {
+        const id = crypto.randomUUID();
+        const key = recordingKey(data.sessionId, id);
+        await putRecordingBlob(key, data.events as Record<string, unknown>[]);
+        const { error } = await getSupabase().from('session_recordings').insert({
+          id,
+          session_id: data.sessionId,
+          page: data.page,
+          events: [],
+          size_bytes: sizeBytes,
+          s3_key: key,
+        });
+        if (error) throw new Error(error.message);
+        return id;
+      } catch (err) {
+        console.warn(
+          '[recordings] S3 write failed, falling back to Postgres jsonb:',
+          err instanceof Error ? err.message : err,
+        );
+        // fall through to the jsonb insert below
+      }
+    }
     const { data: row, error } = await getSupabase()
       .from('session_recordings')
       .insert({
@@ -1822,7 +1880,7 @@ export async function getRecording(id: string): Promise<SessionRecording | null>
       .eq('id', id)
       .single();
     if (error) return null;
-    return rowToRecording(data as RecordingRow);
+    return hydrateRecording(data as RecordingRow);
   }
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
   const row = rows.find((r) => r.id === id);
@@ -1840,7 +1898,7 @@ export async function getSessionChunks(sessionId: string): Promise<SessionRecord
       .order('created_at', { ascending: true })
       .limit(60);
     if (error) throw new Error(`getSessionChunks: ${error.message}`);
-    return (data as RecordingRow[]).map(rowToRecording);
+    return hydrateRecordings(data as RecordingRow[]);
   }
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
   return rows
@@ -1863,7 +1921,7 @@ export async function getChunksForPage(
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw new Error(`getChunksForPage: ${error.message}`);
-    return (data as RecordingRow[]).map(rowToRecording);
+    return hydrateRecordings(data as RecordingRow[]);
   }
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
   return rows
@@ -1944,14 +2002,14 @@ export async function sessionHasRecording(sessionId: string): Promise<boolean> {
  *  Best-effort — never throws into a cron. Returns sessions + bytes freed. */
 export async function purgeIdleRecordings(
   maxMinutes = 10,
-): Promise<{ sessions: number; bytes: number }> {
-  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0 };
+): Promise<{ sessions: number; bytes: number; keys: string[] }> {
+  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0, keys: [] };
   const { data, error } = await getSupabase().rpc('purge_idle_recordings', {
     max_min: maxMinutes,
   });
-  if (error) return { sessions: 0, bytes: 0 };
-  const d = (data ?? {}) as { sessions?: number; bytes?: number };
-  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0 };
+  if (error) return { sessions: 0, bytes: 0, keys: [] };
+  const d = (data ?? {}) as { sessions?: number; bytes?: number; keys?: string[] };
+  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0, keys: d.keys ?? [] };
 }
 
 /** Time-based retention: delete non-purchase recordings older than `maxAgeDays`
@@ -1959,14 +2017,14 @@ export async function purgeIdleRecordings(
  *  plateaus instead of growing forever. Wraps purge_old_recordings. Best-effort. */
 export async function purgeOldRecordings(
   maxAgeDays = 5,
-): Promise<{ sessions: number; bytes: number }> {
-  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0 };
+): Promise<{ sessions: number; bytes: number; keys: string[] }> {
+  if (!isSupabaseConfigured()) return { sessions: 0, bytes: 0, keys: [] };
   const { data, error } = await getSupabase().rpc('purge_old_recordings', {
     max_age_days: maxAgeDays,
   });
-  if (error) return { sessions: 0, bytes: 0 };
-  const d = (data ?? {}) as { sessions?: number; bytes?: number };
-  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0 };
+  if (error) return { sessions: 0, bytes: 0, keys: [] };
+  const d = (data ?? {}) as { sessions?: number; bytes?: number; keys?: string[] };
+  return { sessions: d.sessions ?? 0, bytes: d.bytes ?? 0, keys: d.keys ?? [] };
 }
 
 export type SessionCustomer = {
