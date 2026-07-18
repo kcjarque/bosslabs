@@ -17,10 +17,7 @@ export const metadata: Metadata = {
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
 // Vimeo URL pattern: https://vimeo.com/<id> → embed at player.vimeo.com/video/<id>.
-// TODO(kyle): placeholder — the July 18 share link (vimeo.com/share/765af8ec-…)
-// doesn't resolve to a numeric id without your Vimeo login. Drop in the real
-// vimeo.com/<numbers> URL or id and this is a one-line swap.
-const REPLAY_VIMEO_ID = '1208491192';
+const REPLAY_VIMEO_ID = '1211057522';
 const APP_URL = 'https://cnb-laundry-os.vercel.app/';
 // Screenshot of the app we built live this session (drop the file in /public).
 const APP_SCREENSHOT = '/cnb-laundry-os.png';
