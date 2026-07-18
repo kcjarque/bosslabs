@@ -103,17 +103,20 @@ async function provisionVaultBuyerHub(signup: {
   });
 
   // Auto-send credentials email so new Vault buyers don't depend on the
-  // /thank-you/vault page being open. Best-effort; failures are logged but
-  // don't block the webhook (buyer can also see creds on the success page,
-  // and the admin backfill endpoint can re-send on demand).
+  // /thank-you/vault page being open. Awaited — a fire-and-forget call here
+  // raced against the serverless function's teardown (the webhook's response
+  // goes out, the instance freezes, and the still-in-flight send never
+  // completes), which is why most buyers never got this email even though
+  // their account was provisioned. Still best-effort: failures are logged
+  // but don't block the webhook (buyer can also see creds on the success
+  // page, and the admin backfill endpoint can re-send on demand).
   if (result.password) {
-    void sendHubCredentialsEmail({
+    const res = await sendHubCredentialsEmail({
       firstName: signup.firstName || signup.email.split('@')[0],
       email: signup.email,
       hubPassword: result.password,
-    }).then((res) => {
-      if (!res.ok) console.warn('[hub-provision] auto-email failed', res.error);
     });
+    if (!res.ok) console.warn('[hub-provision] auto-email failed', res.error);
   }
 
   // Return so the caller can merge into its in-memory paidMeta — otherwise
