@@ -11,7 +11,6 @@ type PoolLead = {
   createdAt: string;
   sessionLabel: string;
   ageMinutes: number;
-  pending: boolean;
 };
 type Lead = {
   leadId: string;
@@ -43,19 +42,15 @@ function SessionChip({ label }: { label: string }) {
   );
 }
 
-/** Age-based status pill on each pool card: amber "Pending" under 15 min
- *  (still might complete payment on its own — not yet worth chasing), rose
- *  "Abandoned" at 15+ min (the same age the Telegram cron pings on). */
-function StatusPill({ pending, ageMinutes }: { pending: boolean; ageMinutes: number }) {
-  if (pending) {
-    return (
-      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium text-amber-700">
-        {ageMinutes} min{ageMinutes === 1 ? '' : 's'} · Pending
-      </span>
-    );
-  }
+/** The pool only ever contains genuinely-abandoned carts now (15+ min old —
+ *  see listUnclaimedAbandoned's PENDING_CUTOFF_MIN filter), so there's no
+ *  Pending/Abandoned split left to show — every card here is claimable. */
+function StatusPill({ ageMinutes }: { ageMinutes: number }) {
   return (
-    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-700">
+    <span
+      className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-700"
+      title={`Abandoned ${ageMinutes} min ago`}
+    >
       Abandoned
     </span>
   );
@@ -128,7 +123,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
       <div className="grid gap-3 md:grid-cols-3">
         {/* Unassigned pool */}
         <Column
-          title="Unassigned · pending & abandoned"
+          title="Unassigned · abandoned"
           dot="bg-slate-400"
           count={pool.length}
           highlight={over === 'pool'}
@@ -152,7 +147,7 @@ export function CloserBoard({ commissionPercent }: { commissionPercent: number }
               className="cursor-grab rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm"
             >
               <div className="text-sm font-medium text-slate-900">{p.name}</div>
-              <StatusPill pending={p.pending} ageMinutes={p.ageMinutes} />
+              <StatusPill ageMinutes={p.ageMinutes} />
               <div className="text-[11px] text-slate-400">🔒 Phone hidden — claim to reveal</div>
               <div className="mt-1 text-[11px] font-medium text-slate-600">Cart: {peso(p.amountDueCentavos)}</div>
               <SessionChip label={p.sessionLabel} />

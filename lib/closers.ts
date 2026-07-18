@@ -214,8 +214,15 @@ export async function getCloserForSignup(
  *  so the pool and the Telegram ping flip at the same moment. */
 const PENDING_CUTOFF_MIN = 15;
 
-/** Abandoned carts (registered, not paid) NOT yet claimed by any closer.
- *  No phone is returned — the pool is intentionally private until claimed. */
+/** Genuinely-abandoned carts (registered, not paid, 15+ min old) NOT yet
+ *  claimed by any closer. No phone is returned — the pool is intentionally
+ *  private until claimed.
+ *
+ *  Carts younger than PENDING_CUTOFF_MIN are deliberately excluded, not just
+ *  labeled — closers were claiming fresh checkout-starts within seconds and
+ *  collecting commission when the customer paid on their own minutes later
+ *  (never a real recovery). Gating here means there is nothing pending to
+ *  claim; claimLead() re-checks the same cutoff server-side as a backstop. */
 export type PoolLead = {
   signupId: string;
   name: string;
@@ -223,9 +230,6 @@ export type PoolLead = {
   createdAt: string;
   sessionLabel: string;
   ageMinutes: number;
-  /** true = still inside the grace window (shown as "Pending"), false = past
-   *  it (shown as "Abandoned" — the same age the Telegram cron fires on). */
-  pending: boolean;
 };
 
 export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
@@ -256,9 +260,9 @@ export async function listUnclaimedAbandoned(): Promise<PoolLead[]> {
         createdAt: s.created_at,
         sessionLabel: (s.event_id && labels.get(s.event_id)) || '',
         ageMinutes,
-        pending: ageMinutes < PENDING_CUTOFF_MIN,
       };
-    });
+    })
+    .filter((p) => p.ageMinutes >= PENDING_CUTOFF_MIN);
 }
 
 /** A closer's own leads — phone REVEALED (only ever fetched for the owner). */
@@ -402,9 +406,29 @@ export async function setLeadRemark(
 }
 
 /** Claim an abandoned cart. The unique signup_id index makes this atomic —
- *  a second closer claiming the same lead gets a clean "already claimed". */
+ *  a second closer claiming the same lead gets a clean "already claimed".
+ *
+ *  Re-checks the PENDING_CUTOFF_MIN age here (not just in the pool listing)
+ *  so claiming can't be gamed by hitting this endpoint directly with a
+ *  signup_id grabbed some other way — the pool no longer even shows
+ *  not-yet-abandoned carts, but this is the actual enforcement point. */
 export async function claimLead(signupId: string, closerId: string): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseConfigured()) return { ok: false, error: 'not configured' };
+  const { data: sig } = await getSupabase()
+    .from('signups')
+    .select('created_at, status, source')
+    .eq('id', signupId)
+    .maybeSingle();
+  if (!sig || sig.status !== 'registered' || sig.source !== 'paid') {
+    return { ok: false, error: 'Not a claimable lead.' };
+  }
+  const ageMinutes = (Date.now() - new Date(sig.created_at as string).getTime()) / 60000;
+  if (ageMinutes < PENDING_CUTOFF_MIN) {
+    return {
+      ok: false,
+      error: `Not abandoned yet — still pending (${Math.ceil(PENDING_CUTOFF_MIN - ageMinutes)} min left).`,
+    };
+  }
   const { error } = await getSupabase()
     .from('closer_leads')
     .insert({ signup_id: signupId, closer_id: closerId, stage: 'new' });

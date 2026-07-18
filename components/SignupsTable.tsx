@@ -498,7 +498,7 @@ export function SignupsTable({
                 )}
               </div>
               <div className="flex flex-col items-end gap-1">
-                <StatusPill status={s.status} />
+                <StatusPill status={s.status} createdAt={s.createdAt} />
                 {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
                 {s.eventId && eventNameById[s.eventId] && (
                   <EventPill name={eventNameById[s.eventId]} />
@@ -617,7 +617,7 @@ export function SignupsTable({
                   </td>
                   <td>
                     <div className="flex flex-wrap items-center gap-1">
-                      <StatusPill status={s.status} />
+                      <StatusPill status={s.status} createdAt={s.createdAt} />
                       {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
                     </div>
                   </td>
@@ -717,15 +717,34 @@ export function SignupsTable({
   );
 }
 
+// Age (minutes) a cart must reach before it's "Abandoned" rather than
+// "Pending" — must match PENDING_CUTOFF_MIN in lib/closers.ts (the closer
+// pool) so a customer reads the same signal everywhere in the admin. Kept as
+// its own constant rather than an import because this is a 'use client'
+// component and lib/closers.ts pulls in server-only Supabase code.
+const PENDING_CUTOFF_MIN = 15;
+
 /**
  * StatusPill — renders the FUNNEL-meaningful status label, not the raw
- * SignupStatus enum value. "registered" → "Abandoned" because in practice
- * a paid-funnel signup stuck on 'registered' means they started checkout
- * but never paid. "paid"/"attended" → "Paid". Etc.
+ * SignupStatus enum value. "paid"/"attended" → "Paid". Etc. "registered" is
+ * age-gated: under PENDING_CUTOFF_MIN it's "Pending" (might still complete
+ * payment on its own), at/after it's "Abandoned" (the same age the closer
+ * pool and the Telegram cron treat as abandoned).
  */
-function StatusPill({ status }: { status: Signup['status'] }) {
+function StatusPill({ status, createdAt }: { status: Signup['status']; createdAt: string }) {
+  if (status === 'registered') {
+    const ageMinutes = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    if (ageMinutes < PENDING_CUTOFF_MIN) {
+      return (
+        <span className="pill pill-amber">
+          {Math.max(0, ageMinutes)} min{ageMinutes === 1 ? '' : 's'} · Pending
+        </span>
+      );
+    }
+    return <span className="pill pill-red">Abandoned</span>;
+  }
   const display: Record<Signup['status'], { label: string; cls: string }> = {
-    registered: { label: 'Abandoned', cls: 'pill pill-amber' },
+    registered: { label: 'Abandoned', cls: 'pill pill-red' }, // unreachable (handled above); keeps the map exhaustive
     paid: { label: 'Paid', cls: 'pill pill-green' },
     attended: { label: 'Attended', cls: 'pill pill-green' },
     'no-show': { label: 'No-show', cls: 'pill pill-amber' },
