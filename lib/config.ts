@@ -300,27 +300,32 @@ export const OFFER = {
     priceCentavos: 99900,
     currency: 'PHP',
     label: '₱999',
-    crossed: '₱9,997',
+    crossed: '₱13,497',
     eyebrow: 'Bonus',
-    discountLabel: '90% off',
-    savings: 'Save ₱8,998',
+    discountLabel: '92% off',
+    savings: 'Save ₱12,498',
     footerNote: '⚡ Get instant access upon payment',
     promise:
-      'Everything we use to ship apps fast: every past live build recorded end-to-end, our growing step-by-step tutorial library, the prompts + skills + starter-repo hub, and the exact vision-to-app blueprint. Instant access — this page only.',
+      'Everything we use to ship apps fast, plus a full year inside the BossLabs Hub: Claude Code 101, every past live build recorded end-to-end, our growing tutorial library, and the prompts + skills + starter-repo vault — new lessons added every month, 24/7 access, no live sessions required. Instant access — this page only.',
     inclusions: [
+      'The BossLabs Hub — full access, 1 year (all courses, prompts, skills & starter repos)',
+      'Claude Code 101 — our complete course on shipping real apps with Claude Code',
+      'New lessons added every month — the Hub keeps growing, at no extra cost to you',
+      '24/7 access — no live sessions, learn whenever works for you',
       'All live past build recordings — full end-to-end (EstateConnect, Sentinel, Bescost Ops…)',
-      'BossLabs AI-Flix — step-by-step tutorials, growing weekly · 1-year access',
-      'The BossLabs Hub — exclusive prompts, skills & starter repos',
+      'BossLabs AI-Flix — step-by-step tutorials, growing weekly',
       '4-Step Vision-to-Reality App Blueprint',
+      'Community + Marketplace — network with builders, hire or get hired, sell your own toolkit',
     ],
-    // Value-stack breakdown for the OTO page — sums to the crossed ₱9,997.
+    // Value-stack breakdown for the OTO page — sums to the crossed ₱13,497.
     valueStack: [
+      { label: 'The BossLabs Hub — 1 year access (Claude Code 101 + every course, new lessons monthly)', value: '₱4,000' },
       { label: 'All live build recordings — full end-to-end', value: '₱4,000' },
-      { label: 'BossLabs AI-Flix — tutorials, 1-year access', value: '₱3,000' },
-      { label: 'The BossLabs Hub — prompts, skills & repos', value: '₱2,000' },
+      { label: 'BossLabs AI-Flix — tutorials, growing weekly', value: '₱3,000' },
+      { label: 'Community + Marketplace — network, hire, sell your own toolkit', value: '₱1,500' },
       { label: '4-Step Vision-to-Reality App Blueprint', value: '₱997' },
     ],
-    totalValue: '₱9,997',
+    totalValue: '₱13,497',
   },
   // Second order bump — the premium 1:1 executive session with the founders, ₱5,997.
   oto2: {
