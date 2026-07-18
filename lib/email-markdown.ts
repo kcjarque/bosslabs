@@ -123,19 +123,12 @@ function renderInline(text: string): string {
 }
 
 /**
- * Inline SVG logomark — same shapes as components/Mark.tsx, tuned for an
- * email-client safe palette (dark nodes on light bg). Gmail strips most
- * CSS but inline SVG renders fine. Falls back to alt text everywhere.
+ * Text wordmark for the email header. Gmail (web + mobile) strips inline
+ * <svg> — a prior version used an SVG logomark here and it silently rendered
+ * as blank space in Gmail, the client most of our list reads in. Plain text
+ * + inline CSS has no such failure mode: it renders identically everywhere.
  */
-const LOGO_SVG = `<svg width="56" height="44" viewBox="0 0 100 78" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="BOSSLABS AI">
-  <path d="M14 14 Q 30 60, 50 64 T 86 64" stroke="#0B0D12" stroke-width="5.5" stroke-linecap="round" fill="none" />
-  <path d="M86 14 Q 70 60, 50 64 T 14 64" stroke="#00B8E6" stroke-width="5.5" stroke-linecap="round" fill="none" />
-  <circle cx="14" cy="14" r="9" stroke="#0B0D12" stroke-width="3" fill="#FFFFFF" />
-  <circle cx="86" cy="14" r="9" stroke="#00B8E6" stroke-width="3" fill="#FFFFFF" />
-  <circle cx="14" cy="64" r="9" stroke="#00B8E6" stroke-width="3" fill="#FFFFFF" />
-  <circle cx="50" cy="64" r="9" stroke="#0B0D12" stroke-width="3" fill="#FFFFFF" />
-  <circle cx="86" cy="64" r="9" stroke="#0B0D12" stroke-width="3" fill="#FFFFFF" />
-</svg>`;
+const LOGO_HTML = `<span style="font-size:20px;font-weight:800;letter-spacing:-0.01em;color:#0B0D12">BOSSLABS<span style="color:#00B8E6">AI</span></span>`;
 
 /**
  * Render the wrapped <body> shell.
@@ -159,9 +152,9 @@ function renderShell(innerHtml: string): string {
     '<div style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:20px;overflow:hidden;border:1px solid #E5E9F2;box-shadow:0 1px 2px rgba(11,13,18,0.04)">',
     // Top accent bar — subtle brand cue without slowing the email down.
     '<div style="height:4px;background:linear-gradient(90deg,#00B8E6 0%,#0093B8 100%)"></div>',
-    // Header — logo only, left-aligned, generous top breathing room.
+    // Header — wordmark only, left-aligned, generous top breathing room.
     '<div style="padding:36px 44px 4px;text-align:left">',
-    LOGO_SVG,
+    LOGO_HTML,
     '</div>',
     // Body
     `<div style="padding:24px 44px 40px;color:#0B0D12">${innerHtml}</div>`,
