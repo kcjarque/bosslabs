@@ -209,6 +209,21 @@ export async function getCloserForSignup(
   return closer ? (closer as { id: string; name: string; username: string }) : null;
 }
 
+/** signup_id → claiming closer's name, for every signup currently claimed
+ *  (active or closed). One batched query pair — used by the admin customers
+ *  list's "Claimed by" column, not a per-row lookup. */
+export async function getClaimedByMap(): Promise<Map<string, string>> {
+  if (!isSupabaseConfigured()) return new Map();
+  const sb = getSupabase();
+  const { data: leads } = await sb.from('closer_leads').select('signup_id, closer_id');
+  const rows = (leads ?? []) as Array<{ signup_id: string; closer_id: string }>;
+  if (rows.length === 0) return new Map();
+  const closerIds = [...new Set(rows.map((r) => r.closer_id))];
+  const { data: closers } = await sb.from('closer_accounts').select('id, name').in('id', closerIds);
+  const nameById = new Map(((closers ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]));
+  return new Map(rows.map((r) => [r.signup_id, nameById.get(r.closer_id) ?? 'Closer']));
+}
+
 /** Age (minutes) a cart must reach before it's "Abandoned" rather than
  *  "Pending" — must match GRACE_MINUTES in app/api/cron/abandoned/route.ts
  *  so the pool and the Telegram ping flip at the same moment. */

@@ -76,6 +76,7 @@ type TemplateRef = { id: string; name: string };
 export function SignupsTable({
   initial,
   recoveredIds = [],
+  claimedByName = {},
   eventNameById = {},
   lists = [],
   listMemberIds = {},
@@ -88,6 +89,7 @@ export function SignupsTable({
 }: {
   initial: Signup[];
   recoveredIds?: string[];
+  claimedByName?: Record<string, string>;
   eventNameById?: Record<string, string>;
   lists?: { id: string; name: string }[];
   listMemberIds?: Record<string, string[]>;
@@ -499,6 +501,9 @@ export function SignupsTable({
               </div>
               <div className="flex flex-col items-end gap-1">
                 <StatusPill status={s.status} createdAt={s.createdAt} />
+                {s.status === 'registered' && claimedByName[s.id] && (
+                  <span className="pill">Claimed by {claimedByName[s.id]}</span>
+                )}
                 {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
                 {s.eventId && eventNameById[s.eventId] && (
                   <EventPill name={eventNameById[s.eventId]} />
@@ -550,6 +555,7 @@ export function SignupsTable({
                 <th>Method</th>
                 <th>Amount</th>
                 <th>Status</th>
+                <th>Claimed by</th>
                 <th>When</th>
                 <th />
               </tr>
@@ -621,13 +627,20 @@ export function SignupsTable({
                       {recoveredSet.has(s.id) && <span className="pill pill-orange">Recovered</span>}
                     </div>
                   </td>
+                  <td>
+                    {s.status === 'registered' && claimedByName[s.id] ? (
+                      <span className="pill">{claimedByName[s.id]}</span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
                   <td className="text-slate-500">{formatRelative(activityAt(s))}</td>
                   <td className="text-slate-400">→</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                  <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
                     No signups match this filter.
                   </td>
                 </tr>

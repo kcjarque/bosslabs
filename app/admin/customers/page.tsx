@@ -9,7 +9,7 @@ import {
   computeListMembers,
 } from '@/lib/db';
 import { SignupsTable } from '@/components/SignupsTable';
-import { getCloserRecoveredSignupIds } from '@/lib/closers';
+import { getCloserRecoveredSignupIds, getClaimedByMap } from '@/lib/closers';
 import { recoveredIdSet } from '@/lib/recovered';
 import {
   bulkSubscribeAction,
@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function CustomersPage() {
   requireAdmin();
-  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds, lists] =
+  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds, lists, claimedByMap] =
     await Promise.all([
       getSignups(),
       getEvents(),
@@ -30,8 +30,10 @@ export default async function CustomersPage() {
       getSmsTemplates(),
       getCloserRecoveredSignupIds(),
       getLists(),
+      getClaimedByMap(),
     ]);
   const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
+  const claimedByName = Object.fromEntries(claimedByMap);
   // Recovered = abandoned-then-paid OR closer-claimed-then-paid (orange badge).
   const recoveredIds = Array.from(recoveredIdSet(signups, closerRecoveredIds));
   // Precompute each list's member ids so the table can filter by list instantly
@@ -64,6 +66,7 @@ export default async function CustomersPage() {
       <SignupsTable
         initial={signups}
         recoveredIds={recoveredIds}
+        claimedByName={claimedByName}
         eventNameById={eventNameById}
         lists={lists.map((l) => ({ id: l.id, name: l.name }))}
         listMemberIds={listMemberIds}
