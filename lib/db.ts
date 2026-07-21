@@ -1123,12 +1123,26 @@ export async function countPaidOrders(): Promise<{ total: number; today: number;
   try {
     const sb = getSupabase();
     const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Manila' });
-    const [{ data: comms }, { data: paidRows }] = await Promise.all([
+    // `today`/`recoveredToday` only need recent rows — narrow to a 5-day
+    // window (covers Manila/UTC day-boundary edge cases + abandoned-cart
+    // lag) via whichever field paymentDayOf() actually reads (confirmationSent,
+    // falling back to created_at). This keeps the row-fetch well under
+    // Supabase's default 1000-row response cap no matter how large the paid
+    // table grows. `total` is a separate exact COUNT (no rows returned), so
+    // it's never subject to that cap either — fixes total silently freezing
+    // at 1000 once total paid+attended signups passed it.
+    const cutoffIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ count }, { data: comms }, { data: recentRows }] = await Promise.all([
+      sb.from('signups').select('id', { count: 'exact', head: true }).in('status', ['paid', 'attended']),
       sb.from('closer_commissions').select('signup_id'),
-      sb.from('signups').select('id, status, created_at, metadata').in('status', ['paid', 'attended']),
+      sb
+        .from('signups')
+        .select('id, status, created_at, metadata')
+        .in('status', ['paid', 'attended'])
+        .or(`created_at.gte.${cutoffIso},metadata->>confirmationSent.gte.${cutoffIso}`),
     ]);
     const closerIds = new Set(((comms ?? []) as { signup_id: string }[]).map((c) => c.signup_id));
-    const rows = (paidRows ?? []) as Array<{ id: string; status: SignupStatus; created_at: string; metadata: Record<string, unknown> | null }>;
+    const rows = (recentRows ?? []) as Array<{ id: string; status: SignupStatus; created_at: string; metadata: Record<string, unknown> | null }>;
     let today = 0;
     let recoveredToday = 0;
     for (const r of rows) {
@@ -1137,7 +1151,7 @@ export async function countPaidOrders(): Promise<{ total: number; today: number;
       if (isRecoveredPaid(s, closerIds)) recoveredToday++;
       else today++;
     }
-    return { total: rows.length, today, recoveredToday };
+    return { total: count ?? 0, today, recoveredToday };
   } catch {
     return { total: 0, today: 0, recoveredToday: 0 };
   }
