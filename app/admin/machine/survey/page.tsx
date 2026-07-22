@@ -135,9 +135,18 @@ export default async function SurveyAnalyticsPage() {
       )}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-900">All responses</h2>
-          <p className="mt-0.5 text-[12px] text-slate-500">Newest first — including what people wrote in their own words.</p>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">All responses</h2>
+            <p className="mt-0.5 text-[12px] text-slate-500">Newest first — including what people wrote in their own words.</p>
+          </div>
+          <a
+            href="/api/admin/survey-responses.csv"
+            className="btn btn-secondary shrink-0"
+            download
+          >
+            Export CSV
+          </a>
         </div>
         {data.responses.length === 0 ? (
           <p className="p-8 text-center text-[13.5px] text-slate-400">

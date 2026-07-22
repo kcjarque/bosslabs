@@ -299,35 +299,23 @@ function tally(values: Array<string | null>, labels: Record<string, string>): Su
     .sort((a, b) => b.count - a.count);
 }
 
-/**
- * Every survey response (SPEC §1.4) — industry / pain / intent breakdowns for
- * the admin Survey tab's charts, plus the full list newest-first with the
- * respondent and event resolved in two batched queries (no N+1). All-time,
- * capped at `limit`: survey volume is one row per attendee per event, so this
- * is generous headroom for a long while.
- */
-export async function getSurveyData(limit = 1000): Promise<SurveyData> {
-  if (!isSupabaseConfigured()) return EMPTY_SURVEY;
+type RawSurveyRow = {
+  id: string;
+  contact_id: string | null;
+  event_id: string | null;
+  q1_industry: string | null;
+  q2_pain: string | null;
+  q2_freetext: string | null;
+  q3_freetext: string | null;
+  q4_intent: string | null;
+  created_at: string;
+};
+
+/** Resolve raw survey_responses rows into displayable rows — respondent +
+ *  event name in two batched queries (no N+1). Shared by the dashboard's
+ *  capped getSurveyData and the uncapped CSV export below. */
+async function resolveSurveyResponses(rows: RawSurveyRow[]): Promise<SurveyResponseRow[]> {
   const sb = getSupabase();
-  const { data, error } = await sb
-    .from('survey_responses')
-    .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error || !data || data.length === 0) return EMPTY_SURVEY;
-
-  const rows = data as Array<{
-    id: string;
-    contact_id: string | null;
-    event_id: string | null;
-    q1_industry: string | null;
-    q2_pain: string | null;
-    q2_freetext: string | null;
-    q3_freetext: string | null;
-    q4_intent: string | null;
-    created_at: string;
-  }>;
-
   const contactIds = [...new Set(rows.map((r) => r.contact_id).filter((x): x is string => Boolean(x)))];
   const people: Record<string, { name: string; email: string | null }> = {};
   if (contactIds.length) {
@@ -345,7 +333,7 @@ export async function getSurveyData(limit = 1000): Promise<SurveyData> {
     for (const e of (ev ?? []) as Array<{ id: string; name: string }>) eventNames[e.id] = e.name;
   }
 
-  const responses: SurveyResponseRow[] = rows.map((r) => {
+  return rows.map((r) => {
     const person = r.contact_id ? people[r.contact_id] : undefined;
     return {
       id: r.id,
@@ -362,6 +350,26 @@ export async function getSurveyData(limit = 1000): Promise<SurveyData> {
       createdAt: r.created_at,
     };
   });
+}
+
+/**
+ * Every survey response (SPEC §1.4) — industry / pain / intent breakdowns for
+ * the admin Survey tab's charts, plus the full list newest-first. All-time,
+ * capped at `limit`: survey volume is one row per attendee per event, so this
+ * is generous headroom for a long while.
+ */
+export async function getSurveyData(limit = 1000): Promise<SurveyData> {
+  if (!isSupabaseConfigured()) return EMPTY_SURVEY;
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('survey_responses')
+    .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error || !data || data.length === 0) return EMPTY_SURVEY;
+
+  const rows = data as RawSurveyRow[];
+  const responses = await resolveSurveyResponses(rows);
 
   const eventCounts: Record<string, number> = {};
   for (const r of responses) eventCounts[r.eventName] = (eventCounts[r.eventName] ?? 0) + 1;
@@ -377,4 +385,28 @@ export async function getSurveyData(limit = 1000): Promise<SurveyData> {
     byEvent,
     responses,
   };
+}
+
+/**
+ * ALL survey responses, unpaginated by design — for the CSV export, where a
+ * silent row cap (Supabase's default per-request max) would just mean
+ * incomplete data leaving the system. Pages past that cap the same way
+ * getDripPerformance does.
+ */
+export async function getAllSurveyResponsesForExport(): Promise<SurveyResponseRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const rows: RawSurveyRow[] = [];
+  for (let from = 0; from <= 100_000; from += 1000) {
+    const { data, error } = await sb
+      .from('survey_responses')
+      .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
+      .order('created_at', { ascending: false })
+      .range(from, from + 999);
+    if (error || !data || data.length === 0) break;
+    rows.push(...(data as RawSurveyRow[]));
+    if (data.length < 1000) break;
+  }
+  if (rows.length === 0) return [];
+  return resolveSurveyResponses(rows);
 }
