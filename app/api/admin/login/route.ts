@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     }
     ATTEMPTS.delete(ip);
     const res = NextResponse.json({ ok: true, role: 'staff' });
-    res.cookies.set(ADMIN_COOKIE, buildStaffSessionCookie(staff.perms, staff.name), COOKIE_OPTS);
+    res.cookies.set(ADMIN_COOKIE, buildStaffSessionCookie(staff.perms, staff.name, staff.id), COOKIE_OPTS);
     return res;
   }
 

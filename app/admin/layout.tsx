@@ -56,6 +56,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
   {
     heading: 'Operations',
     items: [
+      { href: '/admin/reimbursements', label: 'Reimbursements', icon: 'payable' },
       { href: '/admin/pending-payments', label: 'Pending payments', icon: 'pending' },
       { href: '/admin/crm', label: 'CRM', icon: 'crm' },
       { href: '/admin/contracts', label: 'Contracts', icon: 'crm' },
@@ -87,6 +88,11 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
   },
 ];
 
+// Every staff account can always reach Reimbursements — it's their own
+// expense claims + payout settings, not a section that should require an
+// admin to remember to grant. Bypasses the perms allowlist below.
+const STAFF_ALWAYS_ALLOWED = ['/admin/reimbursements'];
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const session = getAdminSession();
 
@@ -104,17 +110,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   // Staff are limited to their allowed sections. Block direct navigation to
   // anything else (not just hide the nav link). Admin is never gated.
   if (isStaff && pathname.startsWith('/admin') && pathname !== '/admin/login') {
-    const allowed = session.perms.some(
-      (h) => pathname === h || pathname.startsWith(h + '/'),
-    );
+    const allowed =
+      session.perms.some((h) => pathname === h || pathname.startsWith(h + '/')) ||
+      STAFF_ALWAYS_ALLOWED.some((h) => pathname === h || pathname.startsWith(h + '/'));
     if (!allowed) redirect(session.perms[0] || '/admin/login');
   }
 
-  // Nav scoped to the session's perms (admin sees everything).
+  // Nav scoped to the session's perms (admin sees everything), plus the
+  // always-allowed sections every staff account gets regardless of perms.
   const navGroups = isStaff
     ? NAV_GROUPS.map((g) => ({
         ...g,
-        items: g.items.filter((i) => session.perms.includes(i.href)),
+        items: g.items.filter(
+          (i) => session.perms.includes(i.href) || STAFF_ALWAYS_ALLOWED.includes(i.href),
+        ),
       })).filter((g) => g.items.length > 0)
     : NAV_GROUPS;
   const navFlat = navGroups.flatMap((g) => g.items);

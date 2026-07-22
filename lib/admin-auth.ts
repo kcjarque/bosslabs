@@ -120,11 +120,12 @@ export function buildSessionCookie() {
 }
 
 /** Staff cookie: a signed base64url JSON payload carrying the role, the
- *  display name, and the section allowlist (perms). Distinct from the admin
- *  cookie (which is bare digits), so getAdminSession can tell them apart. */
-export function buildStaffSessionCookie(perms: string[], name: string): string {
+ *  staff_accounts id, display name, and the section allowlist (perms).
+ *  Distinct from the admin cookie (which is bare digits), so
+ *  getAdminSession can tell them apart. */
+export function buildStaffSessionCookie(perms: string[], name: string, id: string): string {
   const payload = Buffer.from(
-    JSON.stringify({ t: Date.now(), r: 'staff', perms, name }),
+    JSON.stringify({ t: Date.now(), r: 'staff', perms, name, id }),
     'utf8',
   ).toString('base64url');
   return `${payload}.${sign(payload)}`;
@@ -153,10 +154,11 @@ export function isValidSession(raw: string | undefined | null) {
   return age >= 0 && age < 7 * ONE_DAY;
 }
 
-export type AdminSession = { role: 'admin' | 'staff'; name: string; perms: string[] };
+export type AdminSession = { role: 'admin' | 'staff'; name: string; perms: string[]; id?: string };
 
-/** The current verified session, or null. Admin = full access (perms `['*']`);
- *  staff = the allowlist baked into their signed cookie at login. */
+/** The current verified session, or null. Admin = full access (perms `['*']`,
+ *  no staff_accounts row so `id` is unset); staff = the allowlist + account id
+ *  baked into their signed cookie at login. */
 export function getAdminSession(): AdminSession | null {
   const raw = cookies().get(ADMIN_COOKIE)?.value;
   if (!raw || !isValidSession(raw)) return null;
@@ -166,8 +168,9 @@ export function getAdminSession(): AdminSession | null {
     const p = JSON.parse(Buffer.from(val, 'base64url').toString('utf8')) as {
       name?: string;
       perms?: string[];
+      id?: string;
     };
-    return { role: 'staff', name: p.name || 'Staff', perms: p.perms ?? [] };
+    return { role: 'staff', name: p.name || 'Staff', perms: p.perms ?? [], id: p.id };
   } catch {
     return null;
   }

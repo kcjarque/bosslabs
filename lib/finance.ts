@@ -631,6 +631,51 @@ export async function removePayoutExpense(payoutId: string): Promise<void> {
   await getSupabase().from('finance_expenses').delete().eq('payout_id', payoutId);
 }
 
+/** Mirror a staff reimbursement payout into the expense ledger (category:
+ *  Salary) with the payment slip as the receipt. Same shape as
+ *  syncPayoutExpense but keyed on reimbursement_payout_id (a separate column
+ *  — finance_expenses.payout_id is FK'd specifically to closer_payouts). */
+export async function syncReimbursementPayoutExpense(input: {
+  payoutId: string;
+  staffName: string;
+  amountCentavos: number;
+  requestCount: number;
+  receiptUrl?: string | null;
+  spentOn: string; // YYYY-MM-DD (Manila)
+  paidBy?: string | null;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const categoryId = await salaryCategoryId();
+  const n = input.requestCount;
+  const row = {
+    description: `Reimbursement payout — ${input.staffName} (${n} expense${n === 1 ? '' : 's'})`,
+    amount_centavos: Math.max(0, Math.round(input.amountCentavos)),
+    category_id: categoryId,
+    spent_on: input.spentOn || manilaToday(),
+    source: 'single',
+    is_abono: false,
+    paid_by: input.paidBy ?? null,
+    receipt_url: input.receiptUrl ?? null,
+    reimbursement_payout_id: input.payoutId,
+  };
+  const { data: existing } = await sb
+    .from('finance_expenses')
+    .select('id')
+    .eq('reimbursement_payout_id', input.payoutId)
+    .maybeSingle();
+  const { error } = existing
+    ? await sb.from('finance_expenses').update(row).eq('id', (existing as { id: string }).id)
+    : await sb.from('finance_expenses').insert(row);
+  if (error) throw new Error(`syncReimbursementPayoutExpense: ${error.message}`);
+}
+
+/** Remove a reimbursement payout's mirrored expense (called when voided). */
+export async function removeReimbursementPayoutExpense(payoutId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  await getSupabase().from('finance_expenses').delete().eq('reimbursement_payout_id', payoutId);
+}
+
 export async function deleteExpense(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('finance_expenses').delete().eq('id', id);
