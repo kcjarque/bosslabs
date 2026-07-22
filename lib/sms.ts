@@ -28,17 +28,6 @@ export type SendSmsArgs = {
   vars?: Record<string, string | number | undefined>;
 };
 
-/** Render an SMS template by id. */
-export async function renderSms(
-  templateId: string,
-  vars: Record<string, string | number | undefined> = {},
-): Promise<{ body: string } | null> {
-  const list = await getSmsTemplates();
-  const t = list.find((x) => x.id === templateId);
-  if (!t) return null;
-  return { body: renderTemplate(t.body, vars) };
-}
-
 /** Normalize a PH phone number to OneWaySMS's required format (countrycode + number, no +). */
 export function normalizePhPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
@@ -52,21 +41,29 @@ export async function sendSms(args: SendSmsArgs): Promise<SendSmsResult> {
   const settings = await getSettings();
   const offerVars = await offerTemplateVars();
 
+  // Resolve {{link:*}} macros → per-contact short links, and strip {{screenshot:*}}
+  // (no images in SMS), on the RAW body BEFORE renderTemplate. renderTemplate's
+  // own {{...}} regex also matches macro syntax and blanks it when there's no
+  // matching var — the same failure mode already fixed for email (see
+  // lib/email.ts's renderEmail), just never ported to SMS: templates with
+  // {{link:*}} were silently shipping with the link stripped out entirely.
+  const contactId = await findSignupIdByPhone(args.to).catch(() => null);
+  const surveyUrl = contactId ? `${SMS_SITE}/survey?c=${signContactToken(contactId)}` : '';
+
   let body = args.body ?? '';
   if (args.templateId) {
-    const rendered = await renderSms(args.templateId, { ...offerVars, ...(args.vars ?? {}) });
-    if (!rendered) {
+    const list = await getSmsTemplates();
+    const t = list.find((x) => x.id === args.templateId);
+    if (!t) {
       return { ok: false, error: `SMS template "${args.templateId}" not found` };
     }
-    body = rendered.body;
+    const macroResolved = await resolveSmsBodyMacros(t.body, contactId, surveyUrl);
+    body = renderTemplate(macroResolved, { ...offerVars, ...(args.vars ?? {}) });
+  } else {
+    body = await resolveSmsBodyMacros(body, contactId, surveyUrl);
   }
   if (!body) return { ok: false, error: 'body is required' };
 
-  // Resolve {{link:*}} macros → per-contact short links, and strip {{screenshot:*}}
-  // (no images in SMS). Then retrofit any remaining raw funnel URLs the same way.
-  const contactId = await findSignupIdByPhone(args.to).catch(() => null);
-  const surveyUrl = contactId ? `${SMS_SITE}/survey?c=${signContactToken(contactId)}` : '';
-  body = await resolveSmsBodyMacros(body, contactId, surveyUrl);
   body = await rewriteSmsLinks(body, contactId);
 
   const phone = normalizePhPhone(args.to);
