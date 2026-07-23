@@ -302,18 +302,20 @@ function Hero({
         <div className="mt-7 items-start lg:grid lg:grid-cols-[55fr_45fr] lg:gap-12">
           {/* LEFT — message + money */}
           <div className="text-center lg:text-left">
-            {/* "Save ₱100K/month" headline (Kyle 2026-07-24) — only the first
-                line is forced; the promise wraps naturally. "In under 24
-                hours" moved down to the subheadline per Kyle. */}
-            <h1 className="font-serif text-[28px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[38px] lg:text-[38px] xl:text-[42px]">
-              ₱500K ang quote sa system mo?{' '}
-              <br className="hidden lg:block" />
-              How to Build Your Own Automated System and save ₱100K/month —{' '}
+            {/* Hero copy (Kyle 2026-07-24): the ₱500K pain hook is a small
+                superscript line ABOVE the headline; the promise carries
+                "Without Hiring a Single Developer" after ₱100K/month. */}
+            <p className="font-sans text-[12px] font-semibold uppercase tracking-[0.2em] text-cyan-300 sm:text-[13px]">
+              ₱500K ang quote sa system mo?
+            </p>
+            <h1 className="mt-2.5 font-serif text-[28px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[38px] lg:text-[38px] xl:text-[42px]">
+              How to Build Your Own Automated System and save ₱100K/month Without
+              Hiring a Single Developer —{' '}
               <span className="accent-italic">using Claude Code.</span>
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl font-sans text-[16px] font-medium text-ink-100 sm:text-[19px] lg:mx-0">
-              No developer. No coding experience needed. In under 24 hours.
+              No Dev, No Code Experience. Less than 24 hours.
             </p>
 
             {/* Body line — shown on ALL breakpoints per Kyle (was desktop-only
