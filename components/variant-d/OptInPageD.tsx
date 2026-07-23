@@ -292,10 +292,11 @@ function Hero({
     <section className="relative isolate overflow-hidden">
       <HeroBackground />
       <div className="container-tight relative z-10 pt-8 pb-12 sm:pt-12 sm:pb-16">
-        {/* Eyebrow — deliberately small + light so it never competes with H1. */}
+        {/* Eyebrow — the control's Live-on-Zoom date pill (restored per Kyle). */}
         <div className="text-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-danger-500/30 bg-danger-900/20 px-3.5 py-1.5 font-sans text-[10px] uppercase tracking-[0.16em] text-danger-200 sm:text-[11px]">
-            ⚠️ Bawal ang hao shao dito — full refund if proven hao shao
+          <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-1.5 font-sans text-[10px] uppercase tracking-[0.22em] text-cyan-300 sm:text-[11px]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
+            Live on Zoom · {webinar.date} · {webinar.time} {webinar.timezone}
           </span>
         </div>
 
