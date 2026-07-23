@@ -213,6 +213,15 @@ function CardAnnotation() {
 function SampleAppBlock() {
   return (
     <div>
+      {/* Kicker above the proof card (Kyle 2026-07-24). */}
+      <p className="mb-3">
+        <span className="block font-sans text-[14px] font-semibold leading-snug text-white sm:text-[15px]">
+          Here&apos;s an example of a REAL APP we built on our live webinar!!
+        </span>
+        <span className="mt-0.5 block font-serif text-[16px] italic text-cyan-300 sm:text-[17px]">
+          Without Hiring a Single Developer.
+        </span>
+      </p>
       <SampleAppCard app={SAMPLE_APP} />
       <CardAnnotation />
     </div>
@@ -293,18 +302,18 @@ function Hero({
         <div className="mt-7 items-start lg:grid lg:grid-cols-[55fr_45fr] lg:gap-12">
           {/* LEFT — message + money */}
           <div className="text-center lg:text-left">
-            {/* Longer "save ₱100K/month" headline (Kyle 2026-07-24) — only the
-                first line is forced; the promise wraps naturally, sized down a
-                notch from the old 3-line version so it stays compact. */}
+            {/* "Save ₱100K/month" headline (Kyle 2026-07-24) — only the first
+                line is forced; the promise wraps naturally. "In under 24
+                hours" moved down to the subheadline per Kyle. */}
             <h1 className="font-serif text-[28px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[38px] lg:text-[38px] xl:text-[42px]">
               ₱500K ang quote sa system mo?{' '}
               <br className="hidden lg:block" />
-              How to Build Your Own Automated System and save ₱100K/month in under 24
-              hours — <span className="accent-italic">using Claude Code.</span>
+              How to Build Your Own Automated System and save ₱100K/month —{' '}
+              <span className="accent-italic">using Claude Code.</span>
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl font-sans text-[16px] font-medium text-ink-100 sm:text-[19px] lg:mx-0">
-              No developer. No coding experience needed.
+              No developer. No coding experience needed. In under 24 hours.
             </p>
 
             {/* Body line — shown on ALL breakpoints per Kyle (was desktop-only
