@@ -62,6 +62,15 @@ body {
   to { stroke-dashoffset: -200; }
 }
 
+/* Variant-D authority ribbon — content duplicated once, track slides -50%. */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[marquee-x_28s_linear_infinite\] { animation: none !important; }
+}
+
 .hero-bg .helix-strand {
   stroke-dasharray: 4 6;
   animation: flow-dash 18s linear infinite;

@@ -24,9 +24,11 @@ export function OurAppsShowcase() {
   return (
     <section className="border-t border-white/[0.05] py-20 sm:py-28">
       <div className="container-tight">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-4xl text-center">
           <div className="eyebrow justify-center">Proof, not promises</div>
-          <h2 className="h-section mt-5">
+          {/* Single line on ≥md (sized down slightly so it never wraps);
+              small screens wrap naturally. */}
+          <h2 className="h-section mt-5 md:!text-[36px] md:whitespace-nowrap lg:!text-[42px]">
             Five production apps.{' '}
             <span className="accent-italic">Zero developers hired.</span>
           </h2>

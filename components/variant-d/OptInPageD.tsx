@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { CountdownDisplay } from '../CountdownBar';
+import { CountdownDisplay, CountdownMini } from '../CountdownBar';
 import { HeroBackground } from '../HeroBackground';
-import { HeroCtaD, HideTopCountdown, SampleAppCard, type SampleApp } from './HeroKitD';
+import { HeroCtaD, SampleAppCard, type SampleApp } from './HeroKitD';
 import {
   CategoryAgencyIcon,
   CategoryBpoIcon,
@@ -40,18 +40,18 @@ import type { WebinarInfo } from '@/lib/webinar';
 
 export function OptInPageD({
   webinar,
+  upcomingSessions = [],
 }: {
   webinar: WebinarInfo;
-  /** Accepted for call-site parity with the other variants; the D hero's
-   *  event line is spec-literal ("Wednesday, July 29") so it goes unused. */
   upcomingSessions?: { dateLabel: string; timeLabel: string }[];
 }) {
   return (
     <>
       <MinimalHeader />
       <main className="relative">
-        <Hero />
+        <Hero webinar={webinar} upcomingSessions={upcomingSessions} />
         <AuthorityBar />
+        <ProofWall />
         <WhatIsSection />
         <OurAppsShowcase />
         <TestimonialWall />
@@ -168,18 +168,18 @@ function PaidCta({ className = '' }: { className?: string }) {
 }
 
 /* --------------------------------------------------------------------- */
-/* 1 — HERO (variant D: ₱500K-quote reframe, SPEC 2026-07-24)            */
-/* Above-the-fold only differs from control; everything below is the     */
-/* control's sections untouched. Copy is spec-literal Taglish — do not   */
-/* paraphrase. One primary CTA; no countdown/seat counter in the hero.   */
+/* 1 — HERO (variant D: ₱500K-quote reframe, SPEC 2026-07-24 + revisions)*/
+/* Reframed headline + clickable sample-app proof card, but KEEPS the    */
+/* control's conversion block (bonuses line, seats pill, mini countdown, */
+/* WHEN/WHERE/LENGTH/FORMAT cards) per Kyle's follow-up direction.       */
 /* --------------------------------------------------------------------- */
 
 // Swappable proof card (spec §6: must match the winning ad creative's app).
 const SAMPLE_APP: SampleApp = {
-  image: '/apps/capcal-os.png',
-  label: 'Captain Calamares — Franchise Ops Dashboard',
+  image: '/apps/mr-squidking.png',
+  label: 'Mr. Squidking — Franchise Ops System',
   sublabel: 'Built in one session · 100% AI coded',
-  demoUrl: 'https://capcal-os.vercel.app/',
+  demoUrl: 'https://mr-squidking.vercel.app/',
 };
 
 function CardAnnotation() {
@@ -219,11 +219,69 @@ function SampleAppBlock() {
   );
 }
 
-function Hero() {
+function Hero({
+  webinar,
+  upcomingSessions,
+}: {
+  webinar: WebinarInfo;
+  upcomingSessions: { dateLabel: string; timeLabel: string }[];
+}) {
+  // Same two-dates treatment as the control's WHEN card.
+  const twoSessions = upcomingSessions.length >= 2 ? upcomingSessions.slice(0, 2) : null;
+  const facts = [
+    {
+      k: 'WHEN',
+      v: twoSessions ? (
+        <div className="space-y-0.5">
+          {twoSessions.map((s) => (
+            <div key={s.dateLabel}>{s.dateLabel}</div>
+          ))}
+        </div>
+      ) : (
+        webinar.date
+      ),
+      s: twoSessions ? '2 sessions to choose from' : `${webinar.time} ${webinar.timezone}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4.5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v3M16 3v3" />
+        </svg>
+      ),
+    },
+    {
+      k: 'WHERE',
+      v: 'Live on Zoom',
+      s: 'Not a recorded session',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3z" />
+        </svg>
+      ),
+    },
+    {
+      k: 'LENGTH',
+      v: '2-Hour Workshop',
+      s: 'Live & hands-on',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" />
+        </svg>
+      ),
+    },
+    {
+      k: 'FORMAT',
+      v: 'Live Demo',
+      s: 'Launch real apps',
+      icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 15c-1.5 1.5-2 4.5-2 4.5s3-.5 4.5-2M9.5 11.5a4 4 0 0 1 4-4c3-3 6.5-3 6.5-3s0 3.5-3 6.5a4 4 0 0 1-4 4l-2 2-5-5 2.5-1.5z" /><circle cx="14.5" cy="9.5" r="1.1" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <section className="relative isolate overflow-hidden">
       <HeroBackground />
-      <HideTopCountdown />
       <div className="container-tight relative z-10 pt-8 pb-12 sm:pt-12 sm:pb-16">
         {/* Eyebrow — deliberately small + light so it never competes with H1. */}
         <div className="text-center">
@@ -235,18 +293,22 @@ function Hero() {
         <div className="mt-7 items-start lg:grid lg:grid-cols-[55fr_45fr] lg:gap-12">
           {/* LEFT — message + money */}
           <div className="text-center lg:text-left">
-            <h1 className="font-serif text-[30px] leading-[1.1] tracking-[-0.01em] text-white sm:text-[42px] lg:text-[50px] xl:text-[56px]">
+            {/* Explicit lg line breaks keep the headline exactly 3 lines on
+                desktop with "using Claude Code" as the accent payoff line. */}
+            <h1 className="font-serif text-[30px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[40px] lg:text-[44px] xl:text-[48px]">
               ₱500K ang quote sa system mo?{' '}
-              <span className="accent-italic">Build it yourself in under 24 hours.</span>
+              <br className="hidden lg:block" />
+              Build it yourself in under{' '}
+              <br className="hidden lg:block" />
+              24 hours — <span className="accent-italic">using Claude Code.</span>
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl font-sans text-[16px] font-medium text-ink-100 sm:text-[19px] lg:mx-0">
               No developer. No coding experience needed.
             </p>
 
-            {/* Body line — desktop only per spec's mobile stack order (mobile
-                goes straight subhead → CTA so the button stays above the fold
-                on 360px screens). */}
+            {/* Body line — desktop only so the CTA stays above the fold on
+                360px screens (spec mobile stack order). */}
             <p className="mt-3 hidden max-w-xl font-sans text-[15px] leading-relaxed text-ink-200 lg:block">
               Boss, pwede ka nang mag-build ng sarili mong CRM, HRIS, Inventory — the real
               backbone of your business.
@@ -258,21 +320,33 @@ function Hero() {
                 className="w-full sm:w-auto"
               />
             </div>
+            <p className="mt-3 font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
+              Bonuses included · Limited seats per session · 7-day guarantee
+            </p>
 
-            {/* Mobile: proof card comes AFTER the CTA (money before the exit
-                link) and BEFORE the trust row — spec §2 mobile stack order. */}
+            {/* Control's scarcity block — kept per Kyle (seats + countdown). */}
+            <div className="mt-4 flex flex-col items-center gap-2 lg:items-start">
+              <div className="inline-flex items-center gap-2 rounded-full border border-danger-500/40 bg-danger-900/30 px-3.5 py-1.5">
+                <span className="pulse-dot" />
+                <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-danger-200 sm:text-[11px]">
+                  Only <span className="font-serif text-sm text-white">23</span> of 200 seats left this session
+                </span>
+              </div>
+              <CountdownMini startsAtIso={webinar.startsAtIso} />
+              <p className="font-sans text-[9px] uppercase tracking-[0.22em] text-ink-400 sm:text-[10px]">
+                Until your session goes live
+              </p>
+            </div>
+
+            {/* Mobile: proof card AFTER the CTA block (money before the exit
+                link), BEFORE the fact cards. */}
             <div className="mx-auto mt-8 max-w-md lg:hidden">
               <SampleAppBlock />
             </div>
 
-            <p className="mt-4 font-sans text-[11px] uppercase tracking-[0.2em] text-ink-300 sm:text-[11.5px] lg:mt-3">
+            <p className="mt-4 font-sans text-[11px] uppercase tracking-[0.2em] text-ink-300 sm:text-[11.5px] lg:mt-4">
               7-day guarantee · Cards · GCash · Maya
             </p>
-
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-1.5 font-sans text-[10px] uppercase tracking-[0.2em] text-cyan-300 sm:text-[11px]">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
-              Live on Zoom · Wednesday, July 29 · 7:00 PM PHT
-            </div>
           </div>
 
           {/* RIGHT — proof card (desktop) */}
@@ -280,27 +354,88 @@ function Hero() {
             <SampleAppBlock />
           </div>
         </div>
+
+        {/* Quick facts — same cards as the control (WHEN shows both upcoming
+            sessions when two exist). 2×2 on mobile → 4-up on desktop. */}
+        <div className="mt-10 grid grid-cols-2 gap-3 text-left sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+          {facts.map((card) => (
+            <div
+              key={card.k}
+              className="rounded-2xl border border-cyan-500/25 bg-white/[0.03] p-4 sm:p-5"
+            >
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 sm:h-9 sm:w-9">
+                  {card.icon}
+                </span>
+                <span className="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-300 sm:text-sm sm:tracking-[0.18em]">
+                  {card.k}
+                </span>
+              </div>
+              <div className="mt-2.5 font-sans text-[15px] font-semibold leading-tight text-white sm:mt-4 sm:text-[17px]">
+                {card.v}
+              </div>
+              <div className="mt-1 text-[12px] leading-snug text-ink-300 sm:text-[13px]">{card.s}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
 /* --------------------------------------------------------------------- */
-/* AUTHORITY BAR                                                         */
+/* AUTHORITY BAR — slim infinite marquee (WeInnovate ribbon treatment)   */
 /* --------------------------------------------------------------------- */
+const AUTHORITY_RIBBON = AUTHORITY.map((a) => `${a.num} · ${a.label}`);
+
 function AuthorityBar() {
+  const row = AUTHORITY_RIBBON.map((item, i) => (
+    <span key={i} className="flex items-center gap-6 pr-6">
+      <span className="whitespace-nowrap font-sans text-[11px] font-bold uppercase tracking-[0.22em] text-ink-100">
+        {item}
+      </span>
+      <span aria-hidden className="text-cyan-400">
+        ✦
+      </span>
+    </span>
+  ));
   return (
-    <section className="border-y border-white/[0.05] bg-white/[0.015]">
-      <div className="container-tight py-8 sm:py-10">
-        <div className="grid grid-cols-3 gap-4 text-center sm:gap-10">
-          {AUTHORITY.map((a) => (
-            <div key={a.label}>
-              <div className="font-serif text-2xl tracking-tight text-white sm:text-4xl">
-                {a.num}
-              </div>
-              <div className="mt-2 font-sans text-[10px] uppercase tracking-[0.22em] text-ink-200 sm:text-[11px]">
-                {a.label}
-              </div>
+    <section
+      className="overflow-hidden border-y border-white/[0.05] bg-white/[0.015] py-3"
+      aria-label={AUTHORITY_RIBBON.join(' · ')}
+    >
+      <div aria-hidden className="flex w-max animate-[marquee-x_28s_linear_infinite]">
+        <div className="flex">{row}</div>
+        <div className="flex">{row}</div>
+      </div>
+    </section>
+  );
+}
+
+/* --------------------------------------------------------------------- */
+/* PROOF WALL — screenshots of students shipping real systems            */
+/* --------------------------------------------------------------------- */
+const PROOF_SHOTS = [1, 2, 3, 4, 5, 6].map((n) => `/proof-wall/proof-${n}.png`);
+
+function ProofWall() {
+  return (
+    <section className="border-b border-white/[0.05]">
+      <div className="container-tight py-14 sm:py-20">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="eyebrow justify-center">Proof · Totoong tao, totoong systems</div>
+          <h2 className="h-sub mt-4">
+            These people are making <span className="accent-italic">7 figure systems</span>{' '}
+            using Claude Code.
+          </h2>
+        </div>
+        <div className="mt-10 columns-1 gap-4 sm:columns-2 lg:columns-3">
+          {PROOF_SHOTS.map((src) => (
+            <div
+              key={src}
+              className="mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="Student proof — real system built with Claude Code" className="w-full" loading="lazy" />
             </div>
           ))}
         </div>

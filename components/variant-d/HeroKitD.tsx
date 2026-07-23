@@ -40,30 +40,6 @@ export function HeroCtaD({ label, className = '' }: { label: string; className?:
   );
 }
 
-/* ─── top countdown suppressor ─────────────────────────────────────────── */
-
-/**
- * The site-wide red countdown strip is rendered by app/layout.tsx for every
- * page. This variant's spec bans countdowns above the fold, but the layout +
- * CountdownBar are shared with the control and must stay untouched — so the
- * variant hides the strip client-side on mount and restores it on unmount.
- * Selector keys on the bar's danger-gradient classes (unique to that strip).
- */
-export function HideTopCountdown() {
-  useEffect(() => {
-    const bar = document.querySelector<HTMLElement>(
-      'div[class*="from-danger-600"][class*="border-danger-400"]',
-    );
-    if (!bar) return;
-    const prev = bar.style.display;
-    bar.style.display = 'none';
-    return () => {
-      bar.style.display = prev;
-    };
-  }, []);
-  return null;
-}
-
 /* ─── sample app card + lightbox modal ─────────────────────────────────── */
 
 export type SampleApp = {
