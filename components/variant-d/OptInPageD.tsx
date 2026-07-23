@@ -213,7 +213,7 @@ function CardAnnotation() {
 function SampleAppBlock() {
   return (
     <div>
-      <SampleAppCard app={SAMPLE_APP} ctaLabel={`Reserve a Seat — ${OFFER.main.label}`} />
+      <SampleAppCard app={SAMPLE_APP} />
       <CardAnnotation />
     </div>
   );
@@ -310,8 +310,9 @@ function Hero({
             {/* Body line — desktop only so the CTA stays above the fold on
                 360px screens (spec mobile stack order). */}
             <p className="mt-3 hidden max-w-xl font-sans text-[15px] leading-relaxed text-ink-200 lg:block">
-              Boss, pwede ka nang mag-build ng sarili mong CRM, HRIS, Inventory — the real
-              backbone of your business.
+              Learn how to build your own CRM, HRIS, Inventory — the real backbone of your
+              business. And the best part? Hindi hao shao — hindi ito marketing-marketing
+              lang, this is the real system na hinahanap mo.
             </p>
 
             <div className="mt-7">
