@@ -98,7 +98,12 @@ export async function POST(req: Request) {
       if (!promoAllowedForProduct(promo, 'main')) {
         return NextResponse.json({ error: 'This code is not valid for the webinar ticket.' }, { status: 400 });
       }
-      const previewDiscount = computeDiscountCentavos(promo, baseAmountCentavos);
+      // Discount ONLY the webinar-ticket line — bumps are separate products
+      // and always charged full price. Computing against the bump-inclusive
+      // total let a 100%-off code (PATIENCEISAVIRTUE) zero the whole cart,
+      // handing out free Vaults/1:1s; capping the discount base at the ticket
+      // price closes that while keeping the ticket itself fully discountable.
+      const previewDiscount = computeDiscountCentavos(promo, OFFER.main.priceCentavos);
       const redeemed = await redeemPromoCode(promo.code);
       if (!redeemed) {
         return NextResponse.json(

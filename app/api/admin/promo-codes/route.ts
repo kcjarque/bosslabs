@@ -37,6 +37,8 @@ export async function POST(req: Request) {
     expiresAt?: string | null;
     active?: boolean;
     note?: string | null;
+    /** Product scope — which checkout may redeem this code. 'any' = site-wide. */
+    product?: string | null;
   };
 
   const code = (body.code ?? '').trim().toUpperCase();
@@ -60,6 +62,27 @@ export async function POST(req: Request) {
 
   // Preserve usesCount + createdAt on edit; new codes start at 0.
   const existing = await findPromoCode(code);
+
+  // Product scope. 'any' (explicit site-wide choice) → null. Omitted:
+  // preserve the existing scope on edit (the old code rebuilt the row
+  // without `product`, silently wiping the scope of any code an admin
+  // edited); NEW codes default to 'main' (webinar only) so an admin can't
+  // accidentally mint a whole-cart code again.
+  const VALID_PRODUCTS = ['main', 'vault', 'build_session', 'retreat'];
+  let product: string | null;
+  if (body.product === undefined) {
+    product = existing ? (existing.product ?? null) : 'main';
+  } else if (body.product === 'any' || body.product === null) {
+    product = null;
+  } else if (VALID_PRODUCTS.includes(body.product)) {
+    product = body.product;
+  } else {
+    return NextResponse.json(
+      { error: `product must be one of ${VALID_PRODUCTS.join(', ')}, or 'any'` },
+      { status: 400 },
+    );
+  }
+
   const next: PromoCode = {
     code,
     discountType: body.discountType,
@@ -69,6 +92,8 @@ export async function POST(req: Request) {
     expiresAt: body.expiresAt || null,
     active: body.active ?? true,
     note: body.note ?? null,
+    product,
+    createdByCloser: existing?.createdByCloser ?? null,
     createdAt: existing?.createdAt ?? new Date().toISOString(),
   };
   const saved = await savePromoCode(next);

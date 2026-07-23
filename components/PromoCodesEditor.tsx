@@ -23,6 +23,19 @@ function discountLabel(p: Pick<PromoCode, 'discountType' | 'discountValue'>): st
   }
 }
 
+const PRODUCT_OPTIONS = [
+  { value: 'main', label: 'Webinar ticket only' },
+  { value: 'vault', label: 'Vault only' },
+  { value: 'build_session', label: '1:1 Build Session only' },
+  { value: 'retreat', label: 'Retreat only' },
+  { value: 'any', label: 'Any product (site-wide)' },
+] as const;
+
+function productLabel(product: string | null | undefined): string {
+  if (!product) return 'Any product';
+  return PRODUCT_OPTIONS.find((o) => o.value === product)?.label.replace(' only', '') ?? product;
+}
+
 export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
   const [codes, setCodes] = useState<PromoCode[]>(initial);
   const [busy, setBusy] = useState(false);
@@ -37,6 +50,10 @@ export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
   const [maxUses, setMaxUses] = useState<number | ''>('');
   const [expiresAt, setExpiresAt] = useState('');
   const [note, setNote] = useState('');
+  // Default 'main': a new code only ever discounts the webinar ticket unless
+  // the admin deliberately widens it — the safe default after the
+  // PATIENCEISAVIRTUE whole-cart-free incident.
+  const [product, setProduct] = useState<string>('main');
 
   async function saveNew() {
     setBusy(true);
@@ -59,6 +76,7 @@ export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
           active: true,
           note: note.trim() || null,
+          product,
         }),
       });
       const data = await res.json();
@@ -175,6 +193,24 @@ export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
           )}
 
           <div>
+            <label className="label" htmlFor="new-product">Applies to</label>
+            <select
+              id="new-product"
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              className="input"
+            >
+              {PRODUCT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              The discount only applies to this product — anything else in the
+              order (bumps, add-ons) is still charged full price.
+            </p>
+          </div>
+
+          <div>
             <label className="label" htmlFor="new-max">Max uses (blank = unlimited)</label>
             <input
               id="new-max"
@@ -239,6 +275,7 @@ export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
                 <tr>
                   <th className="px-4 py-3 text-left">Code</th>
                   <th className="px-4 py-3 text-left">Discount</th>
+                  <th className="px-4 py-3 text-left">Applies to</th>
                   <th className="px-4 py-3 text-left">Uses</th>
                   <th className="px-4 py-3 text-left">Expires</th>
                   <th className="px-4 py-3 text-left">Status</th>
@@ -260,6 +297,17 @@ export function PromoCodesEditor({ initial }: { initial: PromoCode[] }) {
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{discountLabel(p)}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+                            p.product
+                              ? 'bg-cyan-50 text-cyan-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {productLabel(p.product)}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-slate-700">
                         {p.usesCount}{p.maxUses != null ? ` / ${p.maxUses}` : ''}
                       </td>

@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { findPromoCode, computeDiscountCentavos } from '@/lib/db';
+import { findPromoCode, computeDiscountCentavos, promoAllowedForProduct } from '@/lib/db';
 import { OFFER } from '@/lib/config';
 import { isSameOrigin } from '@/lib/admin-auth';
 
@@ -47,17 +47,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false, reason: 'exhausted' }, { status: 200 });
   }
 
+  // Enforce product scoping in the PREVIEW too, so the quoted price always
+  // matches what /api/checkout will accept at claim time. Scope keys mirror
+  // the claim-time checks: main checkout = 'main', order-bump Vault = 'vault',
+  // order-bump 1:1 = 'build_session'.
+  const scopeKey =
+    body.base === 'oto' ? 'vault' : body.base === 'oto2' ? 'build_session' : 'main';
+  if (!promoAllowedForProduct(promo, scopeKey)) {
+    return NextResponse.json({ valid: false, reason: 'wrong_product' }, { status: 200 });
+  }
+
   const bumped = Boolean(body.bump);
   const bumped2 = Boolean(body.bump2);
-  const totalCentavos =
+  // On the main checkout, a promo discounts ONLY the webinar-ticket line —
+  // bumps are separate products and always charged full price. A 100%-off
+  // code with both bumps selected now previews ticket-free + bumps payable
+  // instead of zeroing the whole cart (the PATIENCEISAVIRTUE loophole).
+  const discountableCentavos =
     body.base === 'oto'
       ? OFFER.oto.priceCentavos
       : body.base === 'oto2'
         ? OFFER.oto2.priceCentavos
-        : OFFER.main.priceCentavos +
-          (bumped ? OFFER.oto.priceCentavos : 0) +
-          (bumped2 ? OFFER.oto2.priceCentavos : 0);
-  const discountCentavos = computeDiscountCentavos(promo, totalCentavos);
+        : OFFER.main.priceCentavos;
+  const totalCentavos =
+    body.base === 'oto' || body.base === 'oto2'
+      ? discountableCentavos
+      : discountableCentavos +
+        (bumped ? OFFER.oto.priceCentavos : 0) +
+        (bumped2 ? OFFER.oto2.priceCentavos : 0);
+  const discountCentavos = computeDiscountCentavos(promo, discountableCentavos);
   const finalCentavos = Math.max(0, totalCentavos - discountCentavos);
 
   return NextResponse.json({
