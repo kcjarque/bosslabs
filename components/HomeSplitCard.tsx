@@ -2,18 +2,18 @@
 
 /**
  * Homepage split-test control (GHL-style) — shown on the webinar funnel's
- * admin page. FOUR variants:
- *   - CONTROL: the live homepage (legacy "₱100K/month outcome" hero)
- *   - VARIATION B: conversion-first redesign (bento grids, terminal, sticky CTA)
- *   - VARIATION C: competition-killer informed by the aibuilderssummit.live
- *     audit (outcome-first hero, itemized bonus stack, sharpened apps moat)
- *   - VARIATION D: ₱500K-quote hero reframe for the ₱1,997 price (above the
- *     fold only; below the fold = control)
+ * admin page. Since 2026-07-24 VARIATION D (₱500K-quote reframe) IS THE SITE
+ * DEFAULT; everyone not carved into a test band sees D:
+ *   - VARIATION D: the live homepage (no dial needed — it's the default)
+ *   - ORIGINAL: the previous homepage ("₱100K/month outcome" hero), kept
+ *     intact for rollback — preview via ?preview=control; reverting the whole
+ *     site = one-line fallback change in app/page.tsx
+ *   - VARIATION B / C: test variants, still dialable
  *
- * Three traffic dials, saved to funnel config:
+ * Two traffic dials, saved to funnel config:
  *   homeVariantPct  → Variation B
  *   homeVariantCPct → Variation C
- *   homeVariantDPct → Variation D
+ * (homeVariantDPct is retired — the page router ignores it.)
  *
  * Bucketing is additive (raising a later dial doesn't reshuffle anyone
  * already bucketed earlier). Combined cap of 100; warn past it.
@@ -42,25 +42,22 @@ export function HomeSplitCard({
 }) {
   const initialB = clampPct(Number(funnel.config.homeVariantPct) || 0);
   const initialC = clampPct(Number(funnel.config.homeVariantCPct) || 0);
-  const initialD = clampPct(Number(funnel.config.homeVariantDPct) || 0);
   const [pctB, setPctB] = useState(String(initialB));
   const [pctC, setPctC] = useState(String(initialC));
-  const [pctD, setPctD] = useState(String(initialD));
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const nB = clampPct(Number(pctB));
   const nC = clampPct(Number(pctC));
-  const nD = clampPct(Number(pctD));
-  const sum = nB + nC + nD;
+  const sum = nB + nC;
   const overCap = sum > 100;
-  const nControl = Math.max(0, 100 - Math.min(100, sum));
-  const live = nB > 0 || nC > 0 || nD > 0;
+  const nDefault = Math.max(0, 100 - Math.min(100, sum));
+  const live = nB > 0 || nC > 0;
 
   function save() {
     startTransition(async () => {
       await onSave(funnel.id, {
-        config: { ...funnel.config, homeVariantPct: nB, homeVariantCPct: nC, homeVariantDPct: nD },
+        config: { ...funnel.config, homeVariantPct: nB, homeVariantCPct: nC },
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
@@ -78,27 +75,23 @@ export function HomeSplitCard({
               : 'border-slate-200 bg-slate-100 text-slate-500'
           }`}
         >
-          {live ? `Running · B ${nB}% · C ${nC}% · D ${nD}% · Control ${nControl}%` : 'Off · 100% control'}
+          {live ? `Testing · B ${nB}% · C ${nC}% · D (default) ${nDefault}%` : 'Off · 100% Variation D (site default)'}
         </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            🏁 Control
+        <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+            🔨 Variation D — site default
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            Current homepage (₱100K/month outcome hero)
+            ₱500K-quote reframe — build-it-yourself hero, clickable sample app, ₱1,997 CTA
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <a
-              href="/?preview=control"
-              target="_blank"
-              className="text-xs text-cyan-600 hover:underline"
-            >
-              Preview ↗
+            <a href="/" target="_blank" className="text-xs text-amber-600 hover:underline">
+              View live ↗
             </a>
-            <span className="text-lg font-semibold text-slate-900">{nControl}%</span>
+            <span className="text-lg font-semibold text-slate-900">{nDefault}%</span>
           </div>
         </div>
         <div className="rounded-xl border border-cyan-200 bg-cyan-50/40 p-4">
@@ -138,22 +131,22 @@ export function HomeSplitCard({
             <span className="text-lg font-semibold text-slate-900">{nC}%</span>
           </div>
         </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
-            🔨 Variation D
+        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            🏁 Original (rollback)
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            ₱500K-quote reframe — build-it-yourself hero, clickable sample app, ₱1,997 CTA
+            Previous homepage (₱100K/month outcome hero) — kept intact in case we need to revert
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <a
-              href="/?preview=d"
+              href="/?preview=control"
               target="_blank"
-              className="text-xs text-amber-600 hover:underline"
+              className="text-xs text-cyan-600 hover:underline"
             >
               Preview ↗
             </a>
-            <span className="text-lg font-semibold text-slate-900">{nD}%</span>
+            <span className="text-lg font-semibold text-slate-400">preview-only</span>
           </div>
         </div>
       </div>
@@ -177,15 +170,6 @@ export function HomeSplitCard({
             onChange={(e) => setPctC(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label">Variation D traffic %</label>
-          <input
-            className="input w-28"
-            inputMode="numeric"
-            value={pctD}
-            onChange={(e) => setPctD(e.target.value)}
-          />
-        </div>
         <button
           onClick={save}
           disabled={pending || overCap}
@@ -195,17 +179,18 @@ export function HomeSplitCard({
         </button>
         {overCap && (
           <span className="text-[11px] font-medium text-rose-600">
-            B + C + D = {sum}% &gt; 100. Lower one before saving.
+            B + C = {sum}% &gt; 100. Lower one before saving.
           </span>
         )}
       </div>
       <p className="text-[11px] leading-relaxed text-slate-400">
-        Visitors are bucketed once (sticky cookie) — raising a % adds new people to that variation
-        without reshuffling anyone. Set both to 0 to pause and serve 100% control. Variation views
-        log as <code className="rounded bg-slate-100 px-1">/__ab/home-b</code>,{' '}
-        <code className="rounded bg-slate-100 px-1">/__ab/home-c</code> and{' '}
-        <code className="rounded bg-slate-100 px-1">/__ab/home-d</code> page-views so you can
-        compare traffic.
+        Variation D is the site default — everyone not carved into a B/C test band sees it, no
+        dial needed. Visitors are bucketed once (sticky cookie) — raising a % adds new people to
+        that variation without reshuffling anyone. Set both to 0 to serve 100% Variation D. Test
+        views log as <code className="rounded bg-slate-100 px-1">/__ab/home-b</code> and{' '}
+        <code className="rounded bg-slate-100 px-1">/__ab/home-c</code> page-views; the old
+        design stays preview-only at{' '}
+        <code className="rounded bg-slate-100 px-1">/?preview=control</code>.
       </p>
     </section>
   );
