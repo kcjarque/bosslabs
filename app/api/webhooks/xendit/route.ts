@@ -508,6 +508,20 @@ async function handleOtoPaid(event: XenditEvent) {
     },
   });
 
+  // Auto-add to the 1-on-1 CRM board when this OTO included the Build Session.
+  // otoProduct alone (written above) isn't enough — listCrmCards() only shows
+  // people who already have a crm_cards row; handleMainPaid gets this via
+  // syncCrmCardForSignup but this bumped-OTO path never called it, so Build
+  // Session buyers paid and silently never appeared on the board.
+  if (otoProduct === 'oto2' || otoProduct === 'both') {
+    await syncCrmCardForSignup({
+      signupId: signup.id,
+      name: `${signup.firstName} ${signup.lastName ?? ''}`.trim(),
+      phone: signup.phone ?? '',
+      email: signup.email,
+    });
+  }
+
   // Top up the closer's commission to include the OTO (no-op if no closer
   // claimed this lead; recomputes against the now-larger total paid).
   await closeLeadAndRecordCommission(signup.id);
@@ -686,6 +700,18 @@ async function handleStandaloneOtoPaid(event: XenditEvent) {
         : {}),
     },
   });
+
+  // Auto-add to the 1-on-1 CRM board when this standalone purchase included
+  // the Build Session — same gap as handleOtoPaid above, just never wired
+  // for the standalone /oto path either.
+  if (product === 'oto2' || product === 'both') {
+    await syncCrmCardForSignup({
+      signupId: signup.id,
+      name: `${signup.firstName} ${signup.lastName ?? ''}`.trim(),
+      phone: signup.phone ?? '',
+      email: signup.email,
+    });
+  }
 
   // CAPI Purchase for the standalone 1:1.
   void sendCapiEvent({
