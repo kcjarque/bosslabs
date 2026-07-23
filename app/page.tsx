@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { OptInPage } from '@/components/OptInPage';
 import { OptInPageB } from '@/components/variant-b/OptInPageB';
 import { OptInPageC } from '@/components/variant-c/OptInPageC';
+import { OptInPageD } from '@/components/variant-d/OptInPageD';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { AbBeacon } from '@/components/AbBeacon';
 import { getWebinarInfo, formatSessionLabels } from '@/lib/webinar';
@@ -13,36 +14,99 @@ import { getFunnels, getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 // build time and keeps showing whichever event was active at deploy.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Reserve a Seat — BOSSLABS AI · For Filipino Business Owners',
-  description:
-    'How to build an automated business and save at least ₱100K/month using Claude Code — without hiring a single developer. Live webinar.',
-  openGraph: {
-    title: 'BOSSLABS AI — The Webinar',
-    description:
-      'Build an automated business and save at least ₱100K/month using Claude Code, without a single developer.',
-    type: 'website',
-  },
-};
-
 /**
- * Homepage split test (GHL-style). Three variants:
+ * Homepage split test (GHL-style). Four variants:
  *   - control (components/OptInPage.tsx) — the original
  *   - b (components/variant-b/OptInPageB.tsx) — conversion-first rebuild
  *   - c (components/variant-c/OptInPageC.tsx) — competition-killer informed
  *     by the aibuilderssummit.live audit (outcome-first hero, itemized
  *     bonus, sharpened apps moat)
+ *   - d (components/variant-d/OptInPageD.tsx) — ₱350K-quote hero reframe for
+ *     the ₱1,997 price point (above-the-fold only; below the fold = control)
  *
  * Assignment:
  *   - middleware gives every visitor a sticky random roll 0-99 (bl_ab_roll);
- *   - the webinar funnel exposes TWO traffic dials in admin → Funnels:
+ *   - the webinar funnel exposes THREE traffic dials in admin → Funnels:
  *       homeVariantPct  → traffic % for variant B
  *       homeVariantCPct → traffic % for variant C
- *   - bucketing: roll < pctB → B, else roll < pctB + pctC → C, else control.
- *     Additive so raising pctC doesn't reshuffle anyone already in B.
- *   - ?preview=b / ?preview=c / ?preview=control force a variant for preview
- *     (no cookie change, works even at 0% live traffic).
+ *       homeVariantDPct → traffic % for variant D
+ *   - bucketing: roll < pctB → B, else roll < pctB+pctC → C, else
+ *     roll < pctB+pctC+pctD → D, else control. Additive so raising a later
+ *     dial doesn't reshuffle anyone already bucketed into an earlier variant.
+ *   - ?preview=b / ?preview=c / ?preview=d / ?preview=control force a variant
+ *     for preview (no cookie change, works even at 0% live traffic).
  */
+type HomeVariant = 'control' | 'b' | 'c' | 'd';
+
+// getFunnels is React-cache()'d, so the generateMetadata call and the page
+// render below share one funnels fetch per request.
+async function resolveVariant(preview?: string): Promise<HomeVariant> {
+  let pctB = 0;
+  let pctC = 0;
+  let pctD = 0;
+  try {
+    const funnels = await getFunnels();
+    const cfg = funnels.find((f) => f.slug === 'webinar')?.config as
+      | { homeVariantPct?: number; homeVariantCPct?: number; homeVariantDPct?: number }
+      | undefined;
+    const clamp = (v: unknown) => Math.min(100, Math.max(0, Number(v) || 0));
+    pctB = clamp(cfg?.homeVariantPct);
+    pctC = clamp(cfg?.homeVariantCPct);
+    pctD = clamp(cfg?.homeVariantDPct);
+  } catch {
+    pctB = 0;
+    pctC = 0;
+    pctD = 0; // config unreadable → everyone sees control (fail-safe)
+  }
+
+  // Cap the combined bands at 100 to keep behavior sane if admin overlaps sliders.
+  const cBound = Math.min(100, pctB + pctC);
+  const dBound = Math.min(100, pctB + pctC + pctD);
+  const roll = Number(cookies().get('bl_ab_roll')?.value ?? NaN);
+  let variant: HomeVariant = 'control';
+  if (Number.isFinite(roll)) {
+    if (roll < pctB) variant = 'b';
+    else if (roll < cBound) variant = 'c';
+    else if (roll < dBound) variant = 'd';
+  }
+  if (preview === 'b') variant = 'b';
+  if (preview === 'c') variant = 'c';
+  if (preview === 'd') variant = 'd';
+  if (preview === 'control' || preview === 'a') variant = 'control';
+  return variant;
+}
+
+/** Variant D reframes the promise, so its meta/OG must message-match the new
+ *  H1 (SPEC §6). Every other variant keeps the control metadata. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams?: { preview?: string };
+}): Promise<Metadata> {
+  const variant = await resolveVariant(searchParams?.preview);
+  if (variant === 'd') {
+    const title = 'Build Your ₱350K System Yourself — BOSSLABS AI';
+    const description =
+      '₱350K ang quote sa system mo? Build it yourself in under 24 hours — no developer, no coding experience. Live on Zoom, July 29.';
+    return {
+      title,
+      description,
+      openGraph: { title, description, type: 'website' },
+    };
+  }
+  return {
+    title: 'Reserve a Seat — BOSSLABS AI · For Filipino Business Owners',
+    description:
+      'How to build an automated business and save at least ₱100K/month using Claude Code — without hiring a single developer. Live webinar.',
+    openGraph: {
+      title: 'BOSSLABS AI — The Webinar',
+      description:
+        'Build an automated business and save at least ₱100K/month using Claude Code, without a single developer.',
+      type: 'website',
+    },
+  };
+}
+
 export default async function Page({
   searchParams,
 }: {
@@ -66,38 +130,16 @@ export default async function Page({
     upcomingSessions = []; // falls back to the single settings-based date
   }
 
-  let pctB = 0;
-  let pctC = 0;
-  try {
-    const funnels = await getFunnels();
-    const cfg = funnels.find((f) => f.slug === 'webinar')?.config as
-      | { homeVariantPct?: number; homeVariantCPct?: number }
-      | undefined;
-    pctB = Math.min(100, Math.max(0, Number(cfg?.homeVariantPct) || 0));
-    pctC = Math.min(100, Math.max(0, Number(cfg?.homeVariantCPct) || 0));
-  } catch {
-    pctB = 0;
-    pctC = 0; // config unreadable → everyone sees control (fail-safe)
-  }
-
-  // Cap combined at 100 to keep behavior sane if admin overlaps sliders.
-  const cBound = Math.min(100, pctB + pctC);
-  const roll = Number(cookies().get('bl_ab_roll')?.value ?? NaN);
-  let variant: 'control' | 'b' | 'c' = 'control';
-  if (Number.isFinite(roll)) {
-    if (roll < pctB) variant = 'b';
-    else if (roll < cBound) variant = 'c';
-  }
   const preview = searchParams?.preview;
-  if (preview === 'b') variant = 'b';
-  if (preview === 'c') variant = 'c';
-  if (preview === 'control' || preview === 'a') variant = 'control';
+  const variant = await resolveVariant(preview);
 
   const page =
     variant === 'b' ? (
       <OptInPageB webinar={webinar} upcomingSessions={upcomingSessions} />
     ) : variant === 'c' ? (
       <OptInPageC webinar={webinar} upcomingSessions={upcomingSessions} />
+    ) : variant === 'd' ? (
+      <OptInPageD webinar={webinar} upcomingSessions={upcomingSessions} />
     ) : (
       <OptInPage webinar={webinar} upcomingSessions={upcomingSessions} />
     );
@@ -108,6 +150,7 @@ export default async function Page({
       {/* Log variant views (skip previews so admin peeks don't pollute data). */}
       {variant === 'b' && !preview && <AbBeacon path="/__ab/home-b" />}
       {variant === 'c' && !preview && <AbBeacon path="/__ab/home-c" />}
+      {variant === 'd' && !preview && <AbBeacon path="/__ab/home-d" />}
       <ExitIntentModal />
     </>
   );
