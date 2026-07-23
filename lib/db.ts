@@ -27,6 +27,7 @@ import {
   putRecordingBlob,
   getRecordingBlob,
   getRecordingBlobs,
+  deleteRecordingBlobs,
   recordingKey,
 } from './recordings-s3';
 
@@ -1945,14 +1946,34 @@ export async function getChunksForPage(
     .map(rowToRecording);
 }
 
+/** Best-effort S3 cleanup after rows are gone. Order matters: rows first so a
+ *  failed blob delete only leaves a harmless orphan blob, never a row whose
+ *  blob is missing (which would break replay). */
+async function deleteBlobsBestEffort(keys: (string | null)[]): Promise<void> {
+  const real = keys.filter((k): k is string => Boolean(k));
+  if (real.length === 0) return;
+  try {
+    await deleteRecordingBlobs(real);
+  } catch (err) {
+    console.warn('[recordings] S3 blob cleanup failed (orphans left):', err instanceof Error ? err.message : err);
+  }
+}
+
 /** Delete every chunk of one session (used by the consolidated replay view). */
 export async function deleteRecordingsBySession(sessionId: string): Promise<void> {
   if (isSupabaseConfigured()) {
-    const { error } = await getSupabase()
+    const sb = getSupabase();
+    const { data: keyRows } = await sb
+      .from('session_recordings')
+      .select('s3_key')
+      .eq('session_id', sessionId)
+      .not('s3_key', 'is', null);
+    const { error } = await sb
       .from('session_recordings')
       .delete()
       .eq('session_id', sessionId);
     if (error) throw new Error(`deleteRecordingsBySession: ${error.message}`);
+    await deleteBlobsBestEffort(((keyRows ?? []) as { s3_key: string | null }[]).map((r) => r.s3_key));
     return;
   }
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
@@ -1961,11 +1982,18 @@ export async function deleteRecordingsBySession(sessionId: string): Promise<void
 
 export async function deleteRecording(id: string): Promise<void> {
   if (isSupabaseConfigured()) {
-    const { error } = await getSupabase()
+    const sb = getSupabase();
+    const { data: row } = await sb
+      .from('session_recordings')
+      .select('s3_key')
+      .eq('id', id)
+      .maybeSingle();
+    const { error } = await sb
       .from('session_recordings')
       .delete()
       .eq('id', id);
     if (error) throw new Error(`deleteRecording: ${error.message}`);
+    await deleteBlobsBestEffort([(row as { s3_key: string | null } | null)?.s3_key ?? null]);
     return;
   }
   const rows = await readJson<RecordingRow[]>('recordings.json', []);
@@ -1974,11 +2002,27 @@ export async function deleteRecording(id: string): Promise<void> {
 
 export async function deleteAllRecordings(): Promise<void> {
   if (isSupabaseConfigured()) {
-    const { error } = await getSupabase()
+    const sb = getSupabase();
+    // Collect every s3_key first (paged past the 1000-row response cap) so
+    // the blobs go too — otherwise a "delete all" leaves the whole bucket
+    // orphaned.
+    const keys: string[] = [];
+    for (let from = 0; from <= 200_000; from += 1000) {
+      const { data } = await sb
+        .from('session_recordings')
+        .select('s3_key')
+        .not('s3_key', 'is', null)
+        .range(from, from + 999);
+      const page = (data ?? []) as { s3_key: string | null }[];
+      keys.push(...page.map((r) => r.s3_key).filter((k): k is string => Boolean(k)));
+      if (page.length < 1000) break;
+    }
+    const { error } = await sb
       .from('session_recordings')
       .delete()
       .neq('id', '00000000-0000-0000-0000-000000000000');
     if (error) throw new Error(`deleteAllRecordings: ${error.message}`);
+    await deleteBlobsBestEffort(keys);
     return;
   }
   await writeJson('recordings.json', []);
