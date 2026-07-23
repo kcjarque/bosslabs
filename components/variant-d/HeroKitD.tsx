@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Variant D hero kit — the ₱350K-quote reframe test (SPEC 2026-07-24).
+ * Variant D hero kit — the ₱500K-quote reframe test (SPEC 2026-07-24).
  * Client pieces only: tracked CTA, the swappable sample-app card + lightbox
  * modal, and the top-countdown suppressor. Everything else in the variant
  * stays server-rendered in OptInPageD.

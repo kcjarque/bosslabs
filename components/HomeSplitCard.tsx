@@ -7,7 +7,7 @@
  *   - VARIATION B: conversion-first redesign (bento grids, terminal, sticky CTA)
  *   - VARIATION C: competition-killer informed by the aibuilderssummit.live
  *     audit (outcome-first hero, itemized bonus stack, sharpened apps moat)
- *   - VARIATION D: ₱350K-quote hero reframe for the ₱1,997 price (above the
+ *   - VARIATION D: ₱500K-quote hero reframe for the ₱1,997 price (above the
  *     fold only; below the fold = control)
  *
  * Three traffic dials, saved to funnel config:
@@ -143,7 +143,7 @@ export function HomeSplitCard({
             🔨 Variation D
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            ₱350K-quote reframe — build-it-yourself hero, clickable sample app, ₱1,997 CTA
+            ₱500K-quote reframe — build-it-yourself hero, clickable sample app, ₱1,997 CTA
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <a

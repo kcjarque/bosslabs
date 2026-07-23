@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
  *   - c (components/variant-c/OptInPageC.tsx) — competition-killer informed
  *     by the aibuilderssummit.live audit (outcome-first hero, itemized
  *     bonus, sharpened apps moat)
- *   - d (components/variant-d/OptInPageD.tsx) — ₱350K-quote hero reframe for
+ *   - d (components/variant-d/OptInPageD.tsx) — ₱500K-quote hero reframe for
  *     the ₱1,997 price point (above-the-fold only; below the fold = control)
  *
  * Assignment:
@@ -85,9 +85,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const variant = await resolveVariant(searchParams?.preview);
   if (variant === 'd') {
-    const title = 'Build Your ₱350K System Yourself — BOSSLABS AI';
+    const title = 'Build Your ₱500K System Yourself — BOSSLABS AI';
     const description =
-      '₱350K ang quote sa system mo? Build it yourself in under 24 hours — no developer, no coding experience. Live on Zoom, July 29.';
+      '₱500K ang quote sa system mo? Build it yourself in under 24 hours — no developer, no coding experience. Live on Zoom, July 29.';
     return {
       title,
       description,

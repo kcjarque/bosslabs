@@ -168,7 +168,7 @@ function PaidCta({ className = '' }: { className?: string }) {
 }
 
 /* --------------------------------------------------------------------- */
-/* 1 — HERO (variant D: ₱350K-quote reframe, SPEC 2026-07-24)            */
+/* 1 — HERO (variant D: ₱500K-quote reframe, SPEC 2026-07-24)            */
 /* Above-the-fold only differs from control; everything below is the     */
 /* control's sections untouched. Copy is spec-literal Taglish — do not   */
 /* paraphrase. One primary CTA; no countdown/seat counter in the hero.   */
@@ -202,7 +202,7 @@ function CardAnnotation() {
         <path d="M25 6h7v7" />
       </svg>
       <p className="text-[12.5px] leading-snug text-ink-200 sm:text-[13px]">
-        Dev shops quote ₱350K+ for a system like this.
+        Dev shops quote ₱500K+ for a system like this.
         <br />
         <span className="text-cyan-300">Pindutin mo — live siya, totoo.</span>
       </p>
@@ -236,7 +236,7 @@ function Hero() {
           {/* LEFT — message + money */}
           <div className="text-center lg:text-left">
             <h1 className="font-serif text-[30px] leading-[1.1] tracking-[-0.01em] text-white sm:text-[42px] lg:text-[50px] xl:text-[56px]">
-              ₱350K ang quote sa system mo?{' '}
+              ₱500K ang quote sa system mo?{' '}
               <span className="accent-italic">Build it yourself in under 24 hours.</span>
             </h1>
 
