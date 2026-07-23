@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { CountdownDisplay, CountdownMini } from '../CountdownBar';
+import { CountdownDisplay } from '../CountdownBar';
 import { HeroBackground } from '../HeroBackground';
-import { HeroCtaD, SampleAppCard, type SampleApp } from './HeroKitD';
+import { CountdownRowD, HeroCtaD, SampleAppCard, type SampleApp } from './HeroKitD';
 import {
   CategoryAgencyIcon,
   CategoryBpoIcon,
@@ -321,22 +321,34 @@ function Hero({
                 className="w-full sm:w-auto"
               />
             </div>
-            <p className="mt-3 font-sans text-[10px] uppercase tracking-[0.22em] text-ink-300 sm:text-[11px]">
-              Bonuses included · Limited seats per session · 7-day guarantee
+            {/* One trust caption — bonuses + guarantee + payment rails merged
+                so the guarantee isn't repeated and nothing orphan-wraps. */}
+            <p className="mt-3.5 font-sans text-[10px] uppercase tracking-[0.2em] text-ink-300 [text-wrap:balance] sm:text-[11px]">
+              <span className="whitespace-nowrap">Bonuses included</span> ·{' '}
+              <span className="whitespace-nowrap">7-day guarantee</span> ·{' '}
+              <span className="whitespace-nowrap">Cards · GCash · Maya</span>
             </p>
 
-            {/* Control's scarcity block — kept per Kyle (seats + countdown). */}
-            <div className="mt-4 flex flex-col items-center gap-2 lg:items-start">
-              <div className="inline-flex items-center gap-2 rounded-full border border-danger-500/40 bg-danger-900/30 px-3.5 py-1.5">
-                <span className="pulse-dot" />
-                <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-danger-200 sm:text-[11px]">
-                  Only <span className="font-serif text-sm text-white">23</span> of 200 seats left this session
-                </span>
+            {/* Urgency card — seats meter + countdown fused into ONE unit
+                (control keeps its original pill/mini-countdown stack; this
+                restyle is variant-D only so the A/B stays clean). */}
+            <div className="mx-auto mt-5 w-full max-w-md overflow-hidden rounded-2xl border border-danger-500/30 bg-danger-900/15 text-left lg:mx-0">
+              <div className="px-4 pb-3.5 pt-3 sm:px-5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-baseline gap-2 font-sans text-[10px] uppercase tracking-[0.18em] text-danger-200 sm:text-[11px]">
+                    <span className="pulse-dot self-center" />
+                    Only <span className="font-serif text-base leading-none text-white">23</span> of 200 seats left
+                  </span>
+                  <span className="shrink-0 font-sans text-[9px] uppercase tracking-[0.18em] text-ink-400 sm:text-[10px]">
+                    This session
+                  </span>
+                </div>
+                {/* 177 of 200 taken → the near-full bar carries the urgency. */}
+                <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-white/[0.08]">
+                  <div className="h-full w-[88.5%] rounded-full bg-gradient-to-r from-danger-600 via-danger-500 to-danger-400" />
+                </div>
               </div>
-              <CountdownMini startsAtIso={webinar.startsAtIso} />
-              <p className="font-sans text-[9px] uppercase tracking-[0.22em] text-ink-400 sm:text-[10px]">
-                Until your session goes live
-              </p>
+              <CountdownRowD startsAtIso={webinar.startsAtIso} />
             </div>
 
             {/* Mobile: proof card AFTER the CTA block (money before the exit
@@ -344,10 +356,6 @@ function Hero({
             <div className="mx-auto mt-8 max-w-md lg:hidden">
               <SampleAppBlock />
             </div>
-
-            <p className="mt-4 font-sans text-[11px] uppercase tracking-[0.2em] text-ink-300 sm:text-[11.5px] lg:mt-4">
-              7-day guarantee · Cards · GCash · Maya
-            </p>
           </div>
 
           {/* RIGHT — proof card (desktop) */}

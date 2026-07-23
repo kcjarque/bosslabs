@@ -2,10 +2,12 @@
 
 /**
  * Variant D hero kit — the ₱500K-quote reframe test (SPEC 2026-07-24).
- * Client pieces only: tracked CTA + the swappable sample-app proof card.
- * Everything else in the variant stays server-rendered in OptInPageD.
+ * Client pieces only: tracked CTA, the swappable sample-app proof card and
+ * the ticking countdown row. Everything else stays server-rendered in
+ * OptInPageD.
  */
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 /* ─── analytics — Meta Pixel trackCustom + dataLayer, spec §7 names ────── */
 
@@ -51,6 +53,87 @@ export type SampleApp = {
   /** Live demo URL opened in a new tab on click. */
   demoUrl: string;
 };
+
+/* ─── countdown row — bottom half of the hero urgency card ─────────────────
+   Sans tabular digits (serif figures are proportional → they jitter every
+   second) with unit labels underneath, so the timer reads as one designed
+   segment instead of a cramped text line. Hides itself when no valid future
+   date is configured — the card above still works as a seats-only meter. */
+
+function useCountdownD(iso?: string) {
+  const [target] = useState(() => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) || d.getTime() <= Date.now() ? null : d;
+  });
+  // Server render + first client paint both show 0 to avoid a hydration
+  // mismatch; the first effect tick swaps in the real remaining time.
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    if (!target) return;
+    const tick = () => setRemaining(Math.max(0, target.getTime() - Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  const total = Math.floor(remaining / 1000);
+  return {
+    hasTarget: Boolean(target),
+    days: Math.floor(total / 86400),
+    hours: Math.floor((total % 86400) / 3600),
+    mins: Math.floor((total % 3600) / 60),
+    secs: total % 60,
+  };
+}
+
+const pad2 = (n: number) => n.toString().padStart(2, '0');
+
+function CountUnit({ n, label }: { n: number; label: string }) {
+  return (
+    <span className="flex flex-col items-center">
+      <span
+        suppressHydrationWarning
+        className="font-sans text-lg font-semibold leading-none tabular-nums text-white sm:text-xl"
+      >
+        {pad2(n)}
+      </span>
+      <span className="mt-1 font-sans text-[8px] uppercase tracking-[0.16em] text-ink-400 sm:text-[9px]">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+function CountColon() {
+  return (
+    <span aria-hidden className="pb-3 font-sans text-base leading-none text-white/25 sm:text-lg">
+      :
+    </span>
+  );
+}
+
+export function CountdownRowD({ startsAtIso }: { startsAtIso?: string }) {
+  const { hasTarget, days, hours, mins, secs } = useCountdownD(startsAtIso);
+  if (!hasTarget) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] bg-black/25 px-4 py-3 sm:px-5">
+      <div className="flex items-start gap-2 sm:gap-2.5">
+        <CountUnit n={days} label="Days" />
+        <CountColon />
+        <CountUnit n={hours} label="Hrs" />
+        <CountColon />
+        <CountUnit n={mins} label="Min" />
+        <CountColon />
+        <CountUnit n={secs} label="Sec" />
+      </div>
+      <span className="text-right font-sans text-[9px] uppercase leading-relaxed tracking-[0.18em] text-ink-300 sm:text-[10px]">
+        Until your
+        <br />
+        session goes live
+      </span>
+    </div>
+  );
+}
 
 export function SampleAppCard({ app }: { app: SampleApp; ctaLabel?: string }) {
   return (
