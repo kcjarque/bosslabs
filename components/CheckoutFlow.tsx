@@ -702,7 +702,7 @@ function SeatHoldTimer() {
           {expired ? (
             <>
               <strong className="font-semibold text-white">Your held seat is expiring</strong> — complete
-              checkout now to keep ₱999
+              checkout now to keep {OFFER.main.label}
             </>
           ) : (
             <>

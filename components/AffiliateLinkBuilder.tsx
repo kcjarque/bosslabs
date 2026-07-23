@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { CopyButton } from './CopyButton';
+import { OFFER } from '@/lib/config';
 
 const DESTS = [
   { label: 'Homepage', path: '/' },
-  { label: 'Checkout (₱999)', path: '/checkout' },
+  { label: `Checkout (${OFFER.main.label})`, path: '/checkout' },
   { label: 'VibeCode Retreat', path: '/vibecode-retreat' },
 ];
 

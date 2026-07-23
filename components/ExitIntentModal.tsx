@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { STUDENT_BUILDS as BUILDS } from '@/lib/config';
+import { OFFER, STUDENT_BUILDS as BUILDS } from '@/lib/config';
 
 /**
  * Exit-intent popup. Fires once per session (per storageKey) when the visitor
@@ -33,7 +33,7 @@ export function ExitIntentModal({
   title = 'Boss, ayaw mo pa rin',
   titleAccent = 'maniwala?',
   sub = 'See the builds na nabuo namin with our students sa past webinars 👇',
-  ctaLabel = 'SIGN UP NOW — only ₱999',
+  ctaLabel = `SIGN UP NOW — only ${OFFER.main.label}`,
   ctaHref = '/checkout',
 }: Props) {
   const [open, setOpen] = useState(false);

@@ -52,7 +52,15 @@ const GRAIN =
 const display = `font-serif font-normal`;
 const mono = `font-[family-name:var(--font-vb-mono)]`;
 
-export function OptInPageB({ webinar }: { webinar: WebinarInfo }) {
+type SessionLabel = { dateLabel: string; timeLabel: string };
+
+export function OptInPageB({
+  webinar,
+  upcomingSessions = [],
+}: {
+  webinar: WebinarInfo;
+  upcomingSessions?: SessionLabel[];
+}) {
   return (
     <div className={`${monoFont.variable} relative bg-[#06070A]`}>
       {/* grain overlay across the whole dark canvas */}
@@ -67,7 +75,7 @@ export function OptInPageB({ webinar }: { webinar: WebinarInfo }) {
         <SmoothScroll />
         <HeaderB />
         <main>
-          <HeroB2 webinar={webinar} />
+          <HeroB2 webinar={webinar} upcomingSessions={upcomingSessions} />
           <StatBar />
           <Manifesto />
           <AppsBento />
@@ -111,9 +119,28 @@ function HeaderB() {
 
 /* ─── hero — the 5-second test ────────────────────────────────────────── */
 
-function HeroB2({ webinar }: { webinar: WebinarInfo }) {
+function HeroB2({
+  webinar,
+  upcomingSessions,
+}: {
+  webinar: WebinarInfo;
+  upcomingSessions: SessionLabel[];
+}) {
+  const twoSessions = upcomingSessions.length >= 2 ? upcomingSessions.slice(0, 2) : null;
   const facts = [
-    { k: 'WHEN', v: webinar.date, s: `${webinar.time} ${webinar.timezone}` },
+    {
+      k: 'WHEN',
+      v: twoSessions ? (
+        <div className="space-y-0.5">
+          {twoSessions.map((s) => (
+            <div key={s.dateLabel}>{s.dateLabel}</div>
+          ))}
+        </div>
+      ) : (
+        webinar.date
+      ),
+      s: twoSessions ? '2 sessions to choose from' : `${webinar.time} ${webinar.timezone}`,
+    },
     { k: 'WHERE', v: 'Live on Zoom', s: 'Not a recorded session' },
     { k: 'LENGTH', v: '2-Hour Workshop', s: 'Live & hands-on' },
     { k: 'FORMAT', v: 'Live Demo', s: 'Launch real apps' },
@@ -691,9 +718,9 @@ function FaqSection() {
       q: 'Magkano talaga lahat-lahat?',
       a: (
         <>
-          ₱999. Yun lang. Kasama na ang 2-hour live workshop, ang Claude Code Skills Pack (₱4,997
-          value), at 7-day replay. Walang nakatagong charges — may optional 1:1 session pagkatapos
-          kung gusto mo, pero hindi required.
+          {OFFER.main.label}. Yun lang. Kasama na ang 2-hour live workshop, ang Claude Code Skills
+          Pack (₱4,997 value), at 7-day replay. Walang nakatagong charges — may optional 1:1
+          session pagkatapos kung gusto mo, pero hindi required.
         </>
       ),
     },
@@ -842,9 +869,9 @@ function FinalClose({ webinar }: { webinar: WebinarInfo }) {
                 </div>
               </div>
               <p className="mt-3 text-[13px] leading-relaxed text-ink-200">
-                Attend the workshop. Watch the live build. Kung sa tingin mo hindi sulit ang ₱999,
-                email us within 7 days and we refund it in full. Walang tanong-tanong, walang
-                drama. The risk is on us — as it should be.
+                Attend the workshop. Watch the live build. Kung sa tingin mo hindi sulit ang{' '}
+                {OFFER.main.label}, email us within 7 days and we refund it in full. Walang
+                tanong-tanong, walang drama. The risk is on us — as it should be.
               </p>
             </div>
           </Reveal>

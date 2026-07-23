@@ -278,10 +278,10 @@ export const OFFER = {
   main: {
     sku: 'BL_WEBINAR_LIVE',
     name: 'BOSSLABS AI — AI Coding 101 (Live Webinar)',
-    priceCentavos: 99900,
+    priceCentavos: 199700,
     currency: 'PHP',
-    label: '₱999',
-    crossed: '₱2,997',
+    label: '₱1,997',
+    crossed: '₱4,997',
   },
   bonus: {
     title: 'Free Tools Stack — included',
