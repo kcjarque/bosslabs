@@ -37,12 +37,20 @@ import {
 } from '@/lib/config';
 import type { WebinarInfo } from '@/lib/webinar';
 
-export function OptInPage({ webinar }: { webinar: WebinarInfo }) {
+type SessionLabel = { dateLabel: string; timeLabel: string };
+
+export function OptInPage({
+  webinar,
+  upcomingSessions = [],
+}: {
+  webinar: WebinarInfo;
+  upcomingSessions?: SessionLabel[];
+}) {
   return (
     <>
       <MinimalHeader />
       <main className="relative">
-        <Hero webinar={webinar} />
+        <Hero webinar={webinar} upcomingSessions={upcomingSessions} />
         <AuthorityBar />
         <WhatIsSection />
         <OurAppsShowcase />
@@ -162,12 +170,27 @@ function PaidCta({ className = '' }: { className?: string }) {
 /* --------------------------------------------------------------------- */
 /* 1 — HERO                                                              */
 /* --------------------------------------------------------------------- */
-function Hero({ webinar }: { webinar: WebinarInfo }) {
+function Hero({
+  webinar,
+  upcomingSessions,
+}: {
+  webinar: WebinarInfo;
+  upcomingSessions: SessionLabel[];
+}) {
+  const twoSessions = upcomingSessions.length >= 2 ? upcomingSessions.slice(0, 2) : null;
   const facts = [
     {
       k: 'WHEN',
-      v: webinar.date,
-      s: `${webinar.time} ${webinar.timezone}`,
+      v: twoSessions ? (
+        <div className="space-y-0.5">
+          {twoSessions.map((s) => (
+            <div key={s.dateLabel}>{s.dateLabel}</div>
+          ))}
+        </div>
+      ) : (
+        webinar.date
+      ),
+      s: twoSessions ? '2 sessions to choose from' : `${webinar.time} ${webinar.timezone}`,
       icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="4.5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v3M16 3v3" />

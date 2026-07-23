@@ -21,6 +21,32 @@ export type WebinarInfo = {
   messengerGroupUrl: string;
 };
 
+const TZ_LABEL: Record<string, string> = { 'Asia/Manila': 'PHT' };
+
+/** Format an event's ISO start time into display date/time strings — shared
+ *  by the checkout session picker and the homepage WHEN card so both surfaces
+ *  agree on how a session's date/time reads. */
+export function formatSessionLabels(
+  startsAtIso: string,
+  timezone: string,
+): { dateLabel: string; timeLabel: string } {
+  const d = new Date(startsAtIso);
+  const dateLabel = d.toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: timezone || 'Asia/Manila',
+  });
+  const time = d.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone || 'Asia/Manila',
+  });
+  const tz = TZ_LABEL[timezone] || 'PHT';
+  return { dateLabel, timeLabel: `${time} ${tz}` };
+}
+
 const HARD_DEFAULTS: WebinarInfo = {
   name: 'AI Coding 101 — The BOSSLABS AI Webinar',
   date: 'To Be Announced',

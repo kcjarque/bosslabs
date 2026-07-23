@@ -4,7 +4,7 @@ import { CheckoutFlow, type CheckoutSession } from '@/components/CheckoutFlow';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { TestimonialWall } from '@/components/TestimonialWall';
 import { PILLARS, STUDENT_BUILDS } from '@/lib/config';
-import { getWebinarInfo } from '@/lib/webinar';
+import { getWebinarInfo, formatSessionLabels } from '@/lib/webinar';
 import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 
 // Render per-request so the order summary shows whichever event is currently
@@ -12,29 +12,6 @@ import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const FB_PAGE = 'https://www.facebook.com/profile.php?id=61589686430234';
-
-const TZ_LABEL: Record<string, string> = { 'Asia/Manila': 'PHT' };
-
-function formatSessionLabels(
-  startsAtIso: string,
-  timezone: string,
-): { dateLabel: string; timeLabel: string } {
-  const d = new Date(startsAtIso);
-  const dateLabel = d.toLocaleString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    timeZone: timezone || 'Asia/Manila',
-  });
-  const time = d.toLocaleString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: timezone || 'Asia/Manila',
-  });
-  const tz = TZ_LABEL[timezone] || 'PHT';
-  return { dateLabel, timeLabel: `${time} ${tz}` };
-}
 
 export default async function CheckoutPage({
   searchParams,

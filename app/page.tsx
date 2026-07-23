@@ -5,8 +5,8 @@ import { OptInPageB } from '@/components/variant-b/OptInPageB';
 import { OptInPageC } from '@/components/variant-c/OptInPageC';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { AbBeacon } from '@/components/AbBeacon';
-import { getWebinarInfo } from '@/lib/webinar';
-import { getFunnels } from '@/lib/db';
+import { getWebinarInfo, formatSessionLabels } from '@/lib/webinar';
+import { getFunnels, getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 
 // Render per-request so the live webinar date/time/countdown always reflect
 // the current Settings. Without this the homepage is statically cached at
@@ -50,6 +50,22 @@ export default async function Page({
 }) {
   const webinar = await getWebinarInfo();
 
+  // Same source + visible-count clamp as the checkout session picker, so the
+  // homepage WHEN card never promises a session checkout won't actually offer.
+  let upcomingSessions: { dateLabel: string; timeLabel: string }[] = [];
+  try {
+    const [settings, upcoming] = await Promise.all([
+      getSettings(),
+      getUpcomingCheckoutSessions(2),
+    ]);
+    const limit = settings?.checkoutSessionsVisible ?? 2;
+    upcomingSessions = upcoming
+      .slice(0, Math.max(1, limit))
+      .map((e) => formatSessionLabels(e.startsAtIso, e.timezone));
+  } catch {
+    upcomingSessions = []; // falls back to the single settings-based date
+  }
+
   let pctB = 0;
   let pctC = 0;
   try {
@@ -79,11 +95,11 @@ export default async function Page({
 
   const page =
     variant === 'b' ? (
-      <OptInPageB webinar={webinar} />
+      <OptInPageB webinar={webinar} upcomingSessions={upcomingSessions} />
     ) : variant === 'c' ? (
-      <OptInPageC webinar={webinar} />
+      <OptInPageC webinar={webinar} upcomingSessions={upcomingSessions} />
     ) : (
-      <OptInPage webinar={webinar} />
+      <OptInPage webinar={webinar} upcomingSessions={upcomingSessions} />
     );
 
   return (
