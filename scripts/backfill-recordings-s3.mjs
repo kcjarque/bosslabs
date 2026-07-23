@@ -15,6 +15,19 @@ import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
+// A stale keep-alive HTTP/2 socket to Supabase can fire its own timeout well
+// after the request that used it has already resolved (observed: "stream
+// timeout after 300000" as an uncaught rejection with no live await to catch
+// it). That's unrelated to any specific row — every actual mutation below is
+// already isolated in its own try/catch — so log and keep going instead of
+// letting a stray background event kill an otherwise-healthy backfill run.
+process.on('unhandledRejection', (err) => {
+  console.warn('[backfill] unhandled rejection (continuing):', err?.message ?? err);
+});
+process.on('uncaughtException', (err) => {
+  console.warn('[backfill] uncaught exception (continuing):', err?.message ?? err);
+});
+
 // ── config from .env.local ───────────────────────────────────────────────────
 const env = Object.fromEntries(
   readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
@@ -48,19 +61,45 @@ function recordingKey(sessionId, id) {
   return `recordings/${safe(sessionId)}/${safe(id)}.json.gz`;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Retry a flaky network call with backoff. The observed failure mode is an
+ *  upstream 5xx blip (Supabase's Cloudflare edge returning "521 web server is
+ *  down" for a few seconds under load) — transient, not a data problem — so
+ *  retrying beats aborting the whole run. */
+async function withRetry(fn, { attempts = 5, baseMs = 1000 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        const wait = baseMs * 2 ** i;
+        console.warn(`  ⚠ retry ${i + 1}/${attempts - 1} after ${wait}ms: ${err.message.slice(0, 120)}`);
+        await sleep(wait);
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function fetchPage() {
   const url =
     `${SUPA_URL}/rest/v1/session_recordings` +
     `?s3_key=is.null&select=id,session_id,events&order=created_at.asc&limit=${PAGE}`;
-  const res = await fetch(url, { headers: H });
-  if (!res.ok) throw new Error(`fetchPage ${res.status}: ${await res.text()}`);
-  return res.json();
+  return withRetry(async () => {
+    const res = await fetch(url, { headers: H });
+    if (!res.ok) throw new Error(`fetchPage ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    return res.json();
+  });
 }
 
 async function migrateRow(row) {
   const key = recordingKey(row.session_id, row.id);
   const body = gzipSync(Buffer.from(JSON.stringify(row.events ?? []), 'utf8'));
-  // 1) PUT to S3 (retried by the SDK). Must succeed before we touch Postgres.
+  // 1) PUT to S3 (SDK already retries transient errors internally). Must
+  //    succeed before we touch Postgres.
   await s3.send(
     new PutObjectCommand({
       Bucket: BUCKET,
@@ -70,13 +109,17 @@ async function migrateRow(row) {
       ContentEncoding: 'gzip',
     }),
   );
-  // 2) Only now: set s3_key + empty the jsonb.
-  const res = await fetch(`${SUPA_URL}/rest/v1/session_recordings?id=eq.${row.id}`, {
-    method: 'PATCH',
-    headers: { ...H, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ s3_key: key, events: [] }),
+  // 2) Only now: set s3_key + empty the jsonb. Retried — a PUT that already
+  //    landed shouldn't get stuck behind a flaky PATCH (re-running the PUT
+  //    for the same deterministic key is a harmless overwrite either way).
+  await withRetry(async () => {
+    const res = await fetch(`${SUPA_URL}/rest/v1/session_recordings?id=eq.${row.id}`, {
+      method: 'PATCH',
+      headers: { ...H, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ s3_key: key, events: [] }),
+    });
+    if (!res.ok) throw new Error(`PATCH ${row.id} ${res.status}: ${(await res.text()).slice(0, 200)}`);
   });
-  if (!res.ok) throw new Error(`PATCH ${row.id} ${res.status}: ${await res.text()}`);
 }
 
 let migrated = 0;
