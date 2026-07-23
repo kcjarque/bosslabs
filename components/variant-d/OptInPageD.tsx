@@ -293,23 +293,23 @@ function Hero({
         <div className="mt-7 items-start lg:grid lg:grid-cols-[55fr_45fr] lg:gap-12">
           {/* LEFT — message + money */}
           <div className="text-center lg:text-left">
-            {/* Explicit lg line breaks keep the headline exactly 3 lines on
-                desktop with "using Claude Code" as the accent payoff line. */}
-            <h1 className="font-serif text-[30px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[40px] lg:text-[44px] xl:text-[48px]">
+            {/* Longer "save ₱100K/month" headline (Kyle 2026-07-24) — only the
+                first line is forced; the promise wraps naturally, sized down a
+                notch from the old 3-line version so it stays compact. */}
+            <h1 className="font-serif text-[28px] leading-[1.12] tracking-[-0.01em] text-white sm:text-[38px] lg:text-[38px] xl:text-[42px]">
               ₱500K ang quote sa system mo?{' '}
               <br className="hidden lg:block" />
-              Build it yourself in under{' '}
-              <br className="hidden lg:block" />
-              24 hours — <span className="accent-italic">using Claude Code.</span>
+              How to Build Your Own Automated System and save ₱100K/month in under 24
+              hours — <span className="accent-italic">using Claude Code.</span>
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl font-sans text-[16px] font-medium text-ink-100 sm:text-[19px] lg:mx-0">
               No developer. No coding experience needed.
             </p>
 
-            {/* Body line — desktop only so the CTA stays above the fold on
-                360px screens (spec mobile stack order). */}
-            <p className="mt-3 hidden max-w-xl font-sans text-[15px] leading-relaxed text-ink-200 lg:block">
+            {/* Body line — shown on ALL breakpoints per Kyle (was desktop-only
+                to keep the CTA above the mobile fold; he wants it visible). */}
+            <p className="mx-auto mt-3 max-w-xl font-sans text-[14px] leading-relaxed text-ink-200 sm:text-[15px] lg:mx-0">
               Learn how to build your own CRM, HRIS, Inventory — the real backbone of your
               business. And the best part? Hindi hao shao — hindi ito marketing-marketing
               lang, this is the real system na hinahanap mo.

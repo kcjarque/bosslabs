@@ -78,7 +78,7 @@ export async function generateMetadata({
   if (variant === 'd') {
     const title = 'Build Your ₱500K System Yourself — BOSSLABS AI';
     const description =
-      '₱500K ang quote sa system mo? Build it yourself in under 24 hours — no developer, no coding experience. Live on Zoom, July 29.';
+      '₱500K ang quote sa system mo? Build your own automated system and save ₱100K/month in under 24 hours — no developer, no coding experience. Live on Zoom, July 29.';
     return {
       title,
       description,
