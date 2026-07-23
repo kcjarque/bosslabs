@@ -361,6 +361,10 @@ export default async function CustomerProfilePage({
   const xenditInvoiceId = (meta.xenditInvoiceId as string | undefined) ?? '';
   const otoConfirmed = meta.otoConfirmed as string | undefined;
   const otoAmount = meta.otoAmount as number | undefined;
+  // Promo used at checkout (main flow writes promoCode/promoDiscountCentavos;
+  // the standalone /oto flow writes otoPromoCode).
+  const promoCode = (meta.promoCode as string | undefined) || (meta.otoPromoCode as string | undefined);
+  const promoDiscountCentavos = meta.promoDiscountCentavos as number | undefined;
   const eventName = customer.eventId
     ? events.find((e) => e.id === customer.eventId)?.name
     : null;
@@ -484,6 +488,23 @@ export default async function CustomerProfilePage({
                     ₱{(customer.amountCentavos / 100).toLocaleString()}
                     {customer.bumped && (
                       <span className="ml-1 text-xs text-cyan-600">+ OTO bump</span>
+                    )}
+                  </>
+                }
+              />
+            )}
+            {promoCode && (
+              <Field
+                label="Promo used"
+                value={
+                  <>
+                    <code className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                      {promoCode}
+                    </code>
+                    {promoDiscountCentavos != null && promoDiscountCentavos > 0 && (
+                      <span className="ml-1.5 text-xs text-slate-500">
+                        −₱{(promoDiscountCentavos / 100).toLocaleString()}
+                      </span>
                     )}
                   </>
                 }
