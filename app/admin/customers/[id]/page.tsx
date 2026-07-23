@@ -115,6 +115,60 @@ function buildCommsTimeline(
     });
   }
 
+  // OTO/Vault/1:1 payment confirmation — checkout-bump upsell (handleOtoPaid)
+  // OR standalone /oto page purchase (handleStandaloneOtoPaid). Both write
+  // oto*-prefixed metadata instead of confirmationSent/confirmationStatus, so
+  // without this block these buyers' real, delivered confirmation emails
+  // (and the Hub-credentials email below) never showed up here at all.
+  if (typeof meta.otoConfirmed === 'string') {
+    const otoProduct = meta.otoProduct as string | undefined;
+    const templates =
+      otoProduct === 'both'
+        ? (['oto_confirmation', 'vault_confirmation'] as const)
+        : ([otoProduct === 'oto' ? 'vault_confirmation' : 'oto_confirmation'] as const);
+    const emailOk = meta.otoConfirmationStatus !== 'failed_partial';
+    for (const tpl of templates) {
+      events.push({
+        ts: meta.otoConfirmed,
+        channel: 'email',
+        kind: 'Upsell confirmation',
+        description: `Template: ${emailTemplateNames.get(tpl) ?? tpl}`,
+        ok: emailOk,
+        status: emailOk ? 'sent' : undefined,
+        templateId: tpl,
+      });
+    }
+    if (typeof meta.otoConfirmationSmsOk === 'boolean') {
+      const smsOk = meta.otoConfirmationSmsOk !== false;
+      for (const tpl of templates) {
+        events.push({
+          ts: meta.otoConfirmed,
+          channel: 'sms',
+          kind: 'Upsell confirmation',
+          description: `Template: ${smsTemplateNames.get(tpl) ?? tpl}`,
+          ok: smsOk,
+          status: smsOk ? 'sent' : undefined,
+          templateId: tpl,
+        });
+      }
+    }
+  }
+
+  // Hub credentials email — fired inside provisionVaultBuyerHub alongside the
+  // confirmation above, but on its own timestamp and outside the template
+  // system (raw HTML send), so it needs its own entry.
+  const hubAccount = meta.hubAccount as { provisionedAt?: string } | undefined;
+  if (hubAccount?.provisionedAt) {
+    events.push({
+      ts: hubAccount.provisionedAt,
+      channel: 'email',
+      kind: 'Hub credentials',
+      description: 'BossLabs Hub access — username + password',
+      ok: true,
+      status: 'sent',
+    });
+  }
+
   // Recovery emails (admin re-fire OR webhook recovery)
   if (typeof meta.recoveryEmailSent === 'string') {
     const status = (meta.recoveryEmailStatus as string | undefined) ?? 'sent';
