@@ -85,7 +85,7 @@ export function HomeSplitCard({
             🔨 Variation D — site default
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            ₱500K-quote reframe — build-it-yourself hero, clickable sample app, ₱1,997 CTA
+            ₱500K-quote reframe — build-it-yourself hero, clickable sample app, ₱999 CTA
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <a href="/" target="_blank" className="text-xs text-amber-600 hover:underline">
