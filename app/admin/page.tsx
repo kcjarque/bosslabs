@@ -818,7 +818,9 @@ async function DashboardBody({
           <h2 className="text-base font-semibold text-slate-900">Ad spend &amp; ROAS</h2>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-[11px] text-slate-400">
-              BOSSLABS AI | SALES · {periodLabel} · Meta, synced 12:01am
+              {/* This is the CRON SCHEDULE, not a live timestamp — the real
+                  last-refresh time is shown by <RefreshButton /> beside it. */}
+              BOSSLABS AI | SALES · {periodLabel} · Meta, auto-syncs 12:01am
             </span>
             <RefreshButton />
           </div>
