@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
-import { markAbandonedCartPaid, uploadPaymentProof } from '@/lib/manual-payment';
+import { markAbandonedCartPaid, uploadPaymentProof, parseManualPaymentForm } from '@/lib/manual-payment';
+import { siteUrl } from '@/lib/site';
 import { revalidatePath } from 'next/cache';
 
 export const runtime = 'nodejs';
@@ -28,12 +29,16 @@ export async function POST(req: Request) {
     proofUrl = await uploadPaymentProof(new Blob([proofBytes], { type: file.type }), proofFilename);
   }
 
+  const { products, amountCentavosOverride } = parseManualPaymentForm(form);
   const res = await markAbandonedCartPaid(signupId, {
     proofUrl,
     proofBytes,
     proofFilename,
     paidBy: 'admin',
     method: 'admin',
+    products,
+    amountCentavosOverride,
+    baseUrl: siteUrl(req),
   });
   if (res.ok) revalidatePath(`/admin/customers/${signupId}`);
   return NextResponse.json(res, { status: res.ok ? 200 : 409 });

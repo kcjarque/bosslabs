@@ -33,7 +33,7 @@ export default async function FunnelDetailPage({
 
       {funnel.kind === 'webinar' ? (
         <>
-          <HomeSplitCard funnel={funnel} onSave={updateFunnelAction} />
+          <HomeSplitCard />
           <div className="card">
             <p className="text-sm text-slate-600">
               The webinar funnel&rsquo;s live settings (name, date, time, Zoom

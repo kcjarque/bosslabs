@@ -36,6 +36,62 @@ export async function uploadPaymentProof(file: Blob, name: string): Promise<stri
   return sb.storage.from(BUCKET).getPublicUrl(key).data.publicUrl;
 }
 
+/** What the customer is actually paying for. Drives the amount charged AND the
+ *  downstream entitlements (Vault → Hub access), instead of trusting whatever
+ *  price was frozen on the signup row when they first abandoned. */
+export type ManualProducts = {
+  /** The webinar ticket itself. */
+  main: boolean;
+  /** The AI Secrets Builder Vault (includes BossLabs Hub access). */
+  vault: boolean;
+  /** The 1:1 Build Session. */
+  session: boolean;
+};
+
+/** Line-item total at TODAY's prices (lib/config OFFER), never the stale
+ *  amount stored on the signup. */
+export function manualProductsTotalCentavos(p: ManualProducts): number {
+  return (
+    (p.main ? OFFER.main.priceCentavos : 0) +
+    (p.vault ? OFFER.oto.priceCentavos : 0) +
+    (p.session ? OFFER.oto2.priceCentavos : 0)
+  );
+}
+
+/** Read the product picker + amount override off a mark-paid FormData.
+ *  Returns `products: undefined` when the caller sent no picker at all, which
+ *  keeps the legacy (stored-amount) behaviour for any older client. */
+export function parseManualPaymentForm(form: FormData): {
+  products?: ManualProducts;
+  amountCentavosOverride?: number | null;
+} {
+  const has = (k: string) => form.get(k) != null;
+  const on = (k: string) => {
+    const v = String(form.get(k) ?? '').toLowerCase();
+    return v === 'true' || v === 'on' || v === '1';
+  };
+  const products =
+    has('productMain') || has('productVault') || has('productSession')
+      ? { main: on('productMain'), vault: on('productVault'), session: on('productSession') }
+      : undefined;
+
+  // Amount arrives in PESOS from the form (what the operator typed).
+  const raw = String(form.get('amountPhp') ?? '').replace(/[^0-9.]/g, '');
+  const php = raw ? Number(raw) : NaN;
+  const amountCentavosOverride =
+    Number.isFinite(php) && php >= 0 ? Math.round(php * 100) : null;
+
+  return { products, amountCentavosOverride };
+}
+
+export function manualProductsLabel(p: ManualProducts): string {
+  const parts: string[] = [];
+  if (p.main) parts.push(OFFER.main.name);
+  if (p.vault) parts.push(OFFER.oto.name);
+  if (p.session) parts.push(OFFER.oto2.name);
+  return parts.join(' + ') || '—';
+}
+
 export async function markAbandonedCartPaid(
   signupId: string,
   opts: {
@@ -46,8 +102,17 @@ export async function markAbandonedCartPaid(
     proofFilename?: string;
     paidBy?: string;
     method?: string;
+    /** Which products this payment covers. When omitted we fall back to the
+     *  legacy behaviour (stored cart amount, webinar ticket only). */
+    products?: ManualProducts;
+    /** Exact amount received, in centavos. Overrides the product total — bank
+     *  transfers rarely match to the peso. */
+    amountCentavosOverride?: number | null;
+    /** Site origin, used to build the signed Vault thank-you link in the
+     *  credentials email when the Vault is part of this payment. */
+    baseUrl?: string;
   } = {},
-): Promise<{ ok: boolean; error?: string; alreadyPaid?: boolean }> {
+): Promise<{ ok: boolean; error?: string; alreadyPaid?: boolean; amountCentavos?: number }> {
   const signup = await getSignupById(signupId);
   if (!signup) return { ok: false, error: 'Customer not found.' };
   if (signup.status === 'paid' || signup.status === 'attended') {
@@ -57,7 +122,18 @@ export async function markAbandonedCartPaid(
     return { ok: false, error: 'Only abandoned carts (registered, unpaid) can be marked paid.' };
   }
 
-  const amountCentavos = signup.amountCentavos ?? OFFER.main.priceCentavos;
+  // Amount priority: explicit override → today's price for the chosen products
+  // → (legacy) the amount frozen on the signup row. The stored amount is the
+  // LAST resort because it can be a stale price from an old offer (e.g. a
+  // ₱1,997-era signup confirmed after the price moved back to ₱999).
+  const products = opts.products;
+  const productTotal = products ? manualProductsTotalCentavos(products) : 0;
+  const amountCentavos =
+    opts.amountCentavosOverride != null && opts.amountCentavosOverride >= 0
+      ? Math.round(opts.amountCentavosOverride)
+      : products && productTotal > 0
+        ? productTotal
+        : (signup.amountCentavos ?? OFFER.main.priceCentavos);
   const amountPhp = amountCentavos / 100;
   const now = new Date().toISOString();
 
@@ -79,8 +155,20 @@ export async function markAbandonedCartPaid(
   }
 
   // 1) Mark paid + stamp the manual-payment record (idempotency marker).
+  // When products were picked, record them as the order's line items so
+  // downstream entitlement checks (Vault → Hub, 1:1 → board) see the truth
+  // instead of inferring from a price that may have changed.
+  const productMeta = products
+    ? {
+        bumpVault: products.vault,
+        bumpSession: products.session,
+        manualProducts: products,
+        manualProductsLabel: manualProductsLabel(products),
+      }
+    : {};
   const paidMeta = {
     ...(signup.metadata ?? {}),
+    ...productMeta,
     confirmationSent: now,
     paidAmount: amountPhp,
     manualPayment: true,
@@ -91,6 +179,11 @@ export async function markAbandonedCartPaid(
   };
   await updateSignup(signup.id, {
     status: 'paid',
+    // `bumped` is the legacy "took ANY bump" flag other code keys off.
+    ...(products ? { bumped: products.vault || products.session } : {}),
+    // Keep the row's amount in sync with what was actually collected, so
+    // revenue/AOV/commission all read the real figure.
+    amountCentavos,
     ...(reTagEventId ? { eventId: reTagEventId } : {}),
     metadata: paidMeta,
   });
@@ -114,6 +207,37 @@ export async function markAbandonedCartPaid(
     email: signup.email,
   });
   await closeLeadAndRecordCommission(signup.id);
+
+  // 3b) Vault in this order → provision BossLabs Hub access + email the
+  // credentials, exactly like a Xendit-paid Vault buyer gets. Without this a
+  // manually-confirmed Vault buyer pays but never receives their login.
+  // Best-effort: a Hub outage must not roll back a confirmed payment.
+  let hubProvisioned: boolean | null = null;
+  if (products?.vault) {
+    try {
+      const { provisionAndEmailBuyer } = await import('./hub-backfill');
+      const externalId = String(
+        (signup.metadata as { externalId?: string } | undefined)?.externalId ?? '',
+      );
+      const r = await provisionAndEmailBuyer(
+        {
+          signupId: signup.id,
+          email: signup.email,
+          firstName: signup.firstName || signup.email.split('@')[0],
+          externalId,
+          amountCentavos,
+        },
+        { baseUrl: opts.baseUrl ?? 'https://www.bosslabs.live' },
+      );
+      hubProvisioned = r.provisioned;
+    } catch (err) {
+      hubProvisioned = false;
+      console.warn(
+        '[manual-payment] Vault Hub provisioning failed:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 
   // 4) Paid confirmation email + SMS (best-effort).
   const webinar = await getWebinarInfo();
@@ -152,7 +276,10 @@ export async function markAbandonedCartPaid(
     `<b>${esc(signup.firstName)} ${esc(signup.lastName ?? '')}</b>\n` +
     `${esc(signup.email)}\n` +
     `📱 ${signup.phone ? esc(signup.phone) : '—'}\n` +
+    (products ? `Bought: <b>${esc(manualProductsLabel(products))}</b>\n` : '') +
     `Amount: <b>₱${amountPhp.toLocaleString()}</b>\n` +
+    (hubProvisioned === true ? `🔑 Hub access provisioned + creds emailed\n` : '') +
+    (hubProvisioned === false ? `⚠️ Vault paid but Hub provisioning FAILED — needs manual fix\n` : '') +
     `Confirmed by: <b>${esc(opts.paidBy ?? 'admin')}</b>${opts.method ? ` · ${esc(opts.method)}` : ''}\n` +
     `🧾 Paid orders: <b>${orders.total}</b> total · <b>${orders.today}</b> today` +
       (orders.recoveredToday > 0 ? ` · <b>${orders.recoveredToday}</b> recovered` : '');
@@ -167,5 +294,5 @@ export async function markAbandonedCartPaid(
   // it to the abandoned-cart sales team chat (best-effort add-on).
   await sendAbandonedTeam(caption).catch(() => {});
 
-  return { ok: true };
+  return { ok: true, amountCentavos };
 }

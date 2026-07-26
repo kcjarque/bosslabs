@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getCloserSession } from '@/lib/closer-auth';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import { markAbandonedCartPaid, uploadPaymentProof } from '@/lib/manual-payment';
+import { markAbandonedCartPaid, uploadPaymentProof, parseManualPaymentForm } from '@/lib/manual-payment';
+import { siteUrl } from '@/lib/site';
 
 export const runtime = 'nodejs';
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -39,12 +40,16 @@ export async function POST(req: Request) {
     proofUrl = await uploadPaymentProof(new Blob([proofBytes], { type: file.type }), proofFilename);
   }
 
+  const { products, amountCentavosOverride } = parseManualPaymentForm(form);
   const res = await markAbandonedCartPaid(signupId, {
     proofUrl,
     proofBytes,
     proofFilename,
     paidBy: closer.name,
     method: 'closer',
+    products,
+    amountCentavosOverride,
+    baseUrl: siteUrl(req),
   });
   return NextResponse.json(res, { status: res.ok ? 200 : 409 });
 }
