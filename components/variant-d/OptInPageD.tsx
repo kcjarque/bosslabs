@@ -51,8 +51,10 @@ export function OptInPageD({
       <main className="relative">
         <Hero webinar={webinar} upcomingSessions={upcomingSessions} />
         <AuthorityBar />
-        <ProofWall />
+        {/* "What is BossLabs AI" sets up the premise BEFORE the proof wall —
+            context first, then the receipts (Kyle 2026-07-26). */}
         <WhatIsSection />
+        <ProofWall />
         <OurAppsShowcase />
         <TestimonialWall />
         <Pillars />
