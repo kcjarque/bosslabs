@@ -604,14 +604,18 @@ async function DashboardBody({
   // "Checkout Started" = signups created in the window with paid source
   // (filled the form + clicked a Pay button → invoice issued).
   // "Paid" = those that completed payment.
-  const funnelStarts = signups.filter(
-    (s) => new Date(s.createdAt).getTime() >= funnelSinceMs && s.source === 'paid',
-  ).length;
-  const funnelPaid = signups.filter(
-    (s) =>
-      new Date(s.createdAt).getTime() >= funnelSinceMs &&
-      (s.status === 'paid' || s.status === 'attended'),
-  ).length;
+  // Bound BOTH ends of the window (matches the KPI cards + conversion buckets).
+  // Filtering only `>= funnelSinceMs` let a PAST custom range leak everything
+  // from the start date to now — so the funnel showed far bigger STARTED/PAID
+  // counts than the (correctly-bounded) cards for the same date range.
+  const funnelStarts = signups.filter((s) => {
+    const t = new Date(s.createdAt).getTime();
+    return t >= funnelSinceMs && t <= rangeEnd && s.source === 'paid';
+  }).length;
+  const funnelPaid = signups.filter((s) => {
+    const t = new Date(s.createdAt).getTime();
+    return t >= funnelSinceMs && t <= rangeEnd && (s.status === 'paid' || s.status === 'attended');
+  }).length;
   const visitToCheckoutPct =
     viewsAll.uniqueSessions > 0 ? (funnelStarts / viewsAll.uniqueSessions) * 100 : 0;
   const checkoutToPaidPct =
