@@ -7,8 +7,8 @@ import { OptInPageD } from '@/components/variant-d/OptInPageD';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { AbBeacon } from '@/components/AbBeacon';
 import { getWebinarInfo, formatSessionLabels } from '@/lib/webinar';
-import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
-import { homeArmFromCookie } from '@/lib/ab';
+import { getFunnels, getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
+import { readAbTest, resolveAbVariant, type VariantKey } from '@/lib/ab';
 
 // Render per-request so the live webinar date/time/countdown always reflect
 // the current Settings. Without this the homepage is statically cached at
@@ -16,29 +16,46 @@ import { homeArmFromCookie } from '@/lib/ab';
 export const dynamic = 'force-dynamic';
 
 /**
- * Homepage A/B test (2026-07-26): a 50/50 split between the OLD funnel design
- * and the CURRENT one, to compare conversion. Same public URL — the split is
- * server-side off the sticky bl_ab_roll cookie, so the ad link
+ * Homepage A/B test. Which two designs run, the traffic split, and whether the
+ * test is live at all are all managed from admin → Funnels (stored in the
+ * webinar funnel's config; see lib/ab.ts). The public URL never changes — the
+ * split is server-side off the sticky bl_ab_roll cookie, so the ad link
  * https://www.bosslabs.live is untouched.
- *   - A = 'control' (components/OptInPage.tsx) — the ORIGINAL design
- *   - B = 'd' (components/variant-d/OptInPageD.tsx) — the current ₱500K reframe
- * Attribution: checkout stamps metadata.homeVariant ('a'|'b') from the SAME
- * cookie (see lib/ab.ts), so per-design revenue/conversion is measurable in
- * admin. b/c are legacy experiments, reachable via ?preview only (not live).
+ *
+ * Attribution: checkout stamps metadata.homeVariant (arm) + homeVariantKey
+ * (the actual design) from the SAME config, so per-design revenue stays
+ * correct even after the variants are swapped for a later test.
  */
-type HomeVariant = 'control' | 'b' | 'c' | 'd';
+type HomeVariant = VariantKey;
 
-function resolveVariant(preview?: string): HomeVariant {
-  // LIVE A/B test (2026-07-26): 50/50 OLD design (A = control) vs CURRENT
-  // design (B = d), driven by the sticky bl_ab_roll cookie. Same public URL —
-  // the ad link https://www.bosslabs.live is unchanged; the split is
-  // server-side. b/c remain reachable via ?preview only (not in rotation).
-  const arm = homeArmFromCookie(cookies().get('bl_ab_roll')?.value);
-  let variant: HomeVariant = arm === 'a' ? 'control' : 'd';
-  if (preview === 'control' || preview === 'a') variant = 'control';
-  if (preview === 'd' || preview === 'b') variant = 'd';
-  if (preview === 'c') variant = 'c';
-  return variant;
+/** ?preview=… forces a design for THIS request only — no cookie change, and
+ *  the beacon is skipped so admin peeks never pollute the test data. */
+function previewOverride(preview?: string): HomeVariant | null {
+  if (preview === 'control' || preview === 'a') return 'control';
+  if (preview === 'd') return 'd';
+  if (preview === 'b') return 'b';
+  if (preview === 'c') return 'c';
+  return null;
+}
+
+/** getFunnels is React-cache()'d, so generateMetadata and the page render
+ *  share a single fetch per request. */
+async function resolveVariant(
+  preview?: string,
+): Promise<{ variant: HomeVariant; arm: 'a' | 'b' }> {
+  const forced = previewOverride(preview);
+  let test;
+  try {
+    const funnels = await getFunnels();
+    const cfg = funnels.find((f) => f.slug === 'webinar')?.config as
+      | Record<string, unknown>
+      | undefined;
+    test = readAbTest(cfg);
+  } catch {
+    test = readAbTest(null); // config unreadable → safe defaults
+  }
+  const resolved = resolveAbVariant(test, cookies().get('bl_ab_roll')?.value);
+  return { variant: forced ?? resolved.variant, arm: resolved.arm };
 }
 
 /** Variant D reframes the promise, so its meta/OG must message-match the new
@@ -48,7 +65,7 @@ export async function generateMetadata({
 }: {
   searchParams?: { preview?: string };
 }): Promise<Metadata> {
-  const variant = resolveVariant(searchParams?.preview);
+  const { variant } = await resolveVariant(searchParams?.preview);
   if (variant === 'd') {
     const title = 'Build Your ₱500K System Yourself — BOSSLABS AI';
     const description =
@@ -96,7 +113,7 @@ export default async function Page({
   }
 
   const preview = searchParams?.preview;
-  const variant = resolveVariant(preview);
+  const { variant, arm } = await resolveVariant(preview);
 
   const page =
     variant === 'b' ? (
@@ -112,12 +129,10 @@ export default async function Page({
   return (
     <>
       {page}
-      {/* A/B test view beacons — one per arm so admin can measure sessions per
-          design (skip previews so admin peeks don't pollute data). A = control
-          (old), B = d (current); c is preview-only. */}
-      {variant === 'control' && !preview && <AbBeacon path="/__ab/home-a" />}
-      {variant === 'd' && !preview && <AbBeacon path="/__ab/home-b" />}
-      {variant === 'c' && !preview && <AbBeacon path="/__ab/home-c" />}
+      {/* One view beacon per ARM (not per design) so visit counts stay
+          comparable across a variant swap. Skipped on ?preview so admin peeks
+          never pollute the test. */}
+      {!preview && <AbBeacon path={`/__ab/home-${arm}`} />}
       <ExitIntentModal />
     </>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { REF_COOKIE, REF_TOUCH_COOKIE, REF_SUB_COOKIE } from '@/lib/ref-cookie';
-import { homeArmFromCookie } from '@/lib/ab';
+import { readAbTest, resolveAbVariant } from '@/lib/ab';
 import { OFFER } from '@/lib/config';
 import {
   createInvoice,
@@ -15,6 +15,7 @@ import {
   countPaidOrders,
   findPromoCode,
   findSignupByEmail,
+  getFunnels,
   getSettings,
   promoAllowedForProduct,
   redeemPromoCode,
@@ -155,9 +156,23 @@ export async function POST(req: Request) {
       : {};
 
     // A/B test attribution — which homepage design did this buyer come through?
-    // Derived from the SAME sticky cookie the homepage router uses (lib/ab.ts),
-    // so the tag matches what they actually saw. 'a' = old design, 'b' = current.
-    const homeVariant = homeArmFromCookie(refJar.get('bl_ab_roll')?.value);
+    // Resolved from the SAME config + sticky cookie the homepage router uses
+    // (lib/ab.ts), so the tag matches what they actually saw. We store BOTH the
+    // arm ('a'/'b') and the design key, so past sales stay attributable after
+    // the variants are swapped for a later test.
+    let homeVariant: 'a' | 'b' = 'b';
+    let homeVariantKey: string = 'd';
+    try {
+      const funnels = await getFunnels();
+      const abCfg = funnels.find((f) => f.slug === 'webinar')?.config as
+        | Record<string, unknown>
+        | undefined;
+      const r = resolveAbVariant(readAbTest(abCfg), refJar.get('bl_ab_roll')?.value);
+      homeVariant = r.arm;
+      homeVariantKey = r.variant;
+    } catch {
+      /* attribution is best-effort — never block a checkout */
+    }
 
     // Free-seat path: skip Xendit entirely. The buyer goes straight to
     // /accepted, we mark them paid for ₱0, and we manually fire the
@@ -172,7 +187,8 @@ export async function POST(req: Request) {
         bumpVault,
         bumpSession,
         ...affiliateMeta,
-        homeVariant, // A/B: 'a' = old design, 'b' = current
+        homeVariant, // A/B arm
+      homeVariantKey, // the actual design served
         // Session-replay id — links this signup to its recording.
         ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
         demo: false as boolean,
@@ -347,7 +363,8 @@ export async function POST(req: Request) {
       bumpVault,
       bumpSession,
       ...affiliateMeta,
-      homeVariant, // A/B: 'a' = old design, 'b' = current
+      homeVariant, // A/B arm
+      homeVariantKey, // the actual design served
       // Session-replay id — links this signup to its recording.
       ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
       demo: invoice.demo,

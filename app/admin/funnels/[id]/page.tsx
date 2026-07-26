@@ -4,7 +4,14 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { getFunnel } from '@/lib/db';
 import { FunnelEditor } from '@/components/FunnelEditor';
 import { HomeSplitCard } from '@/components/HomeSplitCard';
-import { updateFunnelAction } from './actions';
+import {
+  updateFunnelAction,
+  updateAbSplitAction,
+  startAbTestAction,
+  stopAbTestAction,
+} from './actions';
+import { readAbTest, readAbHistory } from '@/lib/ab';
+import { getAbResults } from '@/lib/ab-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +23,12 @@ export default async function FunnelDetailPage({
   requireAdmin();
   const funnel = await getFunnel(params.id);
   if (!funnel) notFound();
+
+  // A/B state + live results for the webinar funnel's homepage test.
+  const abConfig = (funnel.config ?? {}) as Record<string, unknown>;
+  const abTest = readAbTest(abConfig);
+  const abHistory = readAbHistory(abConfig);
+  const abResults = funnel.kind === 'webinar' ? await getAbResults(abTest) : null;
 
   return (
     <div className="space-y-6">
@@ -33,7 +46,17 @@ export default async function FunnelDetailPage({
 
       {funnel.kind === 'webinar' ? (
         <>
-          <HomeSplitCard />
+          {abResults && (
+            <HomeSplitCard
+              funnelId={funnel.id}
+              test={abTest}
+              history={abHistory}
+              results={abResults}
+              onUpdateSplit={updateAbSplitAction}
+              onStartTest={startAbTestAction}
+              onStopTest={stopAbTestAction}
+            />
+          )}
           <div className="card">
             <p className="text-sm text-slate-600">
               The webinar funnel&rsquo;s live settings (name, date, time, Zoom
