@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { REF_COOKIE, REF_TOUCH_COOKIE, REF_SUB_COOKIE } from '@/lib/ref-cookie';
+import { homeArmFromCookie } from '@/lib/ab';
 import { OFFER } from '@/lib/config';
 import {
   createInvoice,
@@ -153,6 +154,11 @@ export async function POST(req: Request) {
         }
       : {};
 
+    // A/B test attribution — which homepage design did this buyer come through?
+    // Derived from the SAME sticky cookie the homepage router uses (lib/ab.ts),
+    // so the tag matches what they actually saw. 'a' = old design, 'b' = current.
+    const homeVariant = homeArmFromCookie(refJar.get('bl_ab_roll')?.value);
+
     // Free-seat path: skip Xendit entirely. The buyer goes straight to
     // /accepted, we mark them paid for ₱0, and we manually fire the
     // paid_confirmation email + SMS (the Xendit webhook normally does
@@ -166,6 +172,7 @@ export async function POST(req: Request) {
         bumpVault,
         bumpSession,
         ...affiliateMeta,
+        homeVariant, // A/B: 'a' = old design, 'b' = current
         // Session-replay id — links this signup to its recording.
         ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
         demo: false as boolean,
@@ -340,6 +347,7 @@ export async function POST(req: Request) {
       bumpVault,
       bumpSession,
       ...affiliateMeta,
+      homeVariant, // A/B: 'a' = old design, 'b' = current
       // Session-replay id — links this signup to its recording.
       ...(body.meta?.sessionId ? { blSessionId: body.meta.sessionId } : {}),
       demo: invoice.demo,

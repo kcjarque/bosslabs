@@ -426,6 +426,37 @@ async function DashboardBody({
   const sFunnelEntrants = scoped.filter((s) => s.source === 'paid').length;
   const sConversion = sFunnelEntrants > 0 ? (sPaid.length / sFunnelEntrants) * 100 : 0;
 
+  // ── A/B test: OLD design (A) vs CURRENT design (B) ────────────────────────
+  // Attribution: signups carry metadata.homeVariant ('a'|'b') set at checkout
+  // from the same sticky cookie the homepage split uses. Visits = unique
+  // sessions on each arm's view beacon. All scoped to the selected period.
+  const [abVisitsA, abVisitsB] = await Promise.all([
+    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/__ab/home-a' }),
+    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/__ab/home-b' }),
+  ]);
+  const abArm = (s: Signup) => (s.metadata as { homeVariant?: string } | undefined)?.homeVariant;
+  const abStat = (arm: 'a' | 'b', visitSessions: number) => {
+    const rows = scoped.filter((s) => abArm(s) === arm);
+    const starts = rows.filter((s) => s.source === 'paid').length;
+    const paidRows = rows.filter((s) => s.status === 'paid' || s.status === 'attended');
+    const revenueCentavos = paidRows.reduce((sum, s) => {
+      const meta = (s.metadata as { otoAmount?: number; otoConfirmed?: string } | undefined) ?? {};
+      const otoExtra = meta.otoConfirmed && meta.otoAmount ? meta.otoAmount * 100 : 0;
+      return sum + (s.amountCentavos ?? 0) + otoExtra;
+    }, 0);
+    return {
+      visits: visitSessions,
+      starts,
+      paid: paidRows.length,
+      revenueCentavos,
+      // Conversion = paid ÷ visits (sessions that saw this design). Falls back
+      // to paid ÷ checkout-starts when the visit beacon hasn't logged yet.
+      convPct: visitSessions > 0 ? (paidRows.length / visitSessions) * 100 : starts > 0 ? (paidRows.length / starts) * 100 : 0,
+    };
+  };
+  const abA = abStat('a', abVisitsA.uniqueSessions);
+  const abB = abStat('b', abVisitsB.uniqueSessions);
+
   // All cash RECEIVED in the period, scoped by PAYMENT day, then PARTITIONED
   // into direct vs recovered so the two never overlap:
   //   - recovered = closer-claimed OR abandoned-then-paid (paid a later day
@@ -830,6 +861,77 @@ async function DashboardBody({
           <AdSpendRoasChart rows={adDailyRows} />
         ) : (
           <p className="mt-5 text-[13px] text-slate-500">No ad-spend data in this period.</p>
+        )}
+      </section>
+
+      {/* A/B TEST — Old design (A) vs Current design (B), 50/50 split */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">A/B Test — funnel design</h2>
+            <p className="mt-1 text-[12px] text-slate-500">
+              50/50 split · {periodLabel}. Same ad link — visitors are randomly (stickily)
+              shown one design. Revenue is attributed from the design each buyer checked out through
+              (tracking started when the test went live).
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2 text-[11px]">
+            <a href="https://www.bosslabs.live/?preview=control" target="_blank" rel="noreferrer"
+               className="rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-50">Preview A ↗</a>
+            <a href="https://www.bosslabs.live/?preview=d" target="_blank" rel="noreferrer"
+               className="rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-50">Preview B ↗</a>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 sm:gap-4">
+          {([
+            { key: 'A', name: 'Original design', tint: 'border-slate-300 bg-slate-50/60', accent: 'text-slate-700', st: abA },
+            { key: 'B', name: 'Current design (₱500K reframe)', tint: 'border-cyan-300 bg-cyan-50/50', accent: 'text-cyan-700', st: abB },
+          ] as const).map(({ key, name, tint, accent, st }) => {
+            const other = key === 'A' ? abB : abA;
+            const winning = st.paid > 0 && st.convPct >= other.convPct && (st.convPct > other.convPct || st.revenueCentavos >= other.revenueCentavos);
+            return (
+              <div key={key} className={`rounded-xl border p-4 sm:p-5 ${tint}`}>
+                <div className="flex items-center justify-between">
+                  <div className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${accent}`}>
+                    Variant {key} · {name}
+                  </div>
+                  {winning && (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+                      Leading
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <div className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{fmtRate(st.convPct)}</div>
+                  <div className="text-[11px] uppercase tracking-[0.06em] text-slate-500">visit → paid</div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900 tabular-nums">{formatPHPWhole(st.revenueCentavos)}</div>
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Revenue</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900 tabular-nums">{st.paid}</div>
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Paid</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900 tabular-nums">{st.visits.toLocaleString()}</div>
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Visits</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900 tabular-nums">{st.starts}</div>
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Checkout started</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {abA.paid === 0 && abB.paid === 0 && (
+          <p className="mt-4 text-[12px] text-slate-400">
+            No attributed sales yet in this period — data appears as buyers come through each design.
+          </p>
         )}
       </section>
 

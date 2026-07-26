@@ -7,7 +7,8 @@ import { OptInPageD } from '@/components/variant-d/OptInPageD';
 import { ExitIntentModal } from '@/components/ExitIntentModal';
 import { AbBeacon } from '@/components/AbBeacon';
 import { getWebinarInfo, formatSessionLabels } from '@/lib/webinar';
-import { getFunnels, getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
+import { getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
+import { homeArmFromCookie } from '@/lib/ab';
 
 // Render per-request so the live webinar date/time/countdown always reflect
 // the current Settings. Without this the homepage is statically cached at
@@ -15,55 +16,28 @@ import { getFunnels, getSettings, getUpcomingCheckoutSessions } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 /**
- * Homepage variants. Since 2026-07-24, VARIANT D IS THE SITE DEFAULT — the
- * ₱500K-quote reframe (components/variant-d/OptInPageD.tsx) is what every
- * visitor sees at "/". The other designs are kept intact as variants:
- *   - control (components/OptInPage.tsx) — the ORIGINAL design, preserved for
- *     rollback. View via ?preview=control. To revert the whole site to it,
- *     change the `variant` fallback below from 'd' back to 'control'.
- *   - b (components/variant-b/OptInPageB.tsx) — conversion-first rebuild
- *   - c (components/variant-c/OptInPageC.tsx) — competition-killer
- *
- * Assignment:
- *   - middleware gives every visitor a sticky random roll 0-99 (bl_ab_roll);
- *   - admin → Funnels dials homeVariantPct (B) / homeVariantCPct (C) can
- *     still carve test traffic: roll < pctB → B, else roll < pctB+pctC → C,
- *     else D (the default). homeVariantDPct is now inert — D needs no dial.
- *   - ?preview=b / ?preview=c / ?preview=d / ?preview=control force a variant
- *     for preview (no cookie change).
+ * Homepage A/B test (2026-07-26): a 50/50 split between the OLD funnel design
+ * and the CURRENT one, to compare conversion. Same public URL — the split is
+ * server-side off the sticky bl_ab_roll cookie, so the ad link
+ * https://www.bosslabs.live is untouched.
+ *   - A = 'control' (components/OptInPage.tsx) — the ORIGINAL design
+ *   - B = 'd' (components/variant-d/OptInPageD.tsx) — the current ₱500K reframe
+ * Attribution: checkout stamps metadata.homeVariant ('a'|'b') from the SAME
+ * cookie (see lib/ab.ts), so per-design revenue/conversion is measurable in
+ * admin. b/c are legacy experiments, reachable via ?preview only (not live).
  */
 type HomeVariant = 'control' | 'b' | 'c' | 'd';
 
-// getFunnels is React-cache()'d, so the generateMetadata call and the page
-// render below share one funnels fetch per request.
-async function resolveVariant(preview?: string): Promise<HomeVariant> {
-  let pctB = 0;
-  let pctC = 0;
-  try {
-    const funnels = await getFunnels();
-    const cfg = funnels.find((f) => f.slug === 'webinar')?.config as
-      | { homeVariantPct?: number; homeVariantCPct?: number }
-      | undefined;
-    const clamp = (v: unknown) => Math.min(100, Math.max(0, Number(v) || 0));
-    pctB = clamp(cfg?.homeVariantPct);
-    pctC = clamp(cfg?.homeVariantCPct);
-  } catch {
-    pctB = 0;
-    pctC = 0; // config unreadable → everyone sees the default (D)
-  }
-
-  // Cap the combined bands at 100 to keep behavior sane if admin overlaps sliders.
-  const cBound = Math.min(100, pctB + pctC);
-  const roll = Number(cookies().get('bl_ab_roll')?.value ?? NaN);
-  let variant: HomeVariant = 'd'; // ← site default; set to 'control' to revert
-  if (Number.isFinite(roll)) {
-    if (roll < pctB) variant = 'b';
-    else if (roll < cBound) variant = 'c';
-  }
-  if (preview === 'b') variant = 'b';
-  if (preview === 'c') variant = 'c';
-  if (preview === 'd') variant = 'd';
+function resolveVariant(preview?: string): HomeVariant {
+  // LIVE A/B test (2026-07-26): 50/50 OLD design (A = control) vs CURRENT
+  // design (B = d), driven by the sticky bl_ab_roll cookie. Same public URL —
+  // the ad link https://www.bosslabs.live is unchanged; the split is
+  // server-side. b/c remain reachable via ?preview only (not in rotation).
+  const arm = homeArmFromCookie(cookies().get('bl_ab_roll')?.value);
+  let variant: HomeVariant = arm === 'a' ? 'control' : 'd';
   if (preview === 'control' || preview === 'a') variant = 'control';
+  if (preview === 'd' || preview === 'b') variant = 'd';
+  if (preview === 'c') variant = 'c';
   return variant;
 }
 
@@ -74,7 +48,7 @@ export async function generateMetadata({
 }: {
   searchParams?: { preview?: string };
 }): Promise<Metadata> {
-  const variant = await resolveVariant(searchParams?.preview);
+  const variant = resolveVariant(searchParams?.preview);
   if (variant === 'd') {
     const title = 'Build Your ₱500K System Yourself — BOSSLABS AI';
     const description =
@@ -122,7 +96,7 @@ export default async function Page({
   }
 
   const preview = searchParams?.preview;
-  const variant = await resolveVariant(preview);
+  const variant = resolveVariant(preview);
 
   const page =
     variant === 'b' ? (
@@ -138,10 +112,11 @@ export default async function Page({
   return (
     <>
       {page}
-      {/* Log variant views (skip previews so admin peeks don't pollute data).
-          D is the site default now — no beacon for it, or every homepage view
-          would double-log a page_views row; plain homepage traffic counts it. */}
-      {variant === 'b' && !preview && <AbBeacon path="/__ab/home-b" />}
+      {/* A/B test view beacons — one per arm so admin can measure sessions per
+          design (skip previews so admin peeks don't pollute data). A = control
+          (old), B = d (current); c is preview-only. */}
+      {variant === 'control' && !preview && <AbBeacon path="/__ab/home-a" />}
+      {variant === 'd' && !preview && <AbBeacon path="/__ab/home-b" />}
       {variant === 'c' && !preview && <AbBeacon path="/__ab/home-c" />}
       <ExitIntentModal />
     </>
