@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
@@ -549,6 +549,11 @@ async function DashboardBody({
   ).size;
   const cacCentavos =
     periodCustomers > 0 ? Math.round(adSpendInPeriodCentavos / periodCustomers) : 0;
+  // Ave. order value per customer — the earn-side twin of the cost card above:
+  // same period, same DISTINCT-customer denominator, so ₱X earned vs ₱Y spent
+  // per customer is a like-for-like read.
+  const aovPerCustomerCentavos =
+    periodCustomers > 0 ? Math.round(sRevenueByPaymentCentavos / periodCustomers) : 0;
   // Total revenue (all streams) + the blended/overall ROAS — front-end + VCR +
   // DFY ÷ ad spend. Distinct from the front-end-only ROAS in the Ad spend card.
   const totalIncomeCentavos = sRevenueByPaymentCentavos + webinarIncomeCentavos + dfyIncomeCentavos;
@@ -719,11 +724,9 @@ async function DashboardBody({
           sub={`${sPaid.length} of ${sFunnelEntrants} checkout-starts`}
         />
         <StatCard
-          label="Stuck (unpaid)"
-          value={sRegistered.length.toString()}
-          sub={`Started checkout, never paid · ${sRefunded.length} refunded`}
-          tone={sRegistered.length > 0 ? 'amber' : undefined}
-          href={sRegistered.length > 0 ? '/admin/pending-payments' : undefined}
+          label="Ave. order value per customer"
+          value={formatPHPWhole(aovPerCustomerCentavos)}
+          sub={`${formatPHPWhole(sRevenueByPaymentCentavos)} revenue · ${periodCustomers} customers`}
         />
       </div>
 
@@ -738,7 +741,27 @@ async function DashboardBody({
           label="Recovered"
           value={sRecoveredList.length.toString()}
           tone="orange"
-          sub={`${formatPHPWhole(sRecoveredRevenueCentavos)} · paid after abandoning`}
+          // Stuck-unpaid rides along as the subline: it's the same chase pipeline
+          // read from the other end (still owed vs. already won back), and it
+          // keeps its drill-down to the pending-payments list.
+          sub={
+            <>
+              {formatPHPWhole(sRecoveredRevenueCentavos)} · paid after abandoning
+              <span className="mt-1 block">
+                {sRegistered.length > 0 ? (
+                  <Link
+                    href="/admin/pending-payments"
+                    className="font-medium text-amber-700 underline-offset-4 hover:underline"
+                  >
+                    {sRegistered.length} stuck (unpaid) →
+                  </Link>
+                ) : (
+                  '0 stuck (unpaid)'
+                )}
+                {` · ${sRefunded.length} refunded`}
+              </span>
+            </>
+          }
         />
         <StatCard
           label="Ave. cost per customer"
@@ -1388,7 +1411,7 @@ function StatCard({
 }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?: ReactNode;
   tone?: 'green' | 'amber' | 'orange';
   href?: string;
   /** Interactive hint (e.g. "View clients →") for a card wrapped in a
