@@ -205,24 +205,35 @@ export async function POST(req: Request) {
         },
       };
 
+      // A free seat must NEVER overwrite money already collected. Updating an
+      // ALREADY-PAID row set amount_centavos to 0 and wiped the original sale
+      // from revenue (₱92,910 across 61 rows before this guard). A returning
+      // customer claiming a free seat is a NEW order — record it like the paid
+      // path does (its own row), leaving the earlier sale intact.
+      // Reusing the row is still right for an UNPAID one: that's an abandoned
+      // cart converting, not a second order.
+      const existingIsPaid =
+        existing && (existing.status === 'paid' || existing.status === 'attended');
+      const reusable = existing && !existingIsPaid ? existing : null;
+
       let signupId: string;
-      if (existing) {
-        signupId = existing.id;
+      if (reusable) {
+        signupId = reusable.id;
         // Re-tag to the buyer's chosen event (picker) or the active event
         // (fallback) so a returning lead who claims a free seat for the NEW
         // event lands on its list and gets this event's reminders.
         const activeEventId = (await getSettings().catch(() => null))?.activeEventId ?? null;
         const chosenEventId = body.webinarEventId ?? activeEventId;
-        await updateSignup(existing.id, {
+        await updateSignup(reusable.id, {
           firstName,
           lastName: rest.join(' ') || undefined,
-          phone: body.mobile || existing.phone,
+          phone: body.mobile || reusable.phone,
           status: 'paid',
           amountCentavos: 0,
           bumped,
           ...(chosenEventId ? { eventId: chosenEventId } : {}),
           metadata: {
-            ...(existing.metadata ?? {}),
+            ...(reusable.metadata ?? {}),
             ...baseMeta,
             confirmationSent: new Date().toISOString(),
           },
