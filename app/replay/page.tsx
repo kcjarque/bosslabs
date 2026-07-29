@@ -17,15 +17,15 @@ export const metadata: Metadata = {
 
 // The raw, unfiltered replay. Swap this ID to point the page at a new video.
 // Vimeo URL pattern: https://vimeo.com/<id> → embed at player.vimeo.com/video/<id>.
-const REPLAY_VIMEO_ID = '1212371468';
-const APP_URL = 'https://little-sandbox.vercel.app/';
+const REPLAY_VIMEO_ID = '1213944094';
+const APP_URL = 'https://sunnyshine-kohl.vercel.app';
 // Screenshot of the app we built live this session (drop the file in /public).
-const APP_SCREENSHOT = '/little-sandbox.png';
+const APP_SCREENSHOT = '/sunnyshine.png';
 const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // Real 7-day deadline — the replay genuinely closes at this moment. Replay
 // opens tomorrow (the morning after the webinar) and runs 7 days. Change this
-// single line to move the close date. Webinar: July 23 → +7d = July 30.
-const REPLAY_CLOSES_AT = '2026-07-30T23:59:00+08:00';
+// single line to move the close date. Webinar: July 29 → +7d = August 5.
+const REPLAY_CLOSES_AT = '2026-08-05T23:59:00+08:00';
 
 export default function ReplayPage({
   searchParams,
