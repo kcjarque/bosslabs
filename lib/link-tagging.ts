@@ -34,6 +34,38 @@ export function safeRedirectU(u: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Re-sign a token-gated destination at redirect time.
+ *
+ * `/survey?c=…` carries an HMAC of the signup id, signed with ADMIN_COOKIE_SECRET.
+ * Anything that mints that URL outside production signs it with a DIFFERENT key
+ * — `vercel env pull` deliberately returns encrypted secrets empty, so a local
+ * backfill script silently falls back to the dev secret. The survey page then
+ * can't verify the signature and shows "Link expired", which is what happened to
+ * 631 already-delivered survey links on 2026-07-29.
+ *
+ * Both redirect hops (/l/{slug} and /api/l/{tag}) know the contact, and they run
+ * IN production where the real secret lives — so re-minting the token here
+ * repairs links that were already sent, with no re-send and no DB rewrite.
+ * Only ever touches our own /survey path, and only when the contact is known.
+ */
+export function resignContactUrl(
+  targetUrl: string,
+  contactId: string | null | undefined,
+  sign: (id: string) => string,
+): string {
+  if (!contactId) return targetUrl;
+  try {
+    const u = new URL(targetUrl);
+    if (!ALLOWED_REDIRECT_HOSTS.includes(u.hostname)) return targetUrl;
+    if (u.pathname !== '/survey') return targetUrl;
+    u.searchParams.set('c', sign(contactId));
+    return u.toString();
+  } catch {
+    return targetUrl;
+  }
+}
+
 /** Map a destination URL to a link_tag, or null to leave it un-tracked. */
 export function matchTag(rawUrl: string): string | null {
   let u: URL;

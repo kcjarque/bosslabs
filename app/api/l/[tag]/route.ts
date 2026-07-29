@@ -6,8 +6,9 @@
  */
 import { NextResponse } from 'next/server';
 import { logEngagementEvent, tagContactFromClick, resolveTagTarget } from '@/lib/engagement';
-import { safeRedirectU } from '@/lib/link-tagging';
+import { safeRedirectU, resignContactUrl } from '@/lib/link-tagging';
 import { enrollFromOfferClick } from '@/lib/sos';
+import { signContactToken } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,5 +30,7 @@ export async function GET(req: Request, { params }: { params: { tag: string } })
     // sequence is active + the contact isn't already enrolled.
     await enrollFromOfferClick(contactId, tag);
   }
-  return NextResponse.redirect(target, 302);
+  // Re-mint the survey token here, where the real secret lives (see
+  // resignContactUrl) — repairs links that were signed outside production.
+  return NextResponse.redirect(resignContactUrl(target, contactId, signContactToken), 302);
 }

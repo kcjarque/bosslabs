@@ -7,6 +7,8 @@
 import { NextResponse } from 'next/server';
 import { logEngagementEvent, tagContactFromClick, resolveShortLink } from '@/lib/engagement';
 import { enrollFromOfferClick } from '@/lib/sos';
+import { resignContactUrl } from '@/lib/link-tagging';
+import { signContactToken } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,5 +28,10 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
     await tagContactFromClick(link.contactId, link.linkTag);
     if (link.linkTag) await enrollFromOfferClick(link.contactId, link.linkTag);
   }
-  return NextResponse.redirect(link.targetUrl, 302);
+  // Re-mint the survey token here, where the real secret lives (see
+  // resignContactUrl) — repairs links that were signed outside production.
+  return NextResponse.redirect(
+    resignContactUrl(link.targetUrl, link.contactId, signContactToken),
+    302,
+  );
 }
