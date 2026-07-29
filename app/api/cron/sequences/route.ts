@@ -78,6 +78,37 @@ function eventTargetTime(
   return null;
 }
 
+/**
+ * How late may a fixed-anchor step still fire? A ±15-min window alone means a
+ * single skipped tick silently drops that reminder FOREVER — which is exactly
+ * how 311 buyers got no reminder at all for the 2026-07-29 webinar. A bounded
+ * catch-up makes a missed tick recoverable without turning a multi-day outage
+ * into a burst of stale mail.
+ */
+const CATCHUP_MS = 6 * 60 * 60 * 1000;
+
+/** Is this step due now (in-window) or recoverably late (catch-up)? */
+function dueState(
+  step: SequenceStep,
+  eventStartsAtIso: string | null,
+  now: number,
+): { due: boolean; lateMs: number; target: number | null } {
+  const target = eventTargetTime(step, eventStartsAtIso);
+  if (target === null) return { due: false, lateMs: 0, target: null };
+  const lateMs = now - target;
+  // Still inside the normal window.
+  if (Math.abs(lateMs) <= TOLERANCE_MS) return { due: true, lateMs, target };
+  // Late — allow a catch-up, but never resurrect a pre-event reminder once the
+  // webinar has already started ("join in 3 hours" after it began is worse than
+  // silence), and never fire something older than the catch-up horizon.
+  if (lateMs <= 0 || lateMs > CATCHUP_MS) return { due: false, lateMs, target };
+  if (step.scheduleType === 'before_event') {
+    const eventMs = eventStartsAtIso ? Date.parse(eventStartsAtIso) : NaN;
+    if (!Number.isNaN(eventMs) && now >= eventMs) return { due: false, lateMs, target };
+  }
+  return { due: true, lateMs, target };
+}
+
 export async function GET(req: Request) {
   const auth = verifyCronAuth(req);
   if (!auth.ok) {
@@ -111,11 +142,30 @@ export async function GET(req: Request) {
   for (const sequence of sequences) {
     totals.sequencesProcessed++;
 
+    try {
     const list = await getList(sequence.listId);
     if (!list) continue;
 
     const event = sequence.eventId ? await getEvent(sequence.eventId) : null;
     const steps = await getSequenceSteps(sequence.id);
+
+    // Cheap pre-flight: does ANY step of this sequence want to fire right now?
+    // Building the audience costs a full signups scan, and doing that for every
+    // sequence on every 10-min tick grew to ~85s of pure idle work — which blew
+    // the function's maxDuration once the sequence count reached 30, silently
+    // killing EVERY drip (no sends at all between 2026-07-27 and 2026-07-29).
+    // Fixed-anchor steps have one shared target time, so they can be tested
+    // before we know who the audience is. after_subscribe is per-recipient, so
+    // its presence still forces the full computation.
+    const wantsFixedAnchor = steps.some((s) => {
+      if (!s.active || (!s.emailTemplateId && !s.smsTemplateId)) return false;
+      if (s.scheduleType !== 'before_event' && s.scheduleType !== 'after_event') return false;
+      return dueState(s, event?.startsAtIso ?? null, now).due;
+    });
+    const hasPerRecipient = steps.some(
+      (s) => s.active && (s.emailTemplateId || s.smsTemplateId) && s.scheduleType === 'after_subscribe',
+    );
+    if (!wantsFixedAnchor && !hasPerRecipient) continue;
     // Audience = list members (dynamic filter) ∪ manual subscriptions.
     // For each customer we remember their effective "subscribed_at" anchor:
     //   - list-only members → their signup.createdAt
@@ -160,11 +210,11 @@ export async function GET(req: Request) {
       const targets: Signup[] = [];
 
       if (step.scheduleType === 'before_event' || step.scheduleType === 'after_event') {
-        const target = eventTargetTime(step, event?.startsAtIso ?? null);
-        if (target === null) continue;
-        // Same target for everyone in the audience.
-        const delta = Math.abs(now - target);
-        if (delta > TOLERANCE_MS) continue;
+        // Same target for everyone in the audience. dueState() covers both the
+        // normal ±15-min window and a bounded late catch-up (see CATCHUP_MS) so
+        // one skipped cron tick no longer drops the reminder permanently.
+        const { due } = dueState(step, event?.startsAtIso ?? null, now);
+        if (!due) continue;
         for (const { signup } of audience.values()) targets.push(signup);
       } else {
         // after_subscribe — per-recipient target based on each member's
@@ -277,6 +327,22 @@ export async function GET(req: Request) {
       }
 
       log.push(stepLog);
+    }
+    } catch (err) {
+      // One malformed sequence must never take the whole drip down with it.
+      // Previously an throw here aborted the run, so every sequence after it
+      // silently stopped sending.
+      totals.failures++;
+      log.push({
+        sequenceId: sequence.id,
+        stepId: 'SEQUENCE_ERROR',
+        schedule: sequence.name,
+        recipients: 0,
+        sent: 0,
+        alreadySent: 0,
+        failed: 1,
+      });
+      console.error(`[cron/sequences] "${sequence.name}" threw — skipped`, err);
     }
   }
 
