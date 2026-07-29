@@ -3053,6 +3053,27 @@ export async function hasSequenceSend(
 }
 
 /**
+ * When did the drip engine last actually deliver anything?
+ *
+ * Watchdog for the dashboard. On 2026-07-27 the sequences cron began timing
+ * out and stopped sending entirely; nobody noticed for 46 hours, and 311 paid
+ * buyers went into a webinar day with no reminder. Silence is the failure mode
+ * here — nothing errors, mail just quietly stops — so the only reliable signal
+ * is "how long since the last send".
+ */
+export async function getLatestSequenceSendAt(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await getSupabase()
+    .from('sequence_sends')
+    .select('sent_at')
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null; // never let a watchdog break the dashboard
+  return (data as { sent_at?: string } | null)?.sent_at ?? null;
+}
+
+/**
  * Find all signup IDs that have already received a given step.
  * Cheaper than calling hasSequenceSend() in a loop — one query per step.
  */

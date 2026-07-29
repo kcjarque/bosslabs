@@ -9,6 +9,7 @@ import {
   getVisitBuckets,
   getEmailStats,
   getAdSpendByDay,
+  getLatestSequenceSendAt,
   type Signup,
 } from '@/lib/db';
 import { formatPHP, formatPHPWhole, OFFER, FACEBOOK_GROUP_URL } from '@/lib/config';
@@ -692,8 +693,30 @@ async function DashboardBody({
     facebook: !!FACEBOOK_GROUP_URL,
   };
 
+  // Drip watchdog. The engine's failure mode is SILENCE — nothing errors, mail
+  // just stops. On 2026-07-27 it stopped for 46h and nobody noticed until a
+  // customer asked why she wasn't getting emails, hours before her webinar.
+  const lastDripAt = await getLatestSequenceSendAt();
+  const dripSilentHours = lastDripAt ? (Date.now() - Date.parse(lastDripAt)) / 3600e3 : Infinity;
+  const dripStale = dripSilentHours > 3;
+
   return (
     <>
+      {dripStale && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3">
+          <div className="text-sm font-semibold text-rose-800">
+            ⚠️ Drip engine has sent nothing for{' '}
+            {Number.isFinite(dripSilentHours) ? `${dripSilentHours.toFixed(1)} hours` : 'a long time'}
+          </div>
+          <div className="mt-1 text-[13px] text-rose-700">
+            Reminders, cart recovery and after-webinar emails are probably not going out. Check
+            that <code className="rounded bg-rose-100 px-1">/api/cron/sequences</code> is still
+            running, or run <code className="rounded bg-rose-100 px-1">npx tsx scripts/drip-catchup.ts --send</code>{' '}
+            to deliver anything that is due.
+          </div>
+        </div>
+      )}
+
       {/* Revenue + headline metrics — these are the numbers that matter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard
