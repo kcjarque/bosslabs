@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { CrmListView } from '@/components/admin/CrmListView';
+import type { CrmView } from '@/components/admin/CrmViewToggle';
 import { VIP_TAG_SUGGESTIONS, type VipCard } from '@/lib/vip-crm-types';
 
 async function api(payload: Record<string, unknown>) {
@@ -16,7 +18,7 @@ async function api(payload: Record<string, unknown>) {
 
 type Candidate = { id: string; name: string; email: string; phone: string };
 
-export function VipBoard() {
+export function VipBoard({ view = 'board' }: { view?: CrmView }) {
   const [cards, setCards] = useState<VipCard[]>([]);
   const [customers, setCustomers] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,6 +274,37 @@ export function VipBoard() {
             ? 'No VIPs yet. Add someone above to start your watchlist for future projects.'
             : 'No VIPs match your search.'}
         </div>
+      ) : view === 'list' ? (
+        /* VIP has no stages — it's a watchlist, so the list is a plain sortable
+           table with no stage column. Editing still happens in the card view. */
+        <CrmListView
+          rows={visible}
+          getId={(c) => c.id}
+          initialSort={{ key: 'added', dir: 'desc' }}
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              sortValue: (c) => c.name.toLowerCase(),
+              render: (c) => <span className="font-medium text-slate-900">{c.name}</span>,
+            },
+            {
+              key: 'tag',
+              label: 'Tag',
+              sortValue: (c) => c.tag.toLowerCase(),
+              render: (c) => (c.tag ? <span className="pill pill-violet">{c.tag}</span> : '—'),
+            },
+            { key: 'phone', label: 'Phone', sortValue: (c) => c.phone, render: (c) => c.phone || '—' },
+            { key: 'email', label: 'Email', sortValue: (c) => c.email, render: (c) => c.email || '—' },
+            { key: 'note', label: 'Why we track them', render: (c) => <span className="text-slate-500">{c.note || '—'}</span> },
+            {
+              key: 'added',
+              label: 'Added',
+              sortValue: (c) => c.createdAt,
+              render: (c) => new Date(c.createdAt).toLocaleDateString(),
+            },
+          ]}
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((c) => (

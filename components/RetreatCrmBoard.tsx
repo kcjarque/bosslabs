@@ -10,6 +10,8 @@ import {
 } from '@/lib/retreat-crm-stages';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { CrmListView } from '@/components/admin/CrmListView';
+import type { CrmView } from '@/components/admin/CrmViewToggle';
 import { PipelineFunnel } from '@/components/admin/PipelineFunnel';
 
 async function api(payload: Record<string, unknown>) {
@@ -29,7 +31,7 @@ function smsHref(phone: string, template: string, name: string): string {
 
 type Candidate = { id: string; name: string; email: string; phone: string };
 
-export function RetreatCrmBoard() {
+export function RetreatCrmBoard({ view = 'board' }: { view?: CrmView }) {
   const [cards, setCards] = useState<RetreatCrmCard[]>([]);
   const [customers, setCustomers] = useState<Candidate[]>([]);
   const [template, setTemplate] = useState('');
@@ -303,6 +305,32 @@ export function RetreatCrmBoard() {
       </div>
 
       {/* Board */}
+      {view === 'list' ? (
+        <CrmListView
+          rows={visible}
+          getId={(c) => c.id}
+          initialSort={{ key: 'deal', dir: 'desc' }}
+          empty="No retreat leads yet."
+          columns={[
+            { key: 'name', label: 'Name', sortValue: (c) => c.name.toLowerCase(),
+              render: (c) => (<div><div className="font-medium text-slate-900">{c.name}</div>{c.email && <div className="text-[11px] text-slate-500">{c.email}</div>}</div>) },
+            { key: 'phone', label: 'Phone', sortValue: (c) => c.phone, render: (c) => toE164Ph(c.phone) || '\u2014' },
+            { key: 'batch', label: 'Batch', sortValue: (c) => c.batch, render: (c) => `Batch ${c.batch}` },
+            { key: 'people', label: 'Pax', className: 'text-right tnum', sortValue: (c) => c.people, render: (c) => c.people },
+            { key: 'deal', label: 'Deal', className: 'text-right tnum', sortValue: (c) => c.dealAmountCentavos,
+              render: (c) => (c.dealAmountCentavos ? `\u20b1${(c.dealAmountCentavos / 100).toLocaleString()}` : '\u2014') },
+            { key: 'collected', label: 'Collected', className: 'text-right tnum', sortValue: (c) => c.collectedCentavos,
+              render: (c) => (<span className={c.paidInFull ? 'text-emerald-600' : ''}>{`\u20b1${(c.collectedCentavos / 100).toLocaleString()}`}{c.paidInFull ? ' \u2713' : ''}</span>) },
+            { key: 'note', label: 'Note', render: (c) => <span className="text-slate-500">{c.note || '\u2014'}</span> },
+          ]}
+          stage={{
+            options: RETREAT_CRM_STAGES.map((s) => ({ value: s, label: RETREAT_CRM_STAGE_META[s].label })),
+            valueOf: (c) => c.stage,
+            onChange: (c, next) => moveCard(c.id, next as RetreatCrmStage),
+          }}
+        />
+      ) : (
+
       <div className="grid gap-3 md:grid-cols-5">
         {RETREAT_CRM_STAGES.map((stage) => {
           const meta = RETREAT_CRM_STAGE_META[stage];
@@ -423,6 +451,7 @@ export function RetreatCrmBoard() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

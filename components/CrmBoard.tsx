@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { CRM_STAGES, CRM_STAGE_META, type CrmStage, type CrmCard } from '@/lib/crm-stages';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { CrmListView } from '@/components/admin/CrmListView';
+import type { CrmView } from '@/components/admin/CrmViewToggle';
 
 async function api(payload: Record<string, unknown>) {
   const r = await fetch('/api/admin/crm', {
@@ -23,7 +25,7 @@ function smsHref(phone: string, template: string, name: string): string {
   return `sms:${toE164Ph(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
-export function CrmBoard() {
+export function CrmBoard({ view = 'board' }: { view?: CrmView }) {
   const [cards, setCards] = useState<CrmCard[]>([]);
   const [template, setTemplate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,65 @@ export function CrmBoard() {
         </div>
       </div>
 
-      {/* Board */}
+      {/* List view — same data, same move handler, just sortable and dense. */}
+      {view === 'list' ? (
+        <CrmListView
+          rows={visible}
+          getId={(c) => c.id}
+          initialSort={{ key: 'created', dir: 'desc' }}
+          empty="No 1-on-1 customers yet."
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              sortValue: (c) => c.name.toLowerCase(),
+              render: (c) => (
+                <div>
+                  <div className="font-medium text-slate-900">{c.name}</div>
+                  {c.email && <div className="text-[11px] text-slate-500">{c.email}</div>}
+                </div>
+              ),
+            },
+            { key: 'phone', label: 'Phone', sortValue: (c) => c.phone, render: (c) => toE164Ph(c.phone) || '—' },
+            {
+              key: 'amount',
+              label: 'Paid',
+              className: 'text-right tnum',
+              sortValue: (c) => c.amountCentavos ?? 0,
+              render: (c) =>
+                c.amountCentavos ? `₱${(c.amountCentavos / 100).toLocaleString()}` : '—',
+            },
+            {
+              key: 'created',
+              label: 'Added',
+              sortValue: (c) => c.createdAt,
+              render: (c) => new Date(c.createdAt).toLocaleDateString(),
+            },
+            {
+              key: 'remarks',
+              label: 'Remarks',
+              render: (c) => <span className="text-slate-500">{c.remarks || '—'}</span>,
+            },
+            {
+              key: 'open',
+              label: '',
+              render: (c) =>
+                c.signupId ? (
+                  <a className="text-cyan-600 hover:underline" href={`/admin/customers/${c.signupId}`}>
+                    Open ↗
+                  </a>
+                ) : null,
+            },
+          ]}
+          stage={{
+            options: CRM_STAGES.map((s) => ({ value: s, label: CRM_STAGE_META[s].label })),
+            valueOf: (c) => c.stage,
+            onChange: (c, next) => moveCard(c.id, next as CrmStage),
+          }}
+        />
+      ) : (
+
+      /* Board */
       <div className="grid gap-3 md:grid-cols-6">
         {CRM_STAGES.map((stage) => {
           const meta = CRM_STAGE_META[stage];
@@ -293,6 +353,7 @@ export function CrmBoard() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

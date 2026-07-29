@@ -8,13 +8,15 @@ import {
   type BootcampCard,
   type BootcampStage,
 } from '@/lib/bootcamp-stages';
+import { CrmListView } from '@/components/admin/CrmListView';
+import type { CrmView } from '@/components/admin/CrmViewToggle';
 
 function fmtPHP(centavos: number | null | undefined) {
   if (centavos == null) return '—';
   return `₱${(centavos / 100).toLocaleString('en-PH')}`;
 }
 
-export function BootcampCrmBoard({ initialCards }: { initialCards: BootcampCard[] }) {
+export function BootcampCrmBoard({ initialCards, view = 'board' }: { initialCards: BootcampCard[]; view?: CrmView }) {
   const router = useRouter();
   const [cards, setCards] = useState<BootcampCard[]>(initialCards);
   const [pending, start] = useTransition();
@@ -88,6 +90,31 @@ export function BootcampCrmBoard({ initialCards }: { initialCards: BootcampCard[
         </button>
       </header>
 
+      {view === 'list' ? (
+        <CrmListView
+          rows={cards}
+          getId={(c) => c.id}
+          initialSort={{ key: 'total', dir: 'desc' }}
+          empty="No bootcamp leads yet."
+          columns={[
+            { key: 'name', label: 'Name', sortValue: (c) => c.name.toLowerCase(),
+              render: (c) => (<div><div className="font-medium text-slate-900">{c.name}</div>{c.company && <div className="text-[11px] text-slate-500">{c.company}</div>}</div>) },
+            { key: 'contact', label: 'Contact', sortValue: (c) => c.email || c.phone || '',
+              render: (c) => c.email || c.phone || '\u2014' },
+            { key: 'tier', label: 'Tier', sortValue: (c) => c.tier ?? '', render: (c) => c.tier || '\u2014' },
+            { key: 'people', label: 'Pax', className: 'text-right tnum', sortValue: (c) => c.people, render: (c) => c.people },
+            { key: 'total', label: 'Total', className: 'text-right tnum', sortValue: (c) => c.totalCentavos ?? 0, render: (c) => fmtPHP(c.totalCentavos) },
+            { key: 'due', label: 'Due', className: 'text-right tnum', sortValue: (c) => c.amountDueCentavos ?? 0, render: (c) => fmtPHP(c.amountDueCentavos) },
+            { key: 'paid', label: 'Paid', render: (c) => (c.paid ? <span className="text-emerald-600">PAID</span> : c.status === 'proof_submitted' ? 'Proof in' : '\u2014') },
+          ]}
+          stage={{
+            options: BOOTCAMP_STAGES.map((s) => ({ value: s, label: BOOTCAMP_STAGE_META[s].label })),
+            valueOf: (c) => c.stage,
+            onChange: (c, next) => moveCard(c, next as BootcampStage),
+          }}
+        />
+      ) : (
+
       <div className="grid gap-3 md:grid-cols-5">
         {BOOTCAMP_STAGES.map((stage) => {
           const meta = BOOTCAMP_STAGE_META[stage];
@@ -134,6 +161,7 @@ export function BootcampCrmBoard({ initialCards }: { initialCards: BootcampCard[
           );
         })}
       </div>
+      )}
       {pending && <div className="mt-2 text-right text-[11px] text-slate-400">Saving…</div>}
     </div>
   );

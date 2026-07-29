@@ -6,6 +6,7 @@ import { RetreatCrmBoard } from '@/components/RetreatCrmBoard';
 import { VipBoard } from '@/components/VipBoard';
 import { BootcampCrmBoard } from '@/components/admin/BootcampCrmBoard';
 import { PageHeader } from '@/components/admin/PageHeader';
+import { CrmViewToggle, type CrmView } from '@/components/admin/CrmViewToggle';
 import { listBootcampCards } from '@/lib/bootcamp-crm';
 
 export const dynamic = 'force-dynamic';
@@ -44,9 +45,16 @@ const TABS = [
   },
 ] as const;
 
-export default async function CrmPage({ searchParams }: { searchParams: { board?: string } }) {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: { board?: string; view?: string };
+}) {
   requireAdmin();
   const active = TABS.find((t) => t.key === searchParams.board) ?? TABS[0];
+  // Board vs list lives in the URL (like ?board=) so it survives a refresh and
+  // "the DFY list" is a shareable link.
+  const view: CrmView = searchParams.view === 'list' ? 'list' : 'board';
   // Bootcamp board is server-rendered with its initial cards (matches the
   // /admin/bootcamp pattern). Only fetched when its tab is active so the
   // other tabs don't pay the Supabase round-trip.
@@ -57,13 +65,13 @@ export default async function CrmPage({ searchParams }: { searchParams: { board?
       <PageHeader title="CRM" subtitle={active.subtitle} />
 
       {/* Board switcher — only the active board mounts (one data fetch, not three) */}
-      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
+      <div className="mb-5 flex items-end gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((t) => {
           const isOn = t.key === active.key;
           return (
             <Link
               key={t.key}
-              href={`/admin/crm?board=${t.key}`}
+              href={`/admin/crm?board=${t.key}&view=${view}`}
               scroll={false}
               style={{ color: isOn ? '#0e7490' : '#64748b' }}
               className={`relative whitespace-nowrap px-3.5 py-2 text-sm font-medium transition ${
@@ -75,13 +83,16 @@ export default async function CrmPage({ searchParams }: { searchParams: { board?
             </Link>
           );
         })}
+        <div className="ml-auto pb-1 pl-3">
+          <CrmViewToggle board={active.key} view={view} />
+        </div>
       </div>
 
-      {active.key === 'order-bump' && <CrmBoard />}
-      {active.key === 'dfy' && <DfyBoard />}
-      {active.key === 'retreat' && <RetreatCrmBoard />}
-      {active.key === 'vip' && <VipBoard />}
-      {active.key === 'bootcamp' && <BootcampCrmBoard initialCards={bootcampCards} />}
+      {active.key === 'order-bump' && <CrmBoard view={view} />}
+      {active.key === 'dfy' && <DfyBoard view={view} />}
+      {active.key === 'retreat' && <RetreatCrmBoard view={view} />}
+      {active.key === 'vip' && <VipBoard view={view} />}
+      {active.key === 'bootcamp' && <BootcampCrmBoard initialCards={bootcampCards} view={view} />}
     </div>
   );
 }

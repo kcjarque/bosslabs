@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { DFY_STAGES, DFY_STAGE_META, type DfyStage, type DfyCard } from '@/lib/dfy-stages';
 import { toE164Ph } from '@/lib/phone';
 import { BoardSkeleton } from '@/components/admin/BoardSkeleton';
+import { CrmListView } from '@/components/admin/CrmListView';
+import type { CrmView } from '@/components/admin/CrmViewToggle';
 import { PipelineFunnel } from '@/components/admin/PipelineFunnel';
 
 const DEFAULT_TPL = "Hi {{name}}! Following up on your DFY project — do you have a few minutes today? 😊";
@@ -25,7 +27,7 @@ function smsHref(phone: string, template: string, name: string): string {
 
 type Candidate = { id: string; name: string; email: string; phone: string };
 
-export function DfyBoard() {
+export function DfyBoard({ view = 'board' }: { view?: CrmView }) {
   const [cards, setCards] = useState<DfyCard[]>([]);
   const [customers, setCustomers] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,6 +308,32 @@ export function DfyBoard() {
       </div>
 
       {/* Board */}
+      {view === 'list' ? (
+        <CrmListView
+          rows={visible}
+          getId={(c) => c.id}
+          initialSort={{ key: 'contract', dir: 'desc' }}
+          empty="No DFY deals yet."
+          columns={[
+            { key: 'name', label: 'Name', sortValue: (c) => c.name.toLowerCase(),
+              render: (c) => (<div><div className="font-medium text-slate-900">{c.name}</div>{c.email && <div className="text-[11px] text-slate-500">{c.email}</div>}</div>) },
+            { key: 'phone', label: 'Phone', sortValue: (c) => c.phone, render: (c) => toE164Ph(c.phone) || '\u2014' },
+            { key: 'contract', label: 'Contract', className: 'text-right tnum', sortValue: (c) => c.amountCentavos ?? 0,
+              render: (c) => (c.amountCentavos ? `\u20b1${(c.amountCentavos / 100).toLocaleString()}` : '\u2014') },
+            { key: 'retainer', label: 'Retainer /mo', className: 'text-right tnum', sortValue: (c) => c.retainerCentavos ?? 0,
+              render: (c) => (c.retainerCentavos ? `\u20b1${(c.retainerCentavos / 100).toLocaleString()}` : '\u2014') },
+            { key: 'collected', label: 'Collected', className: 'text-right tnum', sortValue: (c) => c.collectedCentavos,
+              render: (c) => (<span className={c.paidInFull ? 'text-emerald-600' : ''}>{`\u20b1${(c.collectedCentavos / 100).toLocaleString()}`}{c.paidInFull ? ' \u2713' : ''}</span>) },
+            { key: 'note', label: 'Note', render: (c) => <span className="text-slate-500">{c.note || '\u2014'}</span> },
+          ]}
+          stage={{
+            options: DFY_STAGES.map((s) => ({ value: s, label: DFY_STAGE_META[s].label })),
+            valueOf: (c) => c.stage,
+            onChange: (c, next) => moveCard(c.id, next as DfyStage),
+          }}
+        />
+      ) : (
+
       <div className="grid gap-3 md:grid-cols-6">
         {DFY_STAGES.map((stage) => {
           const meta = DFY_STAGE_META[stage];
@@ -414,6 +442,7 @@ export function DfyBoard() {
           );
         })}
       </div>
+      )}
 
       <div className="flex justify-end">
         <button onClick={refresh} className="btn btn-secondary text-xs">
