@@ -26,6 +26,7 @@ type DfyRow = {
   payments: DfyPayment[] | null;
   paid_at: string | null;
   dfy_ops_project_id: string | null;
+  external_ops_url: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -49,6 +50,7 @@ function rowToCard(r: DfyRow): DfyCard {
     paidAt: r.paid_at ?? null,
     payments,
     dfyOpsProjectId: r.dfy_ops_project_id ?? null,
+    externalOpsUrl: r.external_ops_url ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

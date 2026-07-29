@@ -42,6 +42,8 @@ export type DfyCard = {
    *  delivery kanban (auto on Onboarding transition, or via the manual
    *  Create button on existing cards). Null = not yet promoted. */
   dfyOpsProjectId: string | null;
+  /** External BossLabs Ops URL — set when imported to the new ops platform. */
+  externalOpsUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };

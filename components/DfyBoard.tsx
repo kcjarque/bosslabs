@@ -110,9 +110,19 @@ export function DfyBoard() {
     await api({ action: 'mark-paid-full', id: card.id });
     await refresh();
   }
-  async function createOpsProject(card: DfyCard) {
-    await api({ action: 'ensure-ops-project', id: card.id });
-    await refresh();
+  async function importToOps(card: DfyCard) {
+    const res = await fetch('/api/admin/dfy-crm/import-ops', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cardId: card.id }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      await refresh();
+      window.open(data.url, '_blank');
+    } else {
+      alert(data.error || 'Import failed');
+    }
   }
 
   if (loading) return <BoardSkeleton />;
@@ -355,24 +365,30 @@ export function DfyBoard() {
                       onLogPayment={(v) => logPayment(c, v)}
                       onMarkPaid={() => markPaidFull(c)}
                     />
-                    {/* DFY Ops link — only shown on Onboarding cards. Auto-created
-                        when the card first lands on Onboarding; manual button
-                        covers older cards that were already there. */}
                     {c.stage === 'closed_deal' && (
-                      c.dfyOpsProjectId ? (
+                      c.externalOpsUrl ? (
                         <a
-                          href={`/admin/dfy/${c.dfyOpsProjectId}`}
+                          href={c.externalOpsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="mt-2 flex items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                         >
-                          🛠 View in DFY Ops →
+                          🛠 View in BossLabs Ops →
+                        </a>
+                      ) : c.dfyOpsProjectId ? (
+                        <a
+                          href={`/admin/dfy/${c.dfyOpsProjectId}`}
+                          className="mt-2 flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                        >
+                          🛠 View in DFY Ops (legacy) →
                         </a>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => createOpsProject(c)}
+                          onClick={() => importToOps(c)}
                           className="mt-2 block w-full rounded-md border border-dashed border-emerald-300 bg-white px-2 py-1.5 text-center text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
                         >
-                          + Create DFY Ops card
+                          + Import to BossLabs Ops
                         </button>
                       )
                     )}
