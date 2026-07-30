@@ -2955,6 +2955,18 @@ export async function updateSequence(
   return data ? rowToSequence(data as SequenceRow) : null;
 }
 
+export async function deactivateSequencesByEvent(eventId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const { data, error } = await getSupabase()
+    .from('sequences')
+    .update({ active: false })
+    .eq('event_id', eventId)
+    .eq('active', true)
+    .select('id');
+  if (error) throw new Error(`deactivateSequencesByEvent: ${error.message}`);
+  return data?.length ?? 0;
+}
+
 export async function deleteSequence(id: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const { error } = await getSupabase().from('sequences').delete().eq('id', id);

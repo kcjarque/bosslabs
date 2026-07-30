@@ -28,8 +28,11 @@ export async function GET(req: Request) {
   const result = await autoAdvanceActiveEvent();
 
   if (result.status === 'advanced') {
+    const deactMsg = result.deactivatedSequences
+      ? `\n🧹 Deactivated ${result.deactivatedSequences} stale sequence(s).`
+      : '';
     await sendTelegram(
-      `🔄 <b>Auto-rollover</b>\nActive session advanced:\n<b>${esc(result.fromName)}</b> → <b>${esc(result.toName)}</b>\nSite + emails now point to the next session.`,
+      `🔄 <b>Auto-rollover</b>\nActive session advanced:\n<b>${esc(result.fromName)}</b> → <b>${esc(result.toName)}</b>\nSite + emails now point to the next session.${deactMsg}`,
     ).catch(() => {});
     lastNeedsAlertForIso = null;
   } else if (result.status === 'needs_next_event') {

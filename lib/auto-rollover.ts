@@ -12,7 +12,7 @@
  * Idempotent: once flipped, the new active event is in the future, so this
  * no-ops until that one has started + 30 min too.
  */
-import { getSettings, saveSettings, getEvents, type EventModel } from './db';
+import { getSettings, saveSettings, getEvents, deactivateSequencesByEvent, type EventModel } from './db';
 
 const ADVANCE_AFTER_MS = 30 * 60_000; // 30 min after start
 const TZ = 'Asia/Manila';
@@ -36,7 +36,7 @@ function displayTime(iso: string, tz: string): string {
 export type AutoRolloverResult =
   | { status: 'skipped'; reason: string }
   | { status: 'needs_next_event'; fromName: string; fromStartsAtIso: string }
-  | { status: 'advanced'; fromName: string; toName: string; toStartsAtIso: string };
+  | { status: 'advanced'; fromName: string; toName: string; toStartsAtIso: string; deactivatedSequences: number };
 
 export async function autoAdvanceActiveEvent(nowMs = Date.now()): Promise<AutoRolloverResult> {
   const settings = await getSettings();
@@ -82,10 +82,22 @@ export async function autoAdvanceActiveEvent(nowMs = Date.now()): Promise<AutoRo
     zoomJoinUrl: next.zoomJoinUrl || settings.zoomJoinUrl,
   });
 
+  // Deactivate sequences for events that started >7 days ago so stale
+  // sequences don't accumulate and choke the sequences cron.
+  const STALE_MS = 7 * 24 * 60 * 60_000;
+  let deactivatedCount = 0;
+  for (const e of events) {
+    const t = Date.parse(e.startsAtIso);
+    if (!Number.isNaN(t) && t < nowMs - STALE_MS) {
+      deactivatedCount += await deactivateSequencesByEvent(e.id);
+    }
+  }
+
   return {
     status: 'advanced',
     fromName: active.name,
     toName: next.name,
     toStartsAtIso: next.startsAtIso,
+    deactivatedSequences: deactivatedCount,
   };
 }
