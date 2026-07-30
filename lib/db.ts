@@ -2651,8 +2651,20 @@ function filterPredicate(filterType: ListFilterType): (s: Signup) => boolean {
  *  newsletter drip for paused lanes (in_sos / in_winback / sunset). */
 export async function getSignupIdsInSendStates(states: string[]): Promise<Set<string>> {
   if (!isSupabaseConfigured() || states.length === 0) return new Set();
-  const { data } = await getSupabase().from('signups').select('id').in('send_state', states);
-  return new Set(((data ?? []) as Array<{ id: string }>).map((r) => r.id));
+  const sb = getSupabase();
+  const PAGE = 1000;
+  const ids: string[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await sb
+      .from('signups')
+      .select('id')
+      .in('send_state', states)
+      .range(from, from + PAGE - 1);
+    const rows = ((data ?? []) as Array<{ id: string }>);
+    ids.push(...rows.map((r) => r.id));
+    if (rows.length < PAGE) break;
+  }
+  return new Set(ids);
 }
 
 export async function computeListMembers(
@@ -3081,12 +3093,21 @@ export async function getSequenceSendRecipients(
   sequenceStepId: string,
 ): Promise<Set<string>> {
   if (!isSupabaseConfigured()) return new Set();
-  const { data, error } = await getSupabase()
-    .from('sequence_sends')
-    .select('signup_id')
-    .eq('sequence_step_id', sequenceStepId);
-  if (error) throw new Error(`getSequenceSendRecipients: ${error.message}`);
-  return new Set((data as Array<{ signup_id: string }>).map((r) => r.signup_id));
+  const sb = getSupabase();
+  const PAGE = 1000;
+  const ids: string[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from('sequence_sends')
+      .select('signup_id')
+      .eq('sequence_step_id', sequenceStepId)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`getSequenceSendRecipients: ${error.message}`);
+    const rows = (data as Array<{ signup_id: string }>) ?? [];
+    ids.push(...rows.map((r) => r.signup_id));
+    if (rows.length < PAGE) break;
+  }
+  return new Set(ids);
 }
 
 export async function recordSequenceSend(input: {

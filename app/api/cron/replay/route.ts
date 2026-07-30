@@ -97,7 +97,7 @@ export async function GET(req: Request) {
         const vars = templateVars(signup, webinar);
         const emailRes = await sendEmail({ to: signup.email, templateId: 'replay', vars });
         if (emailRes.ok) sent.email += 1;
-        else sent.failed += 1;
+        else { sent.failed += 1; return; }
         if (signup.phone) {
           const smsRes = await sendSms({ to: signup.phone, templateId: 'replay', vars });
           if (smsRes.ok) sent.sms += 1;
