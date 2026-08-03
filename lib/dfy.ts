@@ -10,6 +10,11 @@ export const DFY_LANES = [
   'feedback',
   'launch',
   'maintenance',
+  // Not-live-work buckets — sit at the end so the delivery pipeline reads
+  // left-to-right without them interrupting. Kept as lanes (not deleted rows)
+  // so a paused or dropped project keeps its history and can be revived.
+  'keep_warm',
+  'lost_lead',
 ] as const;
 export type DfyLane = (typeof DFY_LANES)[number];
 
@@ -20,6 +25,8 @@ export const DFY_LANE_LABEL: Record<DfyLane, string> = {
   feedback: 'Feedback Loop',
   launch: 'Launch',
   maintenance: 'Maintenance',
+  keep_warm: 'Keep Warm',
+  lost_lead: 'Lost Lead',
 };
 
 export type DfyVision = {

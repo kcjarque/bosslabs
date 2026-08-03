@@ -15,9 +15,9 @@ export function DfyKanban({ initial }: { initial: DfyProject[] }) {
   const [creatingLane, setCreatingLane] = useState<DfyLane | null>(null);
 
   const byLane = useMemo(() => {
-    const map: Record<DfyLane, DfyProject[]> = {
-      lite: [], contract: [], production: [], feedback: [], launch: [], maintenance: [],
-    };
+    // Seed from DFY_LANES so new lanes light up automatically — no risk of a
+    // future lane addition losing its cards to a stale hardcoded object.
+    const map = Object.fromEntries(DFY_LANES.map((l) => [l, [] as DfyProject[]])) as Record<DfyLane, DfyProject[]>;
     for (const p of projects) map[p.lane].push(p);
     return map;
   }, [projects]);

@@ -4,6 +4,9 @@ export const DFY_STAGES = [
   'discovery_call',
   'contract_sent',
   'follow_up',
+  // Not-now-but-not-lost: decisive pause between Follow Up and Contract
+  // Signing so the pipeline funnel isn't polluted by "circle back later" cards.
+  'keep_warm',
   'contract_signing',
   'closed_deal',
   'lost',
@@ -14,6 +17,7 @@ export const DFY_STAGE_META: Record<DfyStage, { label: string; tint: string; bar
   discovery_call: { label: 'Discovery Call', tint: 'bg-slate-50', bar: 'bg-slate-400' },
   contract_sent: { label: 'Contract Sent', tint: 'bg-cyan-50', bar: 'bg-cyan-500' },
   follow_up: { label: 'Follow Up', tint: 'bg-amber-50', bar: 'bg-amber-500' },
+  keep_warm: { label: 'Keep Warm', tint: 'bg-orange-50', bar: 'bg-orange-400' },
   contract_signing: { label: 'Contract Signing', tint: 'bg-violet-50', bar: 'bg-violet-500' },
   closed_deal: { label: 'Closed Deal', tint: 'bg-emerald-50', bar: 'bg-emerald-500' },
   lost: { label: 'Lost Lead', tint: 'bg-rose-50', bar: 'bg-rose-400' },

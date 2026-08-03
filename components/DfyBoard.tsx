@@ -154,7 +154,9 @@ export function DfyBoard({ view = 'board' }: { view?: CrmView }) {
 
   // Lost + Closed Deal are excluded from the pipeline totals — Lost is dead,
   // Closed Deal is won (surfaced in its own "Closed Projects" summary below).
-  const funnelRows = DFY_STAGES.filter((s) => s !== 'lost').map((s) => {
+  // Keep Warm sits outside the conversion funnel — it's a decisive pause, not
+  // a step toward Closed Deal, so counting it would dilute the funnel metric.
+  const funnelRows = DFY_STAGES.filter((s) => s !== 'lost' && s !== 'keep_warm').map((s) => {
     const inStage = cards.filter((c) => c.stage === s);
     return {
       label: DFY_STAGE_META[s].label,
