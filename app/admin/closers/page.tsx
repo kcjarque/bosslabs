@@ -115,16 +115,29 @@ function LeadList({
   mode: 'active' | 'closed';
 }) {
   const dot = tone === 'cyan' ? 'bg-cyan-500' : 'bg-emerald-500';
+  // Paid rows are already accounted for in the payout history (and in the top
+  // "Paid out" stat), so leaving them here just buries the outstanding ones.
+  // Hide them from the closed list but count them separately so the summary
+  // "3 unpaid · 45 paid" makes the total still traceable at a glance.
+  const visible = mode === 'closed' ? leads.filter((l) => !l.commissionPaid) : leads;
+  const hidden = leads.length - visible.length;
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/40 p-2.5">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
         <span className={`h-2 w-2 rounded-full ${dot}`} />
         {title}
-        <span className="ml-auto text-[11px] text-slate-400">{leads.length}</span>
+        <span className="ml-auto text-[11px] text-slate-400">
+          {visible.length}
+          {hidden > 0 && <span className="ml-1 text-slate-300">· {hidden} paid</span>}
+        </span>
       </div>
       <ul className="mt-2 space-y-1.5">
-        {leads.length === 0 && <li className="text-[11px] text-slate-300">None</li>}
-        {leads.map((l, i) => (
+        {visible.length === 0 && (
+          <li className="text-[11px] text-slate-300">
+            {hidden > 0 ? `All ${hidden} paid out ✓` : 'None'}
+          </li>
+        )}
+        {visible.map((l, i) => (
           <li key={i} className="flex items-center justify-between gap-2 text-xs">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-slate-700">{l.name}</span>
