@@ -86,6 +86,7 @@ export function SignupsTable({
   onBulkSubscribe,
   onBulkDelete,
   onBulkSend,
+  serverPaginated = false,
 }: {
   initial: Signup[];
   recoveredIds?: string[];
@@ -106,6 +107,11 @@ export function SignupsTable({
     channel: 'email' | 'sms',
     templateId: string,
   ) => Promise<{ sent: number; failed: number; noPhone: number }>;
+  /** When set, filter/sort/pagination live in the URL (parent renders the
+   *  toolbar + pagination). Hides this component's local filter card and
+   *  skips the client-side narrowing — `initial` is already the current
+   *  page from getSignupsPage(). Keeps activityAt sort for consistency. */
+  serverPaginated?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
@@ -214,7 +220,14 @@ export function SignupsTable({
   );
 
   // All filters AND together: status + event + list + search.
+  // In serverPaginated mode the parent already narrowed via URL params + SQL,
+  // so we skip the client-side filter (would double-filter or hide rows).
   const filtered = useMemo(() => {
+    if (serverPaginated) {
+      return [...initial].sort(
+        (a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)),
+      );
+    }
     return initial
       .filter((s) => {
         if (!inFilter(s.status, filter)) return false;
@@ -225,7 +238,7 @@ export function SignupsTable({
         return hay.includes(q.toLowerCase());
       })
       .sort((a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)));
-  }, [initial, filter, eventFilter, listMemberSet, q]);
+  }, [initial, filter, eventFilter, listMemberSet, q, serverPaginated]);
 
   const recoveredSet = useMemo(() => new Set(recoveredIds), [recoveredIds]);
   const eventOptions = useMemo(
@@ -242,7 +255,9 @@ export function SignupsTable({
   return (
     <>
       {/* Filters — status + event + list + search all AND together. Narrow to
-          a segment, then select-all + bulk send. */}
+          a segment, then select-all + bulk send. Hidden in serverPaginated
+          mode: parent renders the URL-driven toolbar instead. */}
+      {!serverPaginated && (
       <div className="card flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex flex-wrap gap-1">
@@ -312,6 +327,7 @@ export function SignupsTable({
           </div>
         )}
       </div>
+      )}
 
       {/* Bulk action bar — sticky at top once selections exist. */}
       {bulkSupported && selectedIds.size > 0 && (

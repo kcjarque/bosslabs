@@ -1,16 +1,18 @@
 import { requireAdmin } from '@/lib/admin-auth';
 import {
-  getSignups,
+  getSignupsPage,
+  getSignupCounts,
   getEvents,
   getSequences,
   getEmailTemplates,
   getSmsTemplates,
-  getLists,
-  computeListMembers,
+  type SignupsPageStatus,
 } from '@/lib/db';
 import { SignupsTable } from '@/components/SignupsTable';
 import { getCloserRecoveredSignupIds, getClaimedByMap } from '@/lib/closers';
 import { recoveredIdSet } from '@/lib/recovered';
+import { CustomersToolbar } from '@/components/admin/CustomersToolbar';
+import { CustomersPagination } from '@/components/admin/CustomersPagination';
 import {
   bulkSubscribeAction,
   bulkDeleteAction,
@@ -19,29 +21,55 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function CustomersPage() {
+const STATUSES = new Set<SignupsPageStatus>([
+  'all',
+  'paid',
+  'abandoned',
+  'refunded',
+  'unsubscribed',
+]);
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams?: {
+    q?: string;
+    status?: string;
+    event?: string;
+    page?: string;
+    size?: string;
+  };
+}) {
   requireAdmin();
-  const [signups, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds, lists, claimedByMap] =
+  const q = (searchParams?.q ?? '').trim();
+  const status: SignupsPageStatus = STATUSES.has(
+    (searchParams?.status ?? 'all') as SignupsPageStatus,
+  )
+    ? ((searchParams?.status ?? 'all') as SignupsPageStatus)
+    : 'all';
+  const event = (searchParams?.event ?? '').trim();
+  const page = Math.max(1, Number.parseInt(searchParams?.page ?? '1', 10) || 1);
+  const size = Math.min(
+    200,
+    Math.max(10, Number.parseInt(searchParams?.size ?? '50', 10) || 50),
+  );
+
+  const [pageData, counts, events, sequences, emailTemplates, smsTemplates, closerRecoveredIds, claimedByMap] =
     await Promise.all([
-      getSignups(),
+      getSignupsPage({ q, status, event: event || undefined, page, size }),
+      getSignupCounts(),
       getEvents(),
       getSequences(),
       getEmailTemplates(),
       getSmsTemplates(),
       getCloserRecoveredSignupIds(),
-      getLists(),
       getClaimedByMap(),
     ]);
   const eventNameById = Object.fromEntries(events.map((e) => [e.id, e.name]));
   const claimedByName = Object.fromEntries(claimedByMap);
   // Recovered = abandoned-then-paid OR closer-claimed-then-paid (orange badge).
-  const recoveredIds = Array.from(recoveredIdSet(signups, closerRecoveredIds));
-  // Precompute each list's member ids so the table can filter by list instantly
-  // (computeListMembers reuses the cached getSignups — cheap).
-  const listMembers = await Promise.all(lists.map((l) => computeListMembers(l)));
-  const listMemberIds: Record<string, string[]> = Object.fromEntries(
-    lists.map((l, i) => [l.id, listMembers[i].map((s) => s.id)]),
-  );
+  const recoveredIds = Array.from(recoveredIdSet(pageData.rows, closerRecoveredIds));
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -50,8 +78,7 @@ export default async function CustomersPage() {
             Customers
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {signups.length} {signups.length === 1 ? 'customer' : 'customers'} · click any
-            row to view profile + comms history.
+            Click any row to view profile + comms history.
           </p>
         </div>
         <a
@@ -63,19 +90,33 @@ export default async function CustomersPage() {
         </a>
       </header>
 
+      <CustomersToolbar
+        counts={counts}
+        events={events.map((e) => ({ id: e.id, name: e.name }))}
+        initialQ={q}
+        status={status}
+        event={event}
+      />
+
       <SignupsTable
-        initial={signups}
+        initial={pageData.rows}
         recoveredIds={recoveredIds}
         claimedByName={claimedByName}
         eventNameById={eventNameById}
-        lists={lists.map((l) => ({ id: l.id, name: l.name }))}
-        listMemberIds={listMemberIds}
         sequences={sequences}
         emailTemplates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))}
         smsTemplates={smsTemplates.map((t) => ({ id: t.id, name: t.name }))}
         onBulkSubscribe={bulkSubscribeAction}
         onBulkDelete={bulkDeleteAction}
         onBulkSend={bulkSendAction}
+        serverPaginated
+      />
+
+      <CustomersPagination
+        page={page}
+        size={size}
+        total={pageData.total}
+        rowsOnPage={pageData.rows.length}
       />
     </div>
   );

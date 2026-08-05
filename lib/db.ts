@@ -847,6 +847,114 @@ export const getSignups = cache(async (): Promise<Signup[]> => {
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 });
 
+/** Server-side paginated + filtered signups fetch. Only pulls the requested
+ *  page of rows + an exact filtered count, so /admin/customers stays fast as
+ *  the table grows (the old getSignups() ships every row → ~4 MB at 2k rows).
+ *  Status buckets mirror SignupsTable's client-side filter so behavior lines up. */
+export type SignupsPageStatus = 'all' | 'paid' | 'abandoned' | 'refunded' | 'unsubscribed';
+export type SignupsPageOpts = {
+  q?: string;
+  status?: SignupsPageStatus;
+  event?: string;
+  page?: number;
+  size?: number;
+};
+export type SignupsPageResult = {
+  rows: Signup[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export async function getSignupsPage(opts: SignupsPageOpts = {}): Promise<SignupsPageResult> {
+  const page = Math.max(1, opts.page ?? 1);
+  const size = Math.min(200, Math.max(10, opts.size ?? 50));
+  const status: SignupsPageStatus = opts.status ?? 'all';
+  const q = (opts.q ?? '').trim();
+
+  if (!isSupabaseConfigured()) {
+    const all = await getSignups();
+    const filtered = all.filter((s) => {
+      if (status === 'paid' && s.status !== 'paid' && s.status !== 'attended') return false;
+      if (status === 'abandoned' && s.status !== 'registered') return false;
+      if (status === 'refunded' && s.status !== 'refunded') return false;
+      if (status === 'unsubscribed' && s.status !== 'unsubscribed') return false;
+      if (opts.event && (s.eventId ?? '') !== opts.event) return false;
+      if (q) {
+        const hay = `${s.firstName} ${s.lastName ?? ''} ${s.email} ${s.phone}`.toLowerCase();
+        if (!hay.includes(q.toLowerCase())) return false;
+      }
+      return true;
+    });
+    const from = (page - 1) * size;
+    return { rows: filtered.slice(from, from + size), total: filtered.length, page, size };
+  }
+
+  const sb = getSupabase();
+  let query = sb.from('signups').select('*', { count: 'exact' });
+  if (status === 'paid') query = query.in('status', ['paid', 'attended']);
+  else if (status === 'abandoned') query = query.eq('status', 'registered');
+  else if (status === 'refunded') query = query.eq('status', 'refunded');
+  else if (status === 'unsubscribed') query = query.eq('status', 'unsubscribed');
+  if (opts.event) query = query.eq('event_id', opts.event);
+  if (q) {
+    // PostgREST or() splits on commas + treats parens as grouping — sanitize.
+    const safe = q.replace(/[,()]/g, ' ').trim();
+    if (safe) {
+      query = query.or(
+        `first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`,
+      );
+    }
+  }
+  const from = (page - 1) * size;
+  const to = from + size - 1;
+  const { data, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
+  if (error) throw new Error(`getSignupsPage: ${error.message}`);
+  const rows = ((data as SignupRow[]) ?? []).map(rowToSignup);
+  return { rows, total: count ?? 0, page, size };
+}
+
+/** Cheap header stats (four COUNT(*) queries in parallel). Ignores the page's
+ *  current filter on purpose — the header is the dashboard-y "total picture",
+ *  not a filtered subset. "Today" is Manila-midnight so it matches ops-day. */
+export async function getSignupCounts(): Promise<{
+  total: number;
+  paid: number;
+  unpaid: number;
+  today: number;
+}> {
+  if (!isSupabaseConfigured()) {
+    const all = await getSignups();
+    const nowManila = new Date(Date.now() + 8 * 3600_000);
+    const dayIso = nowManila.toISOString().slice(0, 10);
+    return {
+      total: all.length,
+      paid: all.filter((s) => s.status === 'paid' || s.status === 'attended').length,
+      unpaid: all.filter((s) => s.status === 'registered').length,
+      today: all.filter((s) => s.createdAt.slice(0, 10) === dayIso).length,
+    };
+  }
+  const sb = getSupabase();
+  // Manila (UTC+8) midnight in UTC ISO — matches how ops day rolls over.
+  const nowManila = new Date(Date.now() + 8 * 3600_000);
+  const dayIso = nowManila.toISOString().slice(0, 10);
+  const startIso = new Date(Date.parse(`${dayIso}T00:00:00Z`) - 8 * 3600_000).toISOString();
+  const [t, p, u, d] = await Promise.all([
+    sb.from('signups').select('id', { count: 'exact', head: true }),
+    sb.from('signups').select('id', { count: 'exact', head: true }).in('status', ['paid', 'attended']),
+    sb.from('signups').select('id', { count: 'exact', head: true }).eq('status', 'registered'),
+    sb.from('signups').select('id', { count: 'exact', head: true }).gte('created_at', startIso),
+  ]);
+  return {
+    total: t.count ?? 0,
+    paid: p.count ?? 0,
+    unpaid: u.count ?? 0,
+    today: d.count ?? 0,
+  };
+}
+
 export async function addSignup(
   data: Omit<Signup, 'id' | 'createdAt' | 'status'> & { status?: SignupStatus },
 ): Promise<Signup> {
