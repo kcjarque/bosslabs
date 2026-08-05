@@ -9,12 +9,15 @@ type Detail = Affected & { newPassword: boolean; emailSent: boolean; emailError?
  *  provision + email them in one click. Auth is the admin cookie (same-origin);
  *  the server route uses HUB_PROVISION_TOKEN to talk to the Hub. */
 /** A buyer looks like a genuine Vault purchase (→ owed a Hub account) when the
- *  order carried a ₱999 Vault bump: exact ₱1,998 (ticket+Vault), or the reason
+ *  order carried a Vault bump: exact ₱2,998 today (₱999 ticket + ₱1,999 Vault),
+ *  or ₱1,998 for pre-2026-08 buyers who bought when Vault was ₱999 — or the reason
  *  is a Vault-specific path. 1:1-only bumps (₱3,997) + ambiguous ₱999 + ₱0 test
  *  rows are left UNchecked so an accidental "run" never emails them Hub creds. */
 function looksLikeVault(a: Affected): boolean {
   if (a.reason === 'otox-vault' || a.reason === 'oto-vault') return true;
-  return a.amountCentavos === 199800; // ₱999 ticket + ₱999 Vault bump
+  // Today's total: ₱999 ticket + ₱1,999 Vault = ₱2,998 (299800). Also accept
+  // 199800 for pre-raise buyers so the checkbox stays useful for backfilling.
+  return a.amountCentavos === 299800 || a.amountCentavos === 199800;
 }
 
 export function HubBackfillRunner() {
@@ -117,7 +120,7 @@ export function HubBackfillRunner() {
         ) : affected && affected.length > 0 ? (
           <>
             <p className="mt-2 text-[11.5px] text-slate-500">
-              Pre-checked = clear Vault buyers (₱999+₱999). Unchecked = 1:1-only
+              Pre-checked = clear Vault buyers (₱999+₱1,999 today, or ₱999+₱999 pre-raise). Unchecked = 1:1-only
               or ambiguous — tick only if you&rsquo;re sure they bought the Vault.
             </p>
             <ul className="mt-3 divide-y divide-slate-100">

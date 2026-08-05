@@ -294,16 +294,16 @@ export const OFFER = {
   },
   oto: {
     // SKU unchanged so payment/webhook/tracking keep matching — only the
-    // displayed offer + price changed (now ₱999, down from ₱1,997).
+    // displayed offer + price changed (now ₱1,999, previously ₱999).
     sku: 'BL_OTO_AUDIT',
     name: 'The AI Secrets Builder Vault',
-    priceCentavos: 99900,
+    priceCentavos: 199900,
     currency: 'PHP',
-    label: '₱999',
+    label: '₱1,999',
     crossed: '₱11,997',
     eyebrow: 'Bonus',
-    discountLabel: '91% off',
-    savings: 'Save ₱10,998',
+    discountLabel: '83% off',
+    savings: 'Save ₱9,998',
     footerNote: '⚡ Get instant access upon payment',
     promise:
       'Everything we use to ship apps fast, plus a full year inside the BossLabs Hub: Claude Code 101, every past live build recorded end-to-end, our growing tutorial library, and the prompts + skills + starter-repo vault — new lessons added every month, 24/7 access, no live sessions required. Instant access — this page only.',

@@ -11,10 +11,16 @@ import { provisionHubAccount } from '@/lib/hub-provision';
 import { sendEmail } from '@/lib/email';
 import { signVaultOrder } from '@/lib/vault-token';
 
-const VAULT_BUMP_TOTAL_CENTAVOS = 199800; // ₱999 ticket + ₱999 Vault bump
-// Vault OTO price points (in PESOS, as stored in metadata.otoAmount): ₱999
+// Ticket ₱999 + Vault bump ₱1,999 (raised 2026-08). 199800 (₱999+₱999) is
+// kept in the OTO-amounts set below so buyers from the pre-raise era still
+// resolve as Vault buyers and can be backfilled.
+const VAULT_BUMP_TOTAL_CENTAVOS = 299800;
+// Vault OTO price points (in PESOS, as stored in metadata.otoAmount): ₱1,999
 // (current) or ₱1,997 (original). ₱3,997 is the 1:1 Build Session — NOT Vault.
-const VAULT_OTO_AMOUNTS_PHP = new Set([999, 1997]);
+// 1999 is today's price; 999 + 1997 are legacy amounts kept so pre-raise
+// buyers still resolve as Vault via the OTO-amount path. Never remove old
+// amounts — that would strand historical buyers out of Hub backfill.
+const VAULT_OTO_AMOUNTS_PHP = new Set([999, 1997, 1999]);
 
 export type StuckBuyer = {
   signupId: string;
@@ -65,7 +71,7 @@ export function credsEmailHtml(args: { firstName: string; hubEmail: string; hubP
  *
  *  - Dedupe: if ANY signup row for an email already has a hubAccount, the whole
  *    email is considered covered (handles duplicate signup rows like RC Moran's).
- *  - High-confidence Vault only: exact ₱1,998 (ticket+Vault bump) or an
+ *  - High-confidence Vault only: exact ₱2,998 today (ticket+Vault bump), plus
  *    OTO/standalone-Vault external id. Excludes 1:1-only bumps (₱3,997),
  *    ambiguous ₱999, and ₱0 test rows so the cron never mis-emails.
  */
