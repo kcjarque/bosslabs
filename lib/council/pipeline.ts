@@ -339,7 +339,10 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
     fetchTodaySessionAction(brand, todayManila),
     fetchNextLine(brand),
   ]);
-  const chairNote = sessionAction != null ? sessionAction.slice(0, 80) : 'Council not convened — no triggers.';
+  // Pass the FULL action — buildBrief's tidyAction trims it at a sentence
+  // boundary (never mid-word) and strips the ad_id noise. The old slice(0,80)
+  // chopped the one useful recommendation mid-sentence.
+  const chairNote = sessionAction != null ? sessionAction : 'Council not convened — no triggers.';
 
   const brief = buildBrief({
     brand,

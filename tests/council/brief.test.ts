@@ -39,145 +39,108 @@ const BASE_ARGS = {
 /* buildBrief                                                            */
 /* --------------------------------------------------------------------- */
 
-test('brief renders <=12 lines and marks yesterday preliminary', () => {
+
+test('header + yesterday block: money in plain terms, marked rough', () => {
   const out = buildBrief(BASE_ARGS);
-  const lines = out.split('\n');
-  assert.ok(lines.length <= 12, `expected <=12 lines, got ${lines.length}`);
-  assert.match(out, /preliminary/);
+  assert.match(out, /ADS REVIEW — 2026-08-05/);
+  assert.match(out, /Spent ₱5,500/);
+  assert.match(out, /10 buyers/);
+  assert.match(out, /₱550 each/);
+  assert.match(out, /pricier than your usual/); // ₱550 vs ₱500 avg = 10% pricier
+  assert.match(out, /treat as rough/i);
 });
 
-test('header line names the brand and date exactly per doctrine §5.3', () => {
-  const out = buildBrief(BASE_ARGS);
-  assert.equal(out.split('\n')[0], '=== BOSS DAILY BRIEF — 2026-08-05 ===');
+test('yesterday cheaper-than-usual reads as cheaper, never a bare arrow', () => {
+  const out = buildBrief({ ...BASE_ARGS, yesterday: { spendCentavos: 400000, purchases: 10 }, avg7Cpp: 50000 });
+  assert.match(out, /20% cheaper than your usual/);
+  assert.doesNotMatch(out, /▲|▼/);
 });
 
-test('MOVERS lists only changed-tier ads, each with verdict and headline', () => {
-  const stable = verdict({ adId: 'a1', adName: 'Ads Stable', changed: false });
-  const flipped = verdict({
-    adId: 'a2', adName: 'Ads Flip', verdict: 'WATCH', changed: true,
-    headline: 'CPP +14% this week.',
-  });
-  const out = buildBrief({ ...BASE_ARGS, verdicts: [stable, flipped] });
-  assert.match(out, /↳ Ads Flip → WATCH: CPP \+14% this week\./);
-  assert.doesNotMatch(out, /Ads Stable/);
-});
-
-test('MOVERS falls back to "No tier changes — roster stable." when nothing changed', () => {
-  const out = buildBrief({ ...BASE_ARGS, verdicts: [verdict({ changed: false })] });
-  assert.match(out, /No tier changes — roster stable\./);
-});
-
-test('ROSTER counts every tier across the full verdicts array', () => {
+test('roster line uses plain tier words', () => {
   const out = buildBrief({
     ...BASE_ARGS,
     verdicts: [
-      verdict({ adId: 'a1', verdict: 'WINNING' }),
-      verdict({ adId: 'a2', verdict: 'WATCH' }),
-      verdict({ adId: 'a3', verdict: 'WATCH' }),
-      verdict({ adId: 'a4', verdict: 'LOSER' }),
-      verdict({ adId: 'a5', verdict: 'LEARNING' }),
+      verdict({ verdict: 'WINNING' }), verdict({ verdict: 'WATCH' }),
+      verdict({ verdict: 'LOSER' }), verdict({ verdict: 'LEARNING' }),
     ],
   });
-  assert.match(out, /ROSTER: 🟢 1 Winning · 🟡 2 Watch · 🔴 1 Loser · 🔵 1 Learning/);
+  assert.match(out, /1 winning · 🟡 1 to watch · 🔴 1 to cut · 🌱 1 still learning/);
 });
 
-test('COHORT reports "no attendance data" when showUpPct is null', () => {
-  const out = buildBrief({ ...BASE_ARGS, cohort: { buyers: 5, showUpPct: null, applications: 1 } });
-  assert.match(out, /no attendance data/);
-});
-
-test('COHORT still renders buyers/applications when showUpPct is present', () => {
-  const out = buildBrief(BASE_ARGS);
-  assert.match(out, /COHORT: 12 buyers this week · 92% show-up · 3 applications/);
-});
-
-test('escapes HTML-significant characters in dynamic values (Telegram HTML parse mode)', () => {
-  const flipped = verdict({
-    adId: 'a2', adName: 'Ads A&B <test>', verdict: 'WATCH', changed: true,
-    headline: 'CPP > target & rising',
+test('movers are plain language built from metrics, not the doctrine headline', () => {
+  const watch = verdict({
+    verdict: 'WATCH', changed: true, adName: 'Ads 21_Video_Test',
+    decidingMetrics: { cpp_delta_pct: 55 },
+    headline: 'CPP +55% this week. LOSER if the trend holds; one signal alone isn\'t actionable.',
   });
+  const out = buildBrief({ ...BASE_ARGS, verdicts: [watch] });
+  assert.match(out, /Ads 21 Video Test — cost per buyer up 55% this week\. Watch, no move yet\./);
+  // none of the internal jargon leaks
+  assert.doesNotMatch(out, /LOSER if the trend holds/);
+  assert.doesNotMatch(out, /Andromeda|prospecting engine|CPP/i);
+  assert.doesNotMatch(out, /→ WATCH:/);
+});
+
+test('winning mover with null CPP never prints "— CPP"', () => {
+  const win = verdict({ verdict: 'WINNING', changed: true, adName: 'Ads 9_App', decidingMetrics: {} });
+  const out = buildBrief({ ...BASE_ARGS, verdicts: [win] });
+  assert.match(out, /Ads 9 App — now a winner\. Leave it running\./);
+  assert.doesNotMatch(out, /— CPP/);
+});
+
+test('no movers → friendly "nothing changed" line', () => {
+  const out = buildBrief({ ...BASE_ARGS, verdicts: [verdict({ changed: false })] });
+  assert.match(out, /every ad held its spot/);
+});
+
+test('over 6 movers shows 6 + "and N more"', () => {
+  const movers = Array.from({ length: 8 }, (_, i) =>
+    verdict({ adId: `a${i}`, verdict: 'WATCH', changed: true, decidingMetrics: { cpp_delta_pct: 12 } }));
+  const out = buildBrief({ ...BASE_ARGS, verdicts: movers });
+  assert.match(out, /…and 2 more — full list in the app\./);
+});
+
+test('action: strips (ad_id …) noise + doctrine tail, keeps the instruction', () => {
   const out = buildBrief({
-    ...BASE_ARGS, verdicts: [flipped],
-    chairNote: 'Spend & scale <carefully>',
-    nextLine: 'Hold < 5 days & watch',
+    ...BASE_ARGS,
+    chairNote: 'Kill Ads 36_FINALCALL 4 (ad_id 120251450836640236) only — its multi-day frequency climb plus CPP +47.6% is the full §7.6 fatigue definition.',
   });
-  assert.doesNotMatch(out, /Ads A&B <test>/);
-  assert.match(out, /Ads A&amp;B &lt;test&gt;/);
-  assert.match(out, /CPP &gt; target &amp; rising/);
-  assert.match(out, /Spend &amp; scale &lt;carefully&gt;/);
-  assert.match(out, /Hold &lt; 5 days &amp; watch/);
+  assert.match(out, /Do this today/);
+  assert.match(out, /Kill Ads 36 FINALCALL 4 only\./);
+  assert.doesNotMatch(out, /ad_id/);
+  assert.doesNotMatch(out, /§7\.6|fatigue definition|CPP \+/);
 });
 
-test('yesterday=null and avg7Cpp=null render "—" instead of crashing', () => {
+test('action: no session convened → nothing-to-do message', () => {
+  const out = buildBrief({ ...BASE_ARGS, chairNote: 'Council not convened — no triggers.' });
+  assert.match(out, /Nothing needs touching/);
+});
+
+test('week line shows buyers only, no show-up/applications jargon', () => {
+  const out = buildBrief(BASE_ARGS);
+  assert.match(out, /This week:.*12 new buyers/);
+  assert.doesNotMatch(out, /show-up|applications/);
+});
+
+test('escapes HTML-significant characters in ad names', () => {
+  const out = buildBrief({
+    ...BASE_ARGS,
+    verdicts: [verdict({ changed: true, verdict: 'WATCH', adName: 'A<b>&Test', decidingMetrics: { cpp_delta_pct: 12 } })],
+  });
+  assert.match(out, /A&lt;b&gt;&amp;Test/);
+  assert.doesNotMatch(out, /<b>&Test/);
+});
+
+test('yesterday=null renders a waiting message, never crashes', () => {
   const out = buildBrief({ ...BASE_ARGS, yesterday: null, avg7Cpp: null, dayQuality: 'NO DATA' });
-  assert.match(out, /—/);
-  assert.match(out, /preliminary/);
-  assert.match(out, /NO DATA/);
+  assert.match(out, /Still waiting on the numbers/);
 });
 
-test('MOVERS at exactly 5 (the un-truncated budget) shows every mover, no "+more" line', () => {
-  const movers = ['a1', 'a2', 'a3', 'a4', 'a5'].map((id) =>
-    verdict({ adId: id, adName: `Ads ${id}`, verdict: 'WATCH', changed: true }));
-  const out = buildBrief({ ...BASE_ARGS, verdicts: movers });
-  const lines = out.split('\n');
-  assert.equal(lines.length, 12);
-  assert.doesNotMatch(out, /more flipped/);
-  for (const id of ['a1', 'a2', 'a3', 'a4', 'a5']) assert.match(out, new RegExp(`Ads ${id}`));
+test('embedded newlines in chairNote never break the layout', () => {
+  const out = buildBrief({ ...BASE_ARGS, chairNote: 'Turn off ad X\nline2\nline3' });
+  assert.match(out, /Turn off ad X/);
 });
 
-test('MOVERS at 6 (one over budget) truncates to 4 shown + "+2 more flipped"', () => {
-  const movers = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((id) =>
-    verdict({ adId: id, adName: `Ads ${id}`, verdict: 'WATCH', changed: true }));
-  const out = buildBrief({ ...BASE_ARGS, verdicts: movers });
-  const lines = out.split('\n');
-  assert.equal(lines.length, 12);
-  assert.match(out, /↳ \+2 more flipped — see \/admin\/ads/);
-});
-
-test('MOVERS at 8 truncates to exactly 12 lines, last mover line is "+4 more flipped", most severe shown', () => {
-  const movers = [
-    verdict({ adId: 'l1', adName: 'Loser A', verdict: 'LOSER', changed: true }),
-    verdict({ adId: 'l2', adName: 'Loser B', verdict: 'LOSER', changed: true }),
-    verdict({ adId: 'w1', adName: 'Watch A', verdict: 'WATCH', changed: true }),
-    verdict({ adId: 'w2', adName: 'Watch B', verdict: 'WATCH', changed: true }),
-    verdict({ adId: 'g1', adName: 'Winning A', verdict: 'WINNING', changed: true }),
-    verdict({ adId: 'g2', adName: 'Winning B', verdict: 'WINNING', changed: true }),
-    verdict({ adId: 'r1', adName: 'Learning A', verdict: 'LEARNING', changed: true }),
-    verdict({ adId: 'r2', adName: 'Learning B', verdict: 'LEARNING', changed: true }),
-  ];
-  // Shuffle input order on purpose — output order must come from severity,
-  // not from array position.
-  const shuffled = [movers[6], movers[2], movers[0], movers[5], movers[7], movers[1], movers[4], movers[3]];
-  const out = buildBrief({ ...BASE_ARGS, verdicts: shuffled });
-  const lines = out.split('\n');
-  assert.equal(lines.length, 12);
-  assert.equal(lines[8], '  ↳ +4 more flipped — see /admin/ads');
-  assert.equal(lines[9], 'COHORT: 12 buyers this week · 92% show-up · 3 applications');
-  // Most severe (both LOSERs, both WATCHes) are shown...
-  assert.match(out, /Loser A/); assert.match(out, /Loser B/);
-  assert.match(out, /Watch A/); assert.match(out, /Watch B/);
-  // ...least severe (WINNING, LEARNING) are folded into the "+4 more" line, not named.
-  assert.doesNotMatch(out, /Winning A/); assert.doesNotMatch(out, /Winning B/);
-  assert.doesNotMatch(out, /Learning A/); assert.doesNotMatch(out, /Learning B/);
-});
-
-test('chairNote/nextLine collapse embedded newlines to a single space before escaping', () => {
-  const out = buildBrief({ ...BASE_ARGS, chairNote: 'line1\nline2', nextLine: 'next1\r\nnext2' });
-  const lines = out.split('\n');
-  assert.equal(lines.find((l) => l.startsWith("CHAIR'S NOTE:")), "CHAIR'S NOTE: line1 line2");
-  assert.equal(lines.find((l) => l.startsWith('NEXT:')), 'NEXT: next1 next2');
-});
-
-test('a run of consecutive newlines in chairNote collapses to exactly one space, not one per newline', () => {
-  const out = buildBrief({ ...BASE_ARGS, chairNote: 'para1\n\n\npara2' });
-  const lines = out.split('\n');
-  assert.equal(lines.find((l) => l.startsWith("CHAIR'S NOTE:")), "CHAIR'S NOTE: para1 para2");
-});
-
-test('embedded newlines in chairNote/nextLine never inflate the total line count', () => {
-  const out = buildBrief({ ...BASE_ARGS, chairNote: 'l1\nl2\nl3\nl4', nextLine: 'n1\nn2\nn3' });
-  assert.equal(out.split('\n').length, 7); // BASE_ARGS has 0 movers -> 7 fixed lines, unchanged
-});
 
 /* --------------------------------------------------------------------- */
 /* dayQualityFor                                                         */
@@ -342,3 +305,4 @@ test('detectTriggers: multiple simultaneous triggers all appear, in doctrine ord
     'monday session',
   ]);
 });
+
