@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/admin-auth';
+import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 import { syncAdMetricsDaily } from '@/lib/council/meta-sync';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,8 @@ export const maxDuration = 300;
 /** POST { since?: 'YYYY-MM-DD' } — full-history backfill in 30-day chunks.
  *  Default since: 2026-05-01 (before first BOSSLABS spend). Re-runnable. */
 export async function POST(req: Request) {
-  requireAdmin();
+  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) as { since?: string };
   const since = body.since ?? '2026-05-01';
   const today = new Date().toISOString().slice(0, 10);

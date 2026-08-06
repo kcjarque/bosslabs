@@ -6,6 +6,8 @@ import type { Brand } from './types';
 const GRAPH = process.env.META_GRAPH_VERSION || 'v23.0';
 const ACCOUNT = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
 
+const num = (x: unknown): number => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
+
 export function brandFromCampaignName(name: string): Brand | null {
   const up = name.toUpperCase();
   if (up.startsWith('BOSSLABS')) return 'BOSS';
@@ -27,13 +29,13 @@ function purchasesOf(r: InsightRow): number {
   const a = r.actions ?? [];
   const pick = (t: string) => a.find((x) => x.action_type === t)?.value;
   const v = pick('omni_purchase') ?? pick('purchase') ?? pick('offsite_conversion.fb_pixel_purchase');
-  return v ? Math.round(Number(v)) : 0;
+  return v ? Math.round(num(v)) : 0;
 }
 function revenueOf(r: InsightRow): number {
   const a = r.action_values ?? [];
   const pick = (t: string) => a.find((x) => x.action_type === t)?.value;
   const v = pick('omni_purchase') ?? pick('purchase') ?? pick('offsite_conversion.fb_pixel_purchase');
-  return v ? Math.round(Number(v) * 100) : 0;
+  return v ? Math.round(num(v) * 100) : 0;
 }
 
 /** Pull ad-level daily insights for [since, until] (YYYY-MM-DD, inclusive) and upsert. */
@@ -52,7 +54,7 @@ export async function syncAdMetricsDaily(opts: { since: string; until: string })
     `&access_token=${token}`;
   const rows: Record<string, unknown>[] = [];
   const adIds = new Set<string>();
-  while (url) {
+  for (let guard = 0; guard < 25 && url; guard++) {
     const res = await fetch(url, { cache: 'no-store' });
     const json = (await res.json()) as { data?: InsightRow[]; paging?: { next?: string }; error?: { message: string } };
     if (json.error) throw new Error(`Meta insights: ${json.error.message}`);
@@ -64,13 +66,13 @@ export async function syncAdMetricsDaily(opts: { since: string; until: string })
         brand, campaign_id: r.campaign_id, campaign_name: r.campaign_name,
         adset_id: r.adset_id ?? '', adset_name: r.adset_name ?? '',
         ad_id: r.ad_id, ad_name: r.ad_name ?? '', date: r.date_start,
-        spend_centavos: Math.round(Number(r.spend ?? 0) * 100),
-        impressions: Number(r.impressions ?? 0), reach: Number(r.reach ?? 0),
-        frequency: r.frequency != null ? Number(r.frequency) : null,
-        ctr: r.ctr != null ? Number(r.ctr) : null,
-        link_ctr: r.inline_link_click_ctr != null ? Number(r.inline_link_click_ctr) : null,
-        cpm: r.cpm != null ? Number(r.cpm) : null,
-        link_clicks: Number(r.inline_link_clicks ?? 0),
+        spend_centavos: Math.round(num(r.spend ?? 0) * 100),
+        impressions: num(r.impressions ?? 0), reach: num(r.reach ?? 0),
+        frequency: r.frequency != null ? num(r.frequency) : null,
+        ctr: r.ctr != null ? num(r.ctr) : null,
+        link_ctr: r.inline_link_click_ctr != null ? num(r.inline_link_click_ctr) : null,
+        cpm: r.cpm != null ? num(r.cpm) : null,
+        link_clicks: num(r.inline_link_clicks ?? 0),
         purchases: purchasesOf(r), revenue_centavos: revenueOf(r),
         synced_at: new Date().toISOString(),
       });
