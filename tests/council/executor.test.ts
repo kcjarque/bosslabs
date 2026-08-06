@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkPauseGuardrail, clampBudget, executeAction } from '../../lib/council/executor';
+import { checkPauseGuardrail, clampBudget, netPausedTodayCentavos, executeAction } from '../../lib/council/executor';
 
 // --- checkPauseGuardrail: Ground-Truth 20%-of-daily-spend pause cap +
 // never-touch-LEARNING, both enforced in code regardless of mode ---
@@ -71,6 +71,28 @@ test('checkPauseGuardrail: an ad under its own cap still refuses once already-pa
   assert.equal(result.ok, false);
 });
 
+test('checkPauseGuardrail: empty spend map refuses blind (no data != zero spend)', () => {
+  const result = checkPauseGuardrail({
+    adSpend7ByAd: {},
+    alreadyPausedTodayCentavos: 0,
+    adId: 'a1',
+    tier: 'WATCH',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'no spend data for this ad — refusing to pause blind');
+});
+
+test('checkPauseGuardrail: target ad missing from spend map refuses blind even with sibling data present (reviewer repro)', () => {
+  const result = checkPauseGuardrail({
+    adSpend7ByAd: { sibling: 1_000_000 },
+    alreadyPausedTodayCentavos: 0,
+    adId: 'target',
+    tier: 'WATCH',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'no spend data for this ad — refusing to pause blind');
+});
+
 // --- clampBudget: doctrine's ±20%/day budget-change cap ---
 
 test('clampBudget: +20% clamp — request above the ceiling gets capped', () => {
@@ -88,6 +110,37 @@ test('clampBudget: within-band request passes through unchanged', () => {
 test('clampBudget: exact ±20% boundary passes through unclamped', () => {
   assert.equal(clampBudget(100000, 120000), 120000);
   assert.equal(clampBudget(100000, 80000), 80000);
+});
+
+// --- netPausedTodayCentavos: same-day pause/unpause netting for the
+// alreadyPausedTodayCentavos accumulator ---
+
+test('netPausedTodayCentavos: sums same-day pauses with no matching unpause', () => {
+  const total = netPausedTodayCentavos([
+    { actionType: 'pause_ad', targetId: 'a1', spend7DailyAvg: 1000 },
+    { actionType: 'pause_ad', targetId: 'a2', spend7DailyAvg: 2000 },
+  ]);
+  assert.equal(total, 3000);
+});
+
+test('netPausedTodayCentavos: a same-day unpause nets that ad\'s pause contribution to zero', () => {
+  const total = netPausedTodayCentavos([
+    { actionType: 'pause_ad', targetId: 'a1', spend7DailyAvg: 1000 },
+    { actionType: 'pause_ad', targetId: 'a2', spend7DailyAvg: 2000 },
+    { actionType: 'unpause_ad', targetId: 'a1', spend7DailyAvg: 0 },
+  ]);
+  assert.equal(total, 2000); // only a2 remains counted
+});
+
+test('netPausedTodayCentavos: an unpause with no matching same-day pause does not push the total negative', () => {
+  const total = netPausedTodayCentavos([
+    { actionType: 'unpause_ad', targetId: 'a9', spend7DailyAvg: 0 },
+  ]);
+  assert.equal(total, 0);
+});
+
+test('netPausedTodayCentavos: empty rows -> 0', () => {
+  assert.equal(netPausedTodayCentavos([]), 0);
 });
 
 // --- executeAction: mode gate is the safety-critical no-op path — the only

@@ -9,7 +9,8 @@
  *    - never pause a LEARNING-tier ad (Ground Truth §1).
  *    - never let one day's pausing remove more than 20% of the campaign's
  *      trailing-7d DAILY-AVERAGE spend (doctrine's 20%-of-daily-spend cap,
- *      accumulated across every pause already executed today).
+ *      accumulated across every pause already executed today, net of any
+ *      same-day unpause of the same ad).
  *    - never move a campaign's daily budget by more than ±20% in one call.
  *  `executeAction` logs every attempt — refused, failed, or successful — to
  *  `council_actions` (before/after jsonb + a `result` string the UI
@@ -19,7 +20,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getAdSeries, getLatestVerdicts } from './db';
 import { windowsFor } from './verdict-engine';
 import { settledDay } from './session';
-import type { Brand, Mode, Tier } from './types';
+import type { AdSeries, Brand, Mode, Tier, VerdictResult } from './types';
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
 
@@ -41,11 +42,18 @@ const peso = (c: number) => `₱${Math.round(c / 100).toLocaleString()}`;
  *  everything already paused today, would exceed 20% of the whole
  *  campaign's trailing-7d spend (also averaged to a per-day figure). Pure —
  *  every input is a value the caller already fetched, so this can run
- *  against many candidate ads without re-querying anything. `adSpend7ByAd`
- *  is expected to cover EVERY ad in the campaign (not just the candidate)
- *  — its sum is how the campaign-wide daily average is derived; a partial
- *  map understates the cap and over-refuses, which is the safe direction
- *  to fail in. */
+ *  against many candidate ads without re-querying anything.
+ *
+ *  `adSpend7ByAd` is expected to cover EVERY ad in the campaign (not just
+ *  the candidate) — its sum is how the campaign-wide daily average is
+ *  derived. Missing data is handled ASYMMETRICALLY, deliberately: another
+ *  ad missing from the map just drops out of the sum, understating the
+ *  campaign total — the cap comes out too LOW, so this over-refuses,
+ *  which is the safe direction to fail in. But the TARGET ad's own entry
+ *  missing is the opposite hazard: silently treating unknown as ₱0 would
+ *  UNDERSTATE wouldRemove and could let an over-cap pause through blind.
+ *  So a missing target-ad entry is a hard refusal below, never a `?? 0`
+ *  fallback — "no data" must never be conflated with "no spend". */
 export function checkPauseGuardrail(args: {
   adSpend7ByAd: Record<string, number>;
   alreadyPausedTodayCentavos: number;
@@ -57,8 +65,13 @@ export function checkPauseGuardrail(args: {
   if (args.tier === 'LEARNING') {
     return { ok: false, reason: 'never touch learning ads' };
   }
+  // Missing spend data for the TARGET ad is not the same as ₱0 spend (see
+  // the asymmetry note above) — refuse rather than guess blind.
+  if (!(args.adId in args.adSpend7ByAd)) {
+    return { ok: false, reason: 'no spend data for this ad — refusing to pause blind' };
+  }
 
-  const adDailyAvg = (args.adSpend7ByAd[args.adId] ?? 0) / 7;
+  const adDailyAvg = args.adSpend7ByAd[args.adId] / 7;
   const campaignSpend7 = Object.values(args.adSpend7ByAd).reduce((a, b) => a + b, 0);
   const campaignDailyAvg = campaignSpend7 / 7;
   const cap = campaignDailyAvg * 0.2;
@@ -90,6 +103,30 @@ export function clampBudget(currentCentavos: number, requestedCentavos: number):
   return Math.min(max, Math.max(min, requestedCentavos));
 }
 
+/** Nets today's pause contributions against today's unpause credits, per ad
+ *  id, for `checkPauseGuardrail`'s `alreadyPausedTodayCentavos` accumulator.
+ *  An ad successfully unpaused today no longer has any of its spend
+ *  "removed" today, regardless of an earlier same-day pause — rather than
+ *  reconstruct a subtraction amount the unpause row never recorded (see
+ *  `executeUnpause`'s empty `before`), this nets that ad's pause
+ *  contribution to zero outright. Pure — the Supabase-backed caller
+ *  (`sumAlreadyPausedTodayCentavos`) just fetches+maps rows into this
+ *  shape, so the netting logic itself is directly unit-testable. Floors
+ *  at 0 defensively: the exclusion-based netting below can't actually go
+ *  negative, but the floor documents that invariant explicitly rather
+ *  than leaving it implicit in the algorithm. */
+export function netPausedTodayCentavos(
+  rows: Array<{ actionType: 'pause_ad' | 'unpause_ad'; targetId: string; spend7DailyAvg: number }>,
+): number {
+  const unpausedToday = new Set(
+    rows.filter((r) => r.actionType === 'unpause_ad').map((r) => r.targetId),
+  );
+  const total = rows
+    .filter((r) => r.actionType === 'pause_ad' && !unpausedToday.has(r.targetId))
+    .reduce((sum, r) => sum + r.spend7DailyAvg, 0);
+  return Math.max(0, total);
+}
+
 /* --------------------------------------------------------------------- */
 /* Meta Graph write + council_actions logging                            */
 /* --------------------------------------------------------------------- */
@@ -118,6 +155,15 @@ async function graphPost(id: string, params: Record<string, string>): Promise<{ 
     const json = (await res.json()) as { success?: boolean; error?: { message?: string; code?: number } };
     if (json.error) {
       return { ok: false, error: `Meta: ${json.error.message ?? 'unknown error'} (code ${json.error.code ?? '?'})` };
+    }
+    // Some Marketing API mutation endpoints return {"success": false} with
+    // no structured error object on a logical failure — an explicit false
+    // is a real "it didn't work" signal, not to be confused with the field
+    // simply being absent (undefined), which falls through to the ok:true
+    // default below like every other successful response shape already
+    // observed from these endpoints.
+    if (json.success === false) {
+      return { ok: false, error: 'Meta returned success:false with no error detail' };
     }
     if (!res.ok) return { ok: false, error: `Meta HTTP ${res.status}` };
     return { ok: true };
@@ -153,23 +199,29 @@ async function getCurrentBudgetCentavos(campaignId: string): Promise<number> {
 
 /** Sum of `before.spend7DailyAvg` across every successful pause already
  *  logged today (brand + Manila-today + action_type='pause_ad' +
- *  result='ok') — the running total `checkPauseGuardrail`'s
- *  `alreadyPausedTodayCentavos` needs to keep the 20% cap honest across
- *  MULTIPLE pauses in the same day, not just per-call. `spend7DailyAvg` is
- *  a field this module defines and writes (see `executePause`'s `before`
- *  payload below) — no other writer touches `council_actions`. */
+ *  result='ok'), net of any same-day successful unpause of that same ad
+ *  (see `netPausedTodayCentavos`) — the running total
+ *  `checkPauseGuardrail`'s `alreadyPausedTodayCentavos` needs to keep the
+ *  20% cap honest across MULTIPLE pauses (and pause/unpause reversals) in
+ *  the same day, not just per-call. `spend7DailyAvg` is a field this
+ *  module defines and writes (see `executePause`'s `before` payload
+ *  below) — no other writer touches `council_actions`. */
 async function sumAlreadyPausedTodayCentavos(brand: Brand): Promise<number> {
   if (!isSupabaseConfigured()) return 0;
   const { data, error } = await getSupabase()
     .from('council_actions')
-    .select('before')
+    .select('action_type, target_id, before')
     .eq('brand', brand)
     .eq('date', manilaToday())
-    .eq('action_type', 'pause_ad')
+    .in('action_type', ['pause_ad', 'unpause_ad'])
     .eq('result', 'ok');
   if (error) throw new Error(`sumAlreadyPausedTodayCentavos: ${error.message}`);
-  const rows = (data as { before: { spend7DailyAvg?: number } }[]) ?? [];
-  return rows.reduce((sum, r) => sum + (r.before?.spend7DailyAvg ?? 0), 0);
+  const rows = (data as {
+    action_type: 'pause_ad' | 'unpause_ad'; target_id: string; before: { spend7DailyAvg?: number };
+  }[]) ?? [];
+  return netPausedTodayCentavos(rows.map((r) => ({
+    actionType: r.action_type, targetId: r.target_id, spend7DailyAvg: r.before?.spend7DailyAvg ?? 0,
+  })));
 }
 
 /** Writes one `council_actions` row. Best-effort: this runs AFTER the real
@@ -193,11 +245,25 @@ async function logAction(row: {
 
 async function executePause(a: ActionArgs): Promise<{ ok: boolean; result: string }> {
   const asOf = settledDay();
-  const [series, verdicts, alreadyPausedTodayCentavos] = await Promise.all([
-    getAdSeries(a.brand),
-    getLatestVerdicts(a.brand),
-    sumAlreadyPausedTodayCentavos(a.brand),
-  ]);
+  // Every call here throws on a real Supabase error (getAdSeries,
+  // getLatestVerdicts, sumAlreadyPausedTodayCentavos all follow this
+  // codebase's db.ts convention). Uncaught, that would reject
+  // executeAction itself — breaking both its documented never-rejects
+  // contract and this file's own "every attempt is logged" promise, since
+  // a thrown data-gathering step never reaches logAction below.
+  let gathered: [AdSeries[], VerdictResult[], number];
+  try {
+    gathered = await Promise.all([
+      getAdSeries(a.brand),
+      getLatestVerdicts(a.brand),
+      sumAlreadyPausedTodayCentavos(a.brand),
+    ]);
+  } catch (err) {
+    const result = `error: ${err instanceof Error ? err.message : String(err)}`;
+    await logAction({ a, before: {}, after: {}, result });
+    return { ok: false, result };
+  }
+  const [series, verdicts, alreadyPausedTodayCentavos] = gathered;
   const adSpend7ByAd: Record<string, number> = {};
   for (const s of series) adSpend7ByAd[s.adId] = windowsFor(s, asOf).spend7;
   const tier: Tier = verdicts.find((v) => v.adId === a.targetId)?.verdict ?? 'LEARNING';
@@ -236,7 +302,20 @@ async function executeSetBudget(a: ActionArgs): Promise<{ ok: boolean; result: s
     return { ok: false, result };
   }
 
-  const current = await getCurrentBudgetCentavos(a.targetId);
+  // getCurrentBudgetCentavos already swallows its own fetch/parse errors
+  // to 0 internally (matching getCampaignBudget's degrade-to-null
+  // convention) — this try/catch is belt-and-suspenders so the safety
+  // invariant ("this call site can never take executeAction down without
+  // logging") holds locally, without depending on tribal knowledge of the
+  // callee's internals surviving a future refactor.
+  let current: number;
+  try {
+    current = await getCurrentBudgetCentavos(a.targetId);
+  } catch (err) {
+    const result = `error: ${err instanceof Error ? err.message : String(err)}`;
+    await logAction({ a, before: {}, after: {}, result });
+    return { ok: false, result };
+  }
   if (!(current > 0)) {
     const result = 'refused: could not read current campaign budget from Meta';
     await logAction({ a, before: { currentCentavos: current }, after: {}, result });
