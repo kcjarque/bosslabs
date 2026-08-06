@@ -92,3 +92,16 @@ test('under 14 sample days nulls every field except sampleDays', () => {
   assert.equal(row.medianWinnerLifespanDays, null);
   assert.equal(row.cppDriftPctPerWeek, null);
 });
+
+test('zero-mean guard: 14+ purchase-days at zero spend nulls every analytical field, sampleDays still populated', () => {
+  // Every day has a purchase but zero spend -> CPP 0 on every sample day ->
+  // overallMean 0. All four analytical fields must go null (spec
+  // consistency, not just the fields that literally divide by the mean).
+  const s = series(daysEnding(ASOF, 14, () => ({ spendCentavos: 0, purchases: 1 })));
+  const row = computePriors('BOSS', [s]);
+  assert.equal(row.sampleDays, 14);
+  assert.equal(row.dailyCppSigmaPct, null);
+  assert.equal(row.weekdayMultipliers, null);
+  assert.equal(row.medianWinnerLifespanDays, null);
+  assert.equal(row.cppDriftPctPerWeek, null);
+});

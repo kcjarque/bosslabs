@@ -74,29 +74,17 @@ export function computePriors(brand: Brand, series: AdSeries[]): PriorsRow {
   const cppValues = cppByDate.map((p) => p.cpp);
   const overallMean = mean(cppValues);
 
-  // medianWinnerLifespanDays doesn't depend on CPP at all, so compute it
-  // before the zero-mean guard below.
-  const spans: number[] = [];
-  for (const s of series) {
-    const lifetimePurchases = s.days.reduce((a, d) => a + d.purchases, 0);
-    if (lifetimePurchases < 10) continue;
-    const spendDates = s.days.filter((d) => d.spendCentavos > 0).map((d) => d.date).sort();
-    if (spendDates.length === 0) continue;
-    const span = Math.round(
-      (Date.parse(spendDates[spendDates.length - 1]) - Date.parse(spendDates[0])) / MS_DAY,
-    ) + 1;
-    spans.push(span);
-  }
-  const medianWinnerLifespanDays = spans.length > 0 ? median(spans) : null;
-
-  // Zero-mean guard: every remaining field divides by overallMean. Real
-  // spend data won't hit this (it needs $0 aggregate spend on a day with
-  // purchases attributed), but avoid NaN/Infinity if it ever does.
+  // Zero-mean guard: a degenerate sample (every purchase-day CPP is 0).
+  // Nulls every analytical field, including medianWinnerLifespanDays even
+  // though it doesn't itself divide by overallMean — a half-null PriorsRow
+  // on a degenerate sample is worse than an all-null one, and real spend
+  // data won't hit this (it needs $0 aggregate spend on a day with
+  // purchases attributed).
   if (overallMean === 0) {
     return {
       brand, sampleDays,
       dailyCppSigmaPct: null, weekdayMultipliers: null,
-      medianWinnerLifespanDays, cppDriftPctPerWeek: null,
+      medianWinnerLifespanDays: null, cppDriftPctPerWeek: null,
     };
   }
 
@@ -115,6 +103,19 @@ export function computePriors(brand: Brand, series: AdSeries[]): PriorsRow {
     const arr = byWeekday.get(String(wd));
     weekdayMultipliers[String(wd)] = arr && arr.length > 0 ? mean(arr) / overallMean : 1;
   }
+
+  const spans: number[] = [];
+  for (const s of series) {
+    const lifetimePurchases = s.days.reduce((a, d) => a + d.purchases, 0);
+    if (lifetimePurchases < 10) continue;
+    const spendDates = s.days.filter((d) => d.spendCentavos > 0).map((d) => d.date).sort();
+    if (spendDates.length === 0) continue;
+    const span = Math.round(
+      (Date.parse(spendDates[spendDates.length - 1]) - Date.parse(spendDates[0])) / MS_DAY,
+    ) + 1;
+    spans.push(span);
+  }
+  const medianWinnerLifespanDays = spans.length > 0 ? median(spans) : null;
 
   // Subsumed by the >=14 gate above today (n is always >=14 here, so this
   // never fires), but kept as the brief's stated formula explicitly
