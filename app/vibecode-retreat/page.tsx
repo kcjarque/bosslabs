@@ -351,7 +351,7 @@ function RetreatHeader() {
 function Hero({ priceCentavos, slashedCentavos }: { priceCentavos: number | null; slashedCentavos?: number | null }) {
   const cards = [
     { icon: IC.calendar, k: 'WHEN', v: 'September 11 – 12, 10:00 AM', s: 'Friday to Saturday' },
-    { icon: IC.people, k: 'WHO', v: 'Only 15 founders', s: 'Invite-only cohort' },
+    { icon: IC.people, k: 'WHO', v: 'Only 15 founders', s: 'Slots are very limited' },
     { icon: IC.pin, k: 'WHERE', v: 'Tagaytay City, Cavite', s: 'The best private villa' },
     { icon: IC.rocket, k: 'FORMAT', v: '24 straight hours', s: 'Build · Pitch · Ship' },
   ];
