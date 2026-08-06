@@ -1,5 +1,12 @@
 /**
- * Sequences cron — runs every 10 minutes (vercel.json).
+ * Sequences cron — triggered by TWO independent schedulers (idempotent, so
+ * overlap is harmless):
+ *   1. Vercel cron, every 10 min (vercel.json) — has silently not delivered
+ *      for stretches (July 29, Aug 3-6 2026) despite being registered.
+ *   2. Supabase pg_cron job `bosslabs-sequences-tick`, every 5 min — calls
+ *      this URL via pg_net with the CRON_SECRET bearer. Lives in the same
+ *      Postgres as the data, so it runs as long as the DB is up. Inspect:
+ *      `select * from cron.job` / `cron.job_run_details` on the project DB.
  *
  * Replaces the old hardcoded /api/cron/reminders. Reads active sequences
  * from the DB and fires the steps whose schedule lands inside the current
@@ -118,6 +125,10 @@ export async function GET(req: Request) {
   const now = Date.now();
   const webinar = await getWebinarInfo(); // shared template vars for the legacy single-event case
   const sequences = await getActiveSequences();
+  // Event-anchored sequences (webinar reminders) run FIRST. If a tick ever
+  // dies mid-run (timeout, OOM), the time-critical reminders have already
+  // fired before the unbounded after_subscribe backlogs (newsletter) start.
+  sequences.sort((a, b) => (a.eventId ? 0 : 1) - (b.eventId ? 0 : 1));
 
   const totals = {
     sequencesProcessed: 0,
