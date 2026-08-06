@@ -32,12 +32,17 @@ export const dynamic = 'force-dynamic';
 /* Cached fetches — wrapped in unstable_cache so a hot reopen of the     */
 /* dashboard hits in-memory cache (under 100ms) instead of re-running    */
 /* every Supabase query. The "Refresh" button at the top busts all of    */
-/* them via revalidateTag('dashboard'). 60s TTL = cards stay current     */
-/* while preventing thundering-herd on hot reloads.                      */
+/* them via revalidateTag('dashboard').                                  */
+/*                                                                       */
+/* TTLs are split by cost: heavy scans (signups, page_views, visit-      */
+/* buckets) get 5 min because they take ~900 ms on a miss and dashboard  */
+/* numbers 5 min behind live are still fine for eyeballing; light stuff  */
+/* (retainer, email stats, ad spend, DFY sums) stays 60 s so it feels    */
+/* fresh. If a number is stale, hit Refresh — it busts all of them.      */
 /* --------------------------------------------------------------------- */
-const CACHE_TTL_SECONDS = 60;
 const CACHE_TAG = 'dashboard';
-const cacheOpts = { revalidate: CACHE_TTL_SECONDS, tags: [CACHE_TAG] };
+const cacheOpts = { revalidate: 60, tags: [CACHE_TAG] };
+const heavyCacheOpts = { revalidate: 300, tags: [CACHE_TAG] };
 
 /* Timing instrumentation — wraps each cached call so the Vercel function log
  * shows per-fetch wall-clock + a HIT/MISS guess (sub-5ms ≈ in-memory cache
@@ -59,7 +64,8 @@ function timed<TArgs extends unknown[], TR>(
   };
 }
 
-const cachedGetSignups = timed('signups', unstable_cache(getSignups, ['dashboard:signups'], cacheOpts));
+// Heavy: pulls all ~2k signup rows. Cache 5 min — the biggest miss on the page.
+const cachedGetSignups = timed('signups', unstable_cache(getSignups, ['dashboard:signups'], heavyCacheOpts));
 const cachedGetEmailStats = timed('email-stats', unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts));
 const cachedGetAdSpend = timed('ad-spend', unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts));
 /* IMPORTANT: unstable_cache JSON-serializes results, which turns a Set into
@@ -68,10 +74,12 @@ const cachedGetAdSpend = timed('ad-spend', unstable_cache(getAdSpendByDay, ['das
 const cachedGetCloserRecoveredArr = timed('closer-recovered', unstable_cache(
   async () => Array.from(await getCloserRecoveredSignupIds()),
   ['dashboard:closer-recovered'],
-  cacheOpts,
+  heavyCacheOpts,
 ));
-const cachedCountPageViews = timed('page-views', unstable_cache(countPageViews, ['dashboard:page-views'], cacheOpts));
-const cachedGetVisitBuckets = timed('visit-buckets', unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], cacheOpts));
+// Heavy: scans page_views. 6 calls per dashboard render (funnel + A/B), each ~500-700 ms.
+const cachedCountPageViews = timed('page-views', unstable_cache(countPageViews, ['dashboard:page-views'], heavyCacheOpts));
+// Heavy: buckets page_views by hour/day, runs twice (current + previous period).
+const cachedGetVisitBuckets = timed('visit-buckets', unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], heavyCacheOpts));
 const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
   sumWebinarIncomeCentavos, ['dashboard:webinar-income'], cacheOpts,
 ));
