@@ -13,6 +13,6 @@ export async function POST(req: Request) {
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) as { brand?: Brand };
   const brand = body.brand ?? 'BOSS';
-  const { sessionId } = await runCouncilSession(brand, ['manual run']);
-  return NextResponse.json({ ok: true, sessionId });
+  const { sessionId, failedPredictionInserts } = await runCouncilSession(brand, ['manual run']);
+  return NextResponse.json({ ok: true, sessionId, failedPredictionInserts });
 }
