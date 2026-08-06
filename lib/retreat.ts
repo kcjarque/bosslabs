@@ -33,7 +33,7 @@ export function planAmountCentavos(
 ): number {
   const standard = c.standardPriceCentavos ?? 15_000_000;
   const full = c.payInFullPriceCentavos ?? 15_000_000;
-  const deposit = c.depositCentavos ?? 1_000_000;
+  const deposit = c.depositCentavos ?? 3_000_000;
   switch (plan) {
     case 'full':
       return full;
@@ -52,7 +52,7 @@ export function planSummary(
 ): { label: string; dueNow: number; note: string } {
   const standard = c.standardPriceCentavos ?? 15_000_000;
   const full = c.payInFullPriceCentavos ?? 15_000_000;
-  const deposit = c.depositCentavos ?? 1_000_000;
+  const deposit = c.depositCentavos ?? 3_000_000;
   const slashed = c.slashedPriceCentavos ?? 0;
   const dueDate = c.balanceDueDate ?? 'the balance date';
 
