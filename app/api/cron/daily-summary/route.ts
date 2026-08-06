@@ -23,6 +23,7 @@ import { sendTelegram } from '@/lib/telegram';
 import { deleteRecordingBlobs } from '@/lib/recordings-s3';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const TZ = 'Asia/Manila';
 

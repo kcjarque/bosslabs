@@ -22,6 +22,18 @@ export async function GET(req: Request) {
   const auth = verifyCronAuth(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const result = await runCouncilPipeline('BOSS');
-  return NextResponse.json(result);
+  try {
+    const result = await runCouncilPipeline('BOSS');
+    return NextResponse.json(result);
+  } catch (err) {
+    // By the time a late/transient DB read fails, most of the pipeline's
+    // writes (saveVerdicts, etc.) are already persisted — this is
+    // informational, not a sign the whole run was lost. Surfaced as clean
+    // JSON instead of an unhandled 500 so the pg_cron backup tick's log
+    // shows a real message.
+    return NextResponse.json(
+      { error: String(err instanceof Error ? err.message : err) },
+      { status: 500 },
+    );
+  }
 }
