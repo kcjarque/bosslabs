@@ -135,6 +135,17 @@ export async function GET(req: Request) {
     lines.push(`  Checkout → Paid: <b>${convRate}%</b>`);
   }
 
+  // Ads Council daily brief (§5.3) — pipeline is idempotent; if the backup tick
+  // already ran tonight this just rebuilds the brief text from stored verdicts.
+  try {
+    const { runCouncilPipeline } = await import('@/lib/council/pipeline');
+    const council = await runCouncilPipeline('BOSS');
+    lines.push('', council.brief);
+  } catch (err) {
+    lines.push('', '⚠️ Ads Council brief failed — check /admin/ads?view=council');
+    console.error('[daily-summary] council pipeline failed', err);
+  }
+
   const result = await sendTelegram(lines.join('\n'));
 
   // Daily storage hygiene — delete idle non-purchase recordings (tabs left

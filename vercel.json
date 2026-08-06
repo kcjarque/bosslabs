@@ -18,6 +18,10 @@
       "schedule": "2 16 * * *"
     },
     {
+      "path": "/api/cron/council",
+      "schedule": "20 16 * * *"
+    },
+    {
       "path": "/api/cron/abandoned",
       "schedule": "*/10 * * * *"
     },
