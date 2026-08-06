@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scoreOf, credibilityWeight, parseDirection } from '../../lib/council/ledger';
+import { scoreOf, credibilityWeight, parseDirection, actualFor, type PredictionRow } from '../../lib/council/ledger';
+import type { AdSeries, AdDay } from '../../lib/council/types';
 
 // --- scoreOf: +weight on hit, -weight on miss, 0 on push ---
 
@@ -103,4 +104,62 @@ test('parseDirection: case-insensitive ("Under" at sentence start)', () => {
 
 test('parseDirection: both lte and gte markers present -> ambiguous, null', () => {
   assert.equal(parseDirection('CPP stays under 700 but never above 500'), null);
+});
+
+// --- actualFor: machine-checkable actual value for one prediction row's
+// metric, from an already-fetched series map (fixture style copied from
+// tests/council/verdict-engine.test.ts's day/daysEnding/series builders) ---
+
+function day(date: string, over: Partial<AdDay> = {}): AdDay {
+  return { date, spendCentavos: 100000, impressions: 10000, reach: 8000, frequency: 1.2,
+    ctr: 2.0, linkCtr: 1.2, cpm: 100, linkClicks: 120, purchases: 2, revenueCentavos: 199800, ...over };
+}
+/** n days ending at endDate (inclusive), ascending. */
+function daysEnding(endDate: string, n: number, over: (i: number) => Partial<AdDay> = () => ({})): AdDay[] {
+  const end = new Date(endDate + 'T00:00:00Z').getTime();
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(end - (n - 1 - i) * 86400000).toISOString().slice(0, 10);
+    return day(d, over(i));
+  });
+}
+function series(days: AdDay[], over: Partial<AdSeries> = {}): AdSeries {
+  return { brand: 'BOSS', campaignId: 'c1', campaignName: 'BOSSLABS AI | SALES',
+    adsetId: 's1', adsetName: 'set', adId: 'a1', adName: 'Ads 14_24hrs', days, ...over };
+}
+function row(over: Partial<PredictionRow> = {}): PredictionRow {
+  return {
+    id: 'p1', date: '2026-08-03', brand: 'BOSS', expert: 'CHARLEY', session_id: null,
+    conflict_ref: null, action_taken: false, prediction_text: 'CPP will stay under ₱600',
+    metric: 'cpp_7d', threshold: 60000, target_id: 'a1', deadline: '2026-08-10',
+    weight: 1.0, outcome: null, needs_manual: false, resolved_date: null, notes: '',
+    ...over,
+  };
+}
+const ASOF = '2026-08-03';
+
+test('actualFor: cpp_7d resolves from the target ad\'s synthetic 7d window (centavos)', () => {
+  const s = series(daysEnding(ASOF, 7));
+  const seriesByAdId = new Map([[s.adId, s]]);
+  // 7 days * spendCentavos 100000 = 700000; 7 days * purchases 2 = 14 -> cpp7 = 700000/14 = 50000c (₱500).
+  const actual = actualFor(row({ metric: 'cpp_7d', target_id: s.adId }), seriesByAdId, 0, null, ASOF);
+  assert.equal(actual, 50000);
+});
+
+test('actualFor: campaign_cpp_7d returns the precomputed campaign figure directly (no series lookup)', () => {
+  const actual = actualFor(row({ metric: 'campaign_cpp_7d', target_id: null }), new Map(), 0, 42000, ASOF);
+  assert.equal(actual, 42000);
+});
+
+test('actualFor: spend_share_7d resolves as a 0..1 fraction of campaign spend', () => {
+  const s = series(daysEnding(ASOF, 7));
+  const seriesByAdId = new Map([[s.adId, s]]);
+  // spend7 = 700000; campaignSpend7 = 2800000 -> share = 0.25.
+  const actual = actualFor(row({ metric: 'spend_share_7d', target_id: s.adId }), seriesByAdId, 2800000, null, ASOF);
+  assert.equal(actual, 0.25);
+  assert.ok(actual !== null && actual >= 0 && actual <= 1);
+});
+
+test('actualFor: unrecognized metric returns null', () => {
+  const actual = actualFor(row({ metric: 'some_bogus_metric' }), new Map(), 0, null, ASOF);
+  assert.equal(actual, null);
 });

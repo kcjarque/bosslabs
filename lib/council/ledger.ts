@@ -26,8 +26,9 @@ const EXPERTS = ['CHARLEY', 'NICK', 'BEN', 'DARA', 'CHAIR'] as const;
 type Expert = (typeof EXPERTS)[number];
 
 /** council_predictions row (snake_case) — column-for-column against
- *  supabase/migrations/0053_ads_council.sql. */
-type PredictionRow = {
+ *  supabase/migrations/0053_ads_council.sql. Exported so callers (Task 9's
+ *  fixture tests) can construct rows without duplicating the shape. */
+export type PredictionRow = {
   id: string;
   date: string;
   brand: string;
@@ -80,8 +81,10 @@ export function parseDirection(text: string): 'lte' | 'gte' | null {
 
 /** Machine-checkable actual value for one prediction row's metric, or null
  *  if it can't be resolved (unrecognized metric, missing target_id, or the
- *  target ad has no synced series for the settled window). */
-function actualFor(
+ *  target ad has no synced series for the settled window). Exported —
+ *  already takes a pre-fetched `seriesByAdId` map rather than fetching
+ *  internally, so it's directly fixture-testable (Task 9). */
+export function actualFor(
   row: PredictionRow,
   seriesByAdId: Map<string, AdSeries>,
   campaignSpend7: number,
