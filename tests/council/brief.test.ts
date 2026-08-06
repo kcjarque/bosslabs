@@ -115,6 +115,70 @@ test('yesterday=null and avg7Cpp=null render "—" instead of crashing', () => {
   assert.match(out, /NO DATA/);
 });
 
+test('MOVERS at exactly 5 (the un-truncated budget) shows every mover, no "+more" line', () => {
+  const movers = ['a1', 'a2', 'a3', 'a4', 'a5'].map((id) =>
+    verdict({ adId: id, adName: `Ads ${id}`, verdict: 'WATCH', changed: true }));
+  const out = buildBrief({ ...BASE_ARGS, verdicts: movers });
+  const lines = out.split('\n');
+  assert.equal(lines.length, 12);
+  assert.doesNotMatch(out, /more flipped/);
+  for (const id of ['a1', 'a2', 'a3', 'a4', 'a5']) assert.match(out, new RegExp(`Ads ${id}`));
+});
+
+test('MOVERS at 6 (one over budget) truncates to 4 shown + "+2 more flipped"', () => {
+  const movers = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((id) =>
+    verdict({ adId: id, adName: `Ads ${id}`, verdict: 'WATCH', changed: true }));
+  const out = buildBrief({ ...BASE_ARGS, verdicts: movers });
+  const lines = out.split('\n');
+  assert.equal(lines.length, 12);
+  assert.match(out, /↳ \+2 more flipped — see \/admin\/ads/);
+});
+
+test('MOVERS at 8 truncates to exactly 12 lines, last mover line is "+4 more flipped", most severe shown', () => {
+  const movers = [
+    verdict({ adId: 'l1', adName: 'Loser A', verdict: 'LOSER', changed: true }),
+    verdict({ adId: 'l2', adName: 'Loser B', verdict: 'LOSER', changed: true }),
+    verdict({ adId: 'w1', adName: 'Watch A', verdict: 'WATCH', changed: true }),
+    verdict({ adId: 'w2', adName: 'Watch B', verdict: 'WATCH', changed: true }),
+    verdict({ adId: 'g1', adName: 'Winning A', verdict: 'WINNING', changed: true }),
+    verdict({ adId: 'g2', adName: 'Winning B', verdict: 'WINNING', changed: true }),
+    verdict({ adId: 'r1', adName: 'Learning A', verdict: 'LEARNING', changed: true }),
+    verdict({ adId: 'r2', adName: 'Learning B', verdict: 'LEARNING', changed: true }),
+  ];
+  // Shuffle input order on purpose — output order must come from severity,
+  // not from array position.
+  const shuffled = [movers[6], movers[2], movers[0], movers[5], movers[7], movers[1], movers[4], movers[3]];
+  const out = buildBrief({ ...BASE_ARGS, verdicts: shuffled });
+  const lines = out.split('\n');
+  assert.equal(lines.length, 12);
+  assert.equal(lines[8], '  ↳ +4 more flipped — see /admin/ads');
+  assert.equal(lines[9], 'COHORT: 12 buyers this week · 92% show-up · 3 applications');
+  // Most severe (both LOSERs, both WATCHes) are shown...
+  assert.match(out, /Loser A/); assert.match(out, /Loser B/);
+  assert.match(out, /Watch A/); assert.match(out, /Watch B/);
+  // ...least severe (WINNING, LEARNING) are folded into the "+4 more" line, not named.
+  assert.doesNotMatch(out, /Winning A/); assert.doesNotMatch(out, /Winning B/);
+  assert.doesNotMatch(out, /Learning A/); assert.doesNotMatch(out, /Learning B/);
+});
+
+test('chairNote/nextLine collapse embedded newlines to a single space before escaping', () => {
+  const out = buildBrief({ ...BASE_ARGS, chairNote: 'line1\nline2', nextLine: 'next1\r\nnext2' });
+  const lines = out.split('\n');
+  assert.equal(lines.find((l) => l.startsWith("CHAIR'S NOTE:")), "CHAIR'S NOTE: line1 line2");
+  assert.equal(lines.find((l) => l.startsWith('NEXT:')), 'NEXT: next1 next2');
+});
+
+test('a run of consecutive newlines in chairNote collapses to exactly one space, not one per newline', () => {
+  const out = buildBrief({ ...BASE_ARGS, chairNote: 'para1\n\n\npara2' });
+  const lines = out.split('\n');
+  assert.equal(lines.find((l) => l.startsWith("CHAIR'S NOTE:")), "CHAIR'S NOTE: para1 para2");
+});
+
+test('embedded newlines in chairNote/nextLine never inflate the total line count', () => {
+  const out = buildBrief({ ...BASE_ARGS, chairNote: 'l1\nl2\nl3\nl4', nextLine: 'n1\nn2\nn3' });
+  assert.equal(out.split('\n').length, 7); // BASE_ARGS has 0 movers -> 7 fixed lines, unchanged
+});
+
 /* --------------------------------------------------------------------- */
 /* dayQualityFor                                                         */
 /* --------------------------------------------------------------------- */

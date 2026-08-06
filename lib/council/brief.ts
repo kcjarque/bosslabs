@@ -16,6 +16,27 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Free-text fields (chairNote, nextLine) are one sentence, one line, no
+ *  matter what the source (often an LLM) emits — any run of newlines
+ *  collapses to a single space, applied before escaping. */
+function collapseNewlines(s: string): string {
+  return s.replace(/(\r\n|\n|\r)+/g, ' ');
+}
+
+/** doctrine §5.3's 12-line ceiling is a hard limit, not a suggestion — the
+ *  brief has 6 always-present lines (header, YESTERDAY, ROSTER, COHORT,
+ *  CHAIR'S NOTE, NEXT) plus a "MOVERS:" header, leaving 5 lines for mover
+ *  rows before the section itself has to start summarizing instead of
+ *  listing. Severity order (worst tier first) so truncation always drops
+ *  the least urgent movers. */
+const MOVER_SEVERITY: Record<Tier, number> = { LOSER: 0, WATCH: 1, WINNING: 2, LEARNING: 3 };
+const MOVER_LINE_BUDGET = 5;
+const MOVER_LINES_WHEN_TRUNCATED = 4;
+
+function moverLine(v: VerdictResult): string {
+  return `  ↳ ${escHtml(v.adName)} → ${v.verdict}: ${escHtml(v.headline)}`;
+}
+
 /** doctrine §5.3: "a day is only SOFT/RED FLAG if it exceeds the account's
  *  historical daily variance — no crying wolf over normal noise." Before the
  *  account has a real sigma (< 14 sampled days, §4.1), a fixed 40%/80% band
@@ -71,7 +92,12 @@ export function buildBrief(args: {
   const cppText = yCpp != null ? peso(yCpp) : '—';
 
   const counts = tierCounts(verdicts);
-  const movers = verdicts.filter((v) => v.changed);
+  // Worst tier first, so truncation (below) always keeps the most urgent
+  // movers and drops the least urgent ones. Array#sort is stable, so movers
+  // within the same tier keep their original relative order.
+  const movers = verdicts
+    .filter((v) => v.changed)
+    .sort((a, b) => MOVER_SEVERITY[a.verdict] - MOVER_SEVERITY[b.verdict]);
 
   const cohortLine = cohort == null
     ? 'COHORT: no cohort data yet'
@@ -79,16 +105,22 @@ export function buildBrief(args: {
       `${cohort.showUpPct != null ? `${Math.round(cohort.showUpPct)}% show-up` : 'no attendance data'} · ` +
       `${cohort.applications} applications`;
 
+  const moverBlock: string[] = movers.length === 0
+    ? ['MOVERS: No tier changes — roster stable.']
+    : movers.length <= MOVER_LINE_BUDGET
+      ? ['MOVERS:', ...movers.map(moverLine)]
+      : ['MOVERS:',
+          ...movers.slice(0, MOVER_LINES_WHEN_TRUNCATED).map(moverLine),
+          `  ↳ +${movers.length - MOVER_LINES_WHEN_TRUNCATED} more flipped — see /admin/ads`];
+
   const lines = [
     `=== ${brand} DAILY BRIEF — ${dateManila} ===`,
     `YESTERDAY: ${spendText} → ${buyersText} buyers @ ${cppText} (preliminary)  (${pctText} vs 7d avg) — ${dayQuality}`,
     `ROSTER: 🟢 ${counts.WINNING} Winning · 🟡 ${counts.WATCH} Watch · 🔴 ${counts.LOSER} Loser · 🔵 ${counts.LEARNING} Learning`,
-    ...(movers.length === 0
-      ? ['MOVERS: No tier changes — roster stable.']
-      : ['MOVERS:', ...movers.map((v) => `  ↳ ${escHtml(v.adName)} → ${v.verdict}: ${escHtml(v.headline)}`)]),
+    ...moverBlock,
     cohortLine,
-    `CHAIR'S NOTE: ${escHtml(chairNote)}`,
-    `NEXT: ${escHtml(nextLine)}`,
+    `CHAIR'S NOTE: ${escHtml(collapseNewlines(chairNote))}`,
+    `NEXT: ${escHtml(collapseNewlines(nextLine))}`,
   ];
   return lines.join('\n');
 }
