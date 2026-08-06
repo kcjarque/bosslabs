@@ -106,3 +106,66 @@ test('daysInTier increments when verdict unchanged, changed flag on flip', () =>
   assert.equal(flip.changed, true);
   assert.equal(flip.daysInTier, 1);
 });
+
+// --- fix-wave regression tests (calendar windows, signal honesty, CPP-only deterioration) ---
+
+test('two simultaneous signals stay WATCH; headline names the worse one, interpretation lists both', () => {
+  // CPP signal (~+17%, same purchases pattern as the single-signal test above)
+  // plus an independent, deliberately asymmetric prior/current "other" spend
+  // bucket to force a genuine >20% share decline — without touching the ad's
+  // own spend, so the CPP math above stays exactly what it was.
+  const s = series(daysEnding(ASOF, 20, (i) => (i >= 13 ? { purchases: i >= 18 ? 1 : 2 } : {})));
+  const spend7 = s.days.slice(-7).reduce((t, d) => t + d.spendCentavos, 0);
+  const spendPrior7 = s.days.slice(-14, -7).reduce((t, d) => t + d.spendCentavos, 0);
+  const campaign = {
+    totalSpend7Centavos: spend7 + 4000000,
+    blendedCpp7Centavos: 45000,
+    campaignSpend7ByAd: { [s.adId]: spend7, other: 4000000 },
+    campaignSpendPrior7ByAd: { [s.adId]: spendPrior7, other: 300000 },
+  };
+  const v = gradeAd({ ...BASE, series: s, campaign });
+  assert.equal(v.verdict, 'WATCH');
+  assert.match(v.headline, /^CPP \+\d+% this week \(\+1 more\)/);
+  assert.doesNotMatch(v.headline, /^One deterioration signal/);
+  assert.match(v.interpretation, /2 deterioration signals/);
+  assert.match(v.interpretation, /CPP \+\d+% this week/);
+  assert.match(v.interpretation, /spend share down \d+%/);
+});
+
+test('CPP +27% alone (flat share, flat everything else) is WATCH, not WINNING', () => {
+  // Old [10,20) WATCH band would have let this through as WINNING — the
+  // WINNING copy itself claims "demotes on any single deterioration signal,"
+  // which a +27% CPP swing obviously is.
+  const s = series(daysEnding(ASOF, 20, (i) => (i >= 13 ? { purchases: i < 17 ? 2 : 1 } : {})));
+  const v = gradeAd({ ...BASE, series: s, campaign: campaignFor(s, 4000000) });
+  assert.equal(v.verdict, 'WATCH');
+  assert.match(v.headline, /CPP \+\d+% this week/);
+});
+
+test('8 delivery days (thin prior window) suppresses delta signals — grades on absolutes', () => {
+  // 8 contiguous days: t7 has 7 days (reliable) but p7 only overlaps the
+  // ad's very first day (1 day, unreliable) — calendar-based windows expose
+  // this correctly. 16 lifetime purchases clears LEARNING; cpp7 lands right
+  // at target, so with no delta signals possible it grades WINNING.
+  const s = series(daysEnding(ASOF, 8));
+  const v = gradeAd({ ...BASE, series: s, campaign: campaignFor(s, 400000) });
+  assert.equal(v.verdict, 'WINNING');
+  assert.equal(v.decidingMetrics.cpp_delta_pct, null);
+  assert.equal(v.decidingMetrics.spend_share_delta, null);
+});
+
+test('cpmPrior7 = 0 never produces Infinity in headline or interpretation', () => {
+  const s = series(daysEnding(ASOF, 20, (i) => (i >= 6 && i <= 12 ? { cpm: 0 } : {})));
+  const v = gradeAd({ ...BASE, series: s, campaign: campaignFor(s, 400000) });
+  assert.equal(v.verdict, 'WINNING');
+  assert.doesNotMatch(v.headline, /Infinity/);
+  assert.doesNotMatch(v.interpretation, /Infinity/);
+});
+
+test('ctrFalling + elevated frequency is a standalone WATCH signal (role HYBRID)', () => {
+  const s = series(daysEnding(ASOF, 20, (i) => (i >= 13 ? { ctr: 1.8, frequency: 1.6 } : {})));
+  const v = gradeAd({ ...BASE, series: s, campaign: campaignFor(s, 400000) });
+  assert.equal(v.role, 'HYBRID');
+  assert.equal(v.verdict, 'WATCH');
+  assert.match(v.headline, /frequency 1\.6 rising while CTR falls/);
+});

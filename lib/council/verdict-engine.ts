@@ -1,13 +1,26 @@
 /** Ads Council verdict engine — doctrine §5.2, pure + deterministic.
- *  Windows end at the settled day (asOf = D-3); rows after asOf are ignored. */
+ *  Windows end at the settled day (asOf = D-3); rows after asOf are ignored.
+ *  t7/p7 select by CALENDAR DATE (asOf-6..asOf, asOf-13..asOf-7), not array
+ *  position, so a gap in delivery can't silently shift the window. Delta
+ *  signals (CPP/share/CTR/CPM change) only compute when BOTH windows have
+ *  ≥4 delivery days; thin windows fall back to absolute-only grading. */
 import type { AdSeries, CampaignWindow, CouncilSettingsRow, Tier, Role, VerdictResult } from './types';
 
 const MS_DAY = 86400000;
 const peso = (c: number) => `₱${Math.round(c / 100).toLocaleString()}`;
 
 function slice7(series: AdSeries, asOf: string) {
+  const asOfMs = Date.parse(asOf);
   const upTo = series.days.filter((d) => d.date <= asOf);
-  return { t7: upTo.slice(-7), p7: upTo.slice(-14, -7), upTo };
+  const t7 = series.days.filter((d) => {
+    const ms = Date.parse(d.date);
+    return ms >= asOfMs - 6 * MS_DAY && ms <= asOfMs;
+  });
+  const p7 = series.days.filter((d) => {
+    const ms = Date.parse(d.date);
+    return ms >= asOfMs - 13 * MS_DAY && ms <= asOfMs - 7 * MS_DAY;
+  });
+  return { t7, p7, upTo };
 }
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const avg = (xs: number[]) => (xs.length ? sum(xs) / xs.length : null);
@@ -32,6 +45,8 @@ export function windowsFor(series: AdSeries, asOf: string) {
     lifetimePurchases: sum(upTo.map((d) => d.purchases)),
     lifetimeSpend: sum(upTo.map((d) => d.spendCentavos)),
     ageDays,
+    t7Days: t7.length,
+    p7Days: p7.length,
   };
 }
 
@@ -55,23 +70,29 @@ export function gradeAd(args: {
   const target = settings.targetCppCentavos;
   const role = roleOf(w.freq7);
 
+  // Reliability guard: a thin window (e.g. 1 delivery day) makes percentage
+  // deltas explode. Require ≥4 delivery days in EACH window before trusting
+  // any delta signal; otherwise the ad grades on absolute checks only.
+  const reliable = w.t7Days >= 4 && w.p7Days >= 4;
+
   const totalSpend7 = Math.max(1, Object.values(campaign.campaignSpend7ByAd).reduce((a, b) => a + b, 0));
   const totalPrior7 = Math.max(1, Object.values(campaign.campaignSpendPrior7ByAd).reduce((a, b) => a + b, 0));
   const share7 = w.spend7 / totalSpend7;
   const sharePrior7 = (campaign.campaignSpendPrior7ByAd[series.adId] ?? 0) / totalPrior7;
-  const shareDelta = sharePrior7 > 0 ? (share7 - sharePrior7) / sharePrior7 : 0;
+  const shareDelta: number | null = !reliable ? null : (sharePrior7 > 0 ? (share7 - sharePrior7) / sharePrior7 : 0);
 
-  const cppDeltaPct = w.cpp7 != null && w.cppPrior7 != null && w.cppPrior7 > 0
+  const cppDeltaPct = reliable && w.cpp7 != null && w.cppPrior7 != null && w.cppPrior7 > 0
     ? ((w.cpp7 - w.cppPrior7) / w.cppPrior7) * 100 : null;
-  const ctrFalling = w.ctr7 != null && w.ctrPrior7 != null && w.ctr7 < w.ctrPrior7 * 0.95;
-  const cpmSpiking = w.cpm7 != null && w.cpmPrior7 != null && w.cpm7 > w.cpmPrior7 * 1.25 && !ctrFalling;
+  const ctrFalling = reliable && w.ctr7 != null && w.ctrPrior7 != null && w.ctr7 < w.ctrPrior7 * 0.95;
+  const cpmSpiking = reliable && w.cpm7 != null && w.cpmPrior7 != null && w.cpmPrior7 > 0
+    && w.cpm7 > w.cpmPrior7 * 1.25 && !ctrFalling;
 
   const deciding: Record<string, number | null> = {
     cpp_7d: w.cpp7 != null ? Math.round(w.cpp7) : null,
     cpp_prior_7d: w.cppPrior7 != null ? Math.round(w.cppPrior7) : null,
     cpp_delta_pct: cppDeltaPct != null ? Math.round(cppDeltaPct) : null,
     spend_share_7d: Number(share7.toFixed(3)),
-    spend_share_delta: Number(shareDelta.toFixed(3)),
+    spend_share_delta: shareDelta != null ? Number(shareDelta.toFixed(3)) : null,
     freq_7d: w.freq7 != null ? Number(w.freq7.toFixed(2)) : null,
     ctr_7d: w.ctr7 != null ? Number(w.ctr7.toFixed(2)) : null,
     lifetime_purchases: w.lifetimePurchases,
@@ -111,12 +132,14 @@ export function gradeAd(args: {
   }
 
   // LOSER — full §7.6 fatigue (approximated over settled windows) or red-flag.
-  const fatigued = cppDeltaPct != null && cppDeltaPct >= 20 && shareDelta < 0 && (ctrFalling || (w.freq7 ?? 0) > (role === 'CLOSER' ? 3.5 : 1.8));
-  const redFlag = share7 >= 0.2 && w.cpp7 != null && campaign.blendedCpp7Centavos != null && w.cpp7 > campaign.blendedCpp7Centavos * 1.3;
+  const fatigued = cppDeltaPct != null && cppDeltaPct >= 20 && shareDelta != null && shareDelta < 0
+    && (ctrFalling || (w.freq7 ?? 0) > (role === 'CLOSER' ? 3.5 : 1.8));
+  const redFlag = share7 >= 0.2 && w.cpp7 != null && campaign.blendedCpp7Centavos != null
+    && campaign.blendedCpp7Centavos > 0 && w.cpp7 > campaign.blendedCpp7Centavos * 1.3;
   if (fatigued || redFlag) {
     return make('LOSER', false,
       fatigued
-        ? `Fatigued: CPP +${Math.round(cppDeltaPct!)}%, share ${Math.round(shareDelta * 100)}% — pause within cap.`
+        ? `Fatigued: CPP +${Math.round(cppDeltaPct!)}%, share ${Math.round(shareDelta! * 100)}% — pause within cap.`
         : `Top-spend ad at ${Math.round((w.cpp7! / campaign.blendedCpp7Centavos!) * 100)}% of blended CPP — wrong crowd.`,
       fatigued
         ? `CPP ${peso(w.cppPrior7!)} → ${peso(w.cpp7!)} (+${Math.round(cppDeltaPct!)}%), spend share falling, engagement deteriorating — the full fatigue definition (§7.6). Pause respecting the 20%-of-daily-spend cap and replace the slot.`
@@ -124,17 +147,22 @@ export function gradeAd(args: {
       `Re-grades WINNING if CPP_7d ≤ ${peso(target)} for 3 consecutive settled days.`);
   }
 
-  // WATCH — exactly one deterioration signal.
+  // WATCH — one or more deterioration signals (severity order: CPP > share > freq/CTR > CPM).
   const signals: string[] = [];
-  if (cppDeltaPct != null && cppDeltaPct >= 10 && cppDeltaPct < 20) signals.push(`CPP +${Math.round(cppDeltaPct)}% this week`);
-  if (shareDelta <= -0.2) signals.push(`spend share down ${Math.round(-shareDelta * 100)}% — Andromeda cooling on it`);
-  if ((w.freq7 ?? 0) > (w.ctrPrior7 != null && ctrFalling ? 0 : Infinity)) { /* freq-rising uses ctrFalling combined below */ }
+  if (cppDeltaPct != null && cppDeltaPct >= 10) signals.push(`CPP +${Math.round(cppDeltaPct)}% this week`);
+  if (shareDelta != null && shareDelta <= -0.2) signals.push(`spend share down ${Math.round(-shareDelta * 100)}% — Andromeda cooling on it`);
   if (ctrFalling && w.freq7 != null && w.freq7 >= 1.5 && role !== 'CLOSER') signals.push(`frequency ${w.freq7.toFixed(1)} rising while CTR falls`);
   if (cpmSpiking) signals.push(`CPM +${Math.round(((w.cpm7! - w.cpmPrior7!) / w.cpmPrior7!) * 100)}% on flat CTR`);
   if (signals.length > 0) {
-    return make('WATCH', false,
-      `${signals[0]}. LOSER if the trend holds; one signal alone isn't actionable.`,
-      `One deterioration signal: ${signals.join('; ')}. One signal is early warning, not actionable — pausing a WATCH ad is a protocol violation (§5.2). Threshold to LOSER: CPP ≥ ${peso(Math.round((w.cppPrior7 ?? target) * 1.2))} sustained 3 days with share still falling.`,
+    const [worst, ...rest] = signals;
+    const multi = rest.length > 0;
+    const headline = multi
+      ? `${worst} (+${rest.length} more) — ${signals.length} deterioration signals, still not LOSER.`
+      : `${worst}. LOSER if the trend holds; one signal alone isn't actionable.`;
+    const interpretation = multi
+      ? `${signals.length} deterioration signals: ${signals.join('; ')}. Short of the full fatigue conjunction (§7.6) or red-flag — pausing a WATCH ad is a protocol violation (§5.2). Threshold to LOSER: CPP ≥ ${peso(Math.round((w.cppPrior7 ?? target) * 1.2))} sustained 3 days with share still falling.`
+      : `One deterioration signal: ${worst}. One signal is early warning, not actionable — pausing a WATCH ad is a protocol violation (§5.2). Threshold to LOSER: CPP ≥ ${peso(Math.round((w.cppPrior7 ?? target) * 1.2))} sustained 3 days with share still falling.`;
+    return make('WATCH', false, headline, interpretation,
       `Becomes LOSER if CPP_7d ≥ +20% vs prior AND share declining for 3 consecutive settled days.`);
   }
 
@@ -142,6 +170,6 @@ export function gradeAd(args: {
   const jobLine = role === 'PROSPECTOR' ? 'Prospecting engine' : role === 'CLOSER' ? 'Closer doing closer work' : 'Hybrid workhorse';
   return make('WINNING', false,
     `${jobLine} at ${w.cpp7 != null ? peso(w.cpp7) : '—'} CPP. Do not touch.`,
-    `7d CPP ${w.cpp7 != null ? peso(w.cpp7) : '—'} ≤ target ${peso(target)}, spend share ${Math.round(share7 * 100)}% ${shareDelta >= 0 ? 'rising' : 'stable'}, ${role.toLowerCase()} metrics healthy. Demotes to WATCH on any single deterioration signal (CPP +10%, share −20%, freq↑/CTR↓, CPM +25%).`,
+    `7d CPP ${w.cpp7 != null ? peso(w.cpp7) : '—'} ≤ target ${peso(target)}, spend share ${Math.round(share7 * 100)}% ${shareDelta != null && shareDelta >= 0 ? 'rising' : 'stable'}, ${role.toLowerCase()} metrics healthy. Demotes to WATCH on any single deterioration signal (CPP +10%, share −20%, freq↑/CTR↓, CPM +25%).`,
     `Demotes to WATCH if spend share drops >20% or CPP rises >10% week-over-week.`);
 }
