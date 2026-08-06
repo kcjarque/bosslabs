@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     // what's charged now for the 'full' and 'installment' plans; a 'reservation'
     // deposit is unchanged and the discount rides on total_centavos so the
     // (externally-collected) balance is honoured.
-    const standard = config.standardPriceCentavos ?? 7_500_000;
+    const standard = config.standardPriceCentavos ?? 15_000_000;
     const promoInput = String(b.promoCode ?? '').trim();
     let appliedPromo: string | null = null;
     let discountCentavos = 0;
