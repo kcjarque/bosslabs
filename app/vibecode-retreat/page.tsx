@@ -17,7 +17,7 @@ const SLUG = 'vibecode-retreat';
 export const metadata: Metadata = {
   title: 'VibeCode Retreat — Walk in with an idea. Walk out with an app.',
   description:
-    'An invite-only, build-or-refund founder retreat. July 31 – August 1, Tagaytay City. 15 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
+    'An invite-only, build-or-refund founder retreat. September 11 – 12, Tagaytay City. 15 founders. 24 hours. Walk out with a real, custom app that raises your valuation.',
 };
 
 async function getRetreat() {
@@ -350,7 +350,7 @@ function RetreatHeader() {
 /* --------------------------------------------------------------------- */
 function Hero({ priceCentavos, slashedCentavos }: { priceCentavos: number | null; slashedCentavos?: number | null }) {
   const cards = [
-    { icon: IC.calendar, k: 'WHEN', v: 'July 31 – August 1, 10:00 AM', s: 'Friday to Saturday' },
+    { icon: IC.calendar, k: 'WHEN', v: 'September 11 – 12, 10:00 AM', s: 'Friday to Saturday' },
     { icon: IC.people, k: 'WHO', v: 'Only 15 founders', s: 'Invite-only cohort' },
     { icon: IC.pin, k: 'WHERE', v: 'Tagaytay City, Cavite', s: 'The best private villa' },
     { icon: IC.rocket, k: 'FORMAT', v: '24 straight hours', s: 'Build · Pitch · Ship' },
@@ -564,7 +564,7 @@ function BillionaireSession() {
       </div>
       <SpecBar
         items={[
-          { icon: IC.calendar, top: 'July 31 – Aug 1', bottom: '10 AM' },
+          { icon: IC.calendar, top: 'Sep 11 – 12', bottom: '10 AM' },
           { icon: IC.bed, top: '2 Day · 1 Night', bottom: 'Live-in build' },
           { icon: IC.pin, top: 'Tagaytay City', bottom: 'Cavite' },
         ]}
@@ -638,7 +638,7 @@ function FinalCta() {
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.18em] text-ink-300">
           <span className="inline-flex items-center gap-2 text-cyan-300">{IC.refund} Build-or-refund</span>
           <span>Tagaytay City, Cavite</span>
-          <span>July 31 – August 1</span>
+          <span>September 11 – 12</span>
         </div>
       </div>
     </section>
