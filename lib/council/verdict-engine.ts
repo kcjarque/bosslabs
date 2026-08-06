@@ -136,6 +136,28 @@ export function gradeAd(args: {
     && (ctrFalling || (w.freq7 ?? 0) > (role === 'CLOSER' ? 3.5 : 1.8));
   const redFlag = share7 >= 0.2 && w.cpp7 != null && campaign.blendedCpp7Centavos != null
     && campaign.blendedCpp7Centavos > 0 && w.cpp7 > campaign.blendedCpp7Centavos * 1.3;
+
+  // RECOVERY GUARD — never recommend cutting an ad that is converting cheaply
+  // RIGHT NOW. The settled windows above end at D-3 (Meta restates for 72h), so
+  // a bad 7-day stretch can be stale: the ad may have bounced back on the last
+  // 1-2 (still-preliminary) days. Using fresh data only to WITHHOLD a
+  // destructive verdict is always safe — it can downgrade LOSER→WATCH, never
+  // escalate. Recovering = ≥2 purchases in the preliminary tail at a blended
+  // cost within 1.2× target. This is the fix for "it told me to kill an ad
+  // that's still generating sales."
+  const tail = series.days.filter((d) => d.date > asOf);
+  const tailPurch = tail.reduce((s, d) => s + d.purchases, 0);
+  const tailSpend = tail.reduce((s, d) => s + d.spendCentavos, 0);
+  const tailCpp = tailPurch > 0 ? tailSpend / tailPurch : null;
+  const recovering = tailCpp != null && tailPurch >= 2 && tailCpp <= target * 1.2;
+
+  if ((fatigued || redFlag) && recovering) {
+    return make('WATCH', false,
+      `Was getting expensive, but bounced back — ${tailPurch} buyers at ${peso(tailCpp!)} in the last few days. Watch, don't cut.`,
+      `The settled 7-day window (through ${asOf}) looked fatigued (CPP ${cppDeltaPct != null ? `+${Math.round(cppDeltaPct)}%` : 'up'}), but the most recent days recovered: ${tailPurch} purchases at ${peso(tailCpp!)} each, at or below target ${peso(target)}. Not a cut — the fatigue read is stale. Hold and re-check once these days settle.`,
+      `Becomes a real cut only if the recovery fades: CPP back above ${peso(Math.round(target * 1.3))} with no cheap days for 3 straight settled days.`);
+  }
+
   if (fatigued || redFlag) {
     return make('LOSER', false,
       fatigued

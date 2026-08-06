@@ -74,6 +74,40 @@ test('full fatigue (CPP +25%, share down, ctr falling) is LOSER', () => {
   assert.equal(v.verdict, 'LOSER');
 });
 
+test('recovery guard: fatigued through the settled window but bouncing back in the preliminary tail → WATCH, never LOSER', () => {
+  // Fatigued exactly like the LOSER case, with the window ending at ASOF…
+  const fatiguedDays = daysEnding(ASOF, 20, (i) => (i >= 13
+    ? { purchases: 1, spendCentavos: 60000, ctr: 1.0, frequency: 2.6 } : {}));
+  // …then the ad recovers hard on the two still-preliminary days AFTER asOf.
+  const recovery = [
+    day('2026-08-04', { purchases: 8, spendCentavos: 160000 }), // ₱200/buyer
+    day('2026-08-05', { purchases: 8, spendCentavos: 200000 }), // ₱250/buyer
+  ];
+  const s = series([...fatiguedDays, ...recovery]);
+  // Inline campaign context: ad share collapsed (30% → 6%) so fatigue fires.
+  const campaign = {
+    totalSpend7Centavos: 1_000_000,
+    blendedCpp7Centavos: 45000,
+    campaignSpend7ByAd: { a1: 60000, other: 940000 },
+    campaignSpendPrior7ByAd: { a1: 300000, other: 700000 },
+  };
+  const v = gradeAd({ ...BASE, series: s, campaign });
+  assert.equal(v.verdict, 'WATCH');
+  assert.match(v.headline, /bounced back|don.t cut/i);
+});
+
+test('recovery guard does NOT rescue a genuinely dead ad (no purchases in the tail)', () => {
+  const dead = daysEnding(ASOF, 20, (i) => (i >= 13
+    ? { purchases: 1, spendCentavos: 60000, ctr: 1.0, frequency: 2.6 } : {}));
+  const stillDead = [
+    day('2026-08-04', { purchases: 0, spendCentavos: 160000 }),
+    day('2026-08-05', { purchases: 0, spendCentavos: 200000 }),
+  ];
+  const s = series([...dead, ...stillDead]);
+  const v = gradeAd({ ...BASE, series: s, campaign: campaignFor(s, 800000) });
+  assert.equal(v.verdict, 'LOSER');
+});
+
 test('zero purchases after 3x target spend post-learning is LOSER', () => {
   const s = series(daysEnding(ASOF, 10, () => ({ purchases: 0, spendCentavos: 20000 })));
   // lifetime spend ₱2,000*10... ensure > 3×₱500 = ₱1,500 ✓ and >72h old ✓ — but <10 purchases…
