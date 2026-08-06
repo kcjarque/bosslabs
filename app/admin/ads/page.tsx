@@ -90,10 +90,11 @@ function cmpBy(a: AdEntity, b: AdEntity, key: SortKey, dir: 'asc' | 'desc'): num
   return dir === 'asc' ? av - bv : bv - av;
 }
 
-function AdsTabs({ view }: { view: 'live' | 'results' }) {
+function AdsTabs({ view }: { view: 'live' | 'results' | 'council' }) {
   const tabs = [
     { key: 'live' as const, label: 'Live (Meta)', href: '/admin/ads' },
     { key: 'results' as const, label: 'Results over time', href: '/admin/ads?view=results' },
+    { key: 'council' as const, label: 'Council', href: '/admin/ads?view=council' },
     { key: 'settings' as const, label: 'Settings', href: '/admin/ads/settings' },
   ];
   return (
@@ -136,6 +137,19 @@ export default async function AdsPage({
         </header>
         <AdsTabs view="results" />
         <AdsResultsView searchParams={searchParams} />
+      </div>
+    );
+  }
+
+  if (searchParams?.view === 'council') {
+    const { CouncilView } = await import('./CouncilView');
+    return (
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Ads</h1>
+        </header>
+        <AdsTabs view="council" />
+        <CouncilView />
       </div>
     );
   }
