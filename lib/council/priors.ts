@@ -17,12 +17,13 @@ function median(xs: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-/** Weekday key '0'..'6' for `date` (YYYY-MM-DD) in Asia/Manila. Pinning the
- *  timestamp to +08:00 before reading getUTCDay() ties the bucket to
- *  Manila's calendar day (Philippines has no DST, so the offset is constant
- *  year-round). */
+/** Weekday key '0'..'6' for `date` (YYYY-MM-DD) — the literal calendar
+ *  weekday of the Manila ops-date (Sunday=0..Saturday=6). `date` is already
+ *  a Manila-calendar date string, so no zone conversion is needed: parsing
+ *  it as UTC midnight and reading getUTCDay() returns that date's real
+ *  weekday directly. */
 function weekdayKey(date: string): string {
-  return String(new Date(`${date}T00:00:00+08:00`).getUTCDay());
+  return String(new Date(`${date}T00:00:00Z`).getUTCDay());
 }
 
 /** OLS slope of `ys` against its own index (0..n-1) — the "(dayIndex, cpp)
@@ -72,6 +73,33 @@ export function computePriors(brand: Brand, series: AdSeries[]): PriorsRow {
 
   const cppValues = cppByDate.map((p) => p.cpp);
   const overallMean = mean(cppValues);
+
+  // medianWinnerLifespanDays doesn't depend on CPP at all, so compute it
+  // before the zero-mean guard below.
+  const spans: number[] = [];
+  for (const s of series) {
+    const lifetimePurchases = s.days.reduce((a, d) => a + d.purchases, 0);
+    if (lifetimePurchases < 10) continue;
+    const spendDates = s.days.filter((d) => d.spendCentavos > 0).map((d) => d.date).sort();
+    if (spendDates.length === 0) continue;
+    const span = Math.round(
+      (Date.parse(spendDates[spendDates.length - 1]) - Date.parse(spendDates[0])) / MS_DAY,
+    ) + 1;
+    spans.push(span);
+  }
+  const medianWinnerLifespanDays = spans.length > 0 ? median(spans) : null;
+
+  // Zero-mean guard: every remaining field divides by overallMean. Real
+  // spend data won't hit this (it needs $0 aggregate spend on a day with
+  // purchases attributed), but avoid NaN/Infinity if it ever does.
+  if (overallMean === 0) {
+    return {
+      brand, sampleDays,
+      dailyCppSigmaPct: null, weekdayMultipliers: null,
+      medianWinnerLifespanDays, cppDriftPctPerWeek: null,
+    };
+  }
+
   const variance = mean(cppValues.map((v) => (v - overallMean) ** 2));
   const dailyCppSigmaPct = (Math.sqrt(variance) / overallMean) * 100;
 
@@ -87,19 +115,6 @@ export function computePriors(brand: Brand, series: AdSeries[]): PriorsRow {
     const arr = byWeekday.get(String(wd));
     weekdayMultipliers[String(wd)] = arr && arr.length > 0 ? mean(arr) / overallMean : 1;
   }
-
-  const spans: number[] = [];
-  for (const s of series) {
-    const lifetimePurchases = s.days.reduce((a, d) => a + d.purchases, 0);
-    if (lifetimePurchases < 10) continue;
-    const spendDates = s.days.filter((d) => d.spendCentavos > 0).map((d) => d.date).sort();
-    if (spendDates.length === 0) continue;
-    const span = Math.round(
-      (Date.parse(spendDates[spendDates.length - 1]) - Date.parse(spendDates[0])) / MS_DAY,
-    ) + 1;
-    spans.push(span);
-  }
-  const medianWinnerLifespanDays = spans.length > 0 ? median(spans) : null;
 
   // Subsumed by the >=14 gate above today (n is always >=14 here, so this
   // never fires), but kept as the brief's stated formula explicitly

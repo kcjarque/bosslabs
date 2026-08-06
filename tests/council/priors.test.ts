@@ -61,6 +61,28 @@ test('winner-lifespan median: two winners spanning 10 and 20 days -> median 15',
   assert.equal(row.medianWinnerLifespanDays, 15);
 });
 
+test('weekday bucket uses the literal Manila calendar weekday, not a UTC+8-shifted one', () => {
+  // 2026-08-03 is a Monday (true weekday index 1). Give it a distinctive CPP
+  // (P900) with 13 filler purchase-days at a different CPP (P500), all on
+  // Wed/Thu/Fri/Sat/Sun so none of them is a Monday (key '1' under the
+  // correct formula) or a Tuesday (key '1' under the old, wrong
+  // +08:00-shifted formula) — isolating key '1' to only this one date.
+  // Under the old formula this date bucketed to key '0' instead, leaving
+  // '1' at its untouched default of 1, so this assertion fails on the old
+  // code and passes on the fixed code.
+  const fillerDates = [
+    '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', '2026-08-09',
+    '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16',
+    '2026-08-19', '2026-08-20', '2026-08-21',
+  ];
+  const days = [
+    day('2026-08-03', { spendCentavos: 90000, purchases: 1 }),
+    ...fillerDates.map((d) => day(d, { spendCentavos: 50000, purchases: 1 })),
+  ].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const row = computePriors('BOSS', [series(days)]);
+  assert.notEqual(row.weekdayMultipliers!['1'], 1);
+});
+
 test('under 14 sample days nulls every field except sampleDays', () => {
   const s = series(daysEnding(ASOF, 10));
   const row = computePriors('BOSS', [s]);
