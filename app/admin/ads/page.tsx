@@ -5,6 +5,10 @@ import { formatPHP } from '@/lib/config';
 import { RefreshButton } from './RefreshButton';
 import { AdsResultsView } from './AdsResultsView';
 import { AdPreviewCell } from '@/components/admin/ads/AdPreviewCell';
+import { VerdictBadge } from '@/components/admin/council/VerdictBadge';
+import { AdviseDrawer } from '@/components/admin/council/AdviseDrawer';
+import { getLatestVerdicts } from '@/lib/council/db';
+import type { Tier, VerdictResult } from '@/lib/council/types';
 import {
   getAdsReportCached,
   ADS_RANGES,
@@ -147,7 +151,12 @@ export default async function AdsPage({
     if (activeOnly) p.set('active', '1');
     return `/admin/ads?${p.toString()}`;
   };
-  const report = await getAdsReportCached(rangeKey);
+  const [report, verdicts] = await Promise.all([
+    getAdsReportCached(rangeKey),
+    getLatestVerdicts('BOSS'),
+  ]);
+  const verdictByAdId: Record<string, VerdictResult> = {};
+  for (const v of verdicts) verdictByAdId[v.adId] = v;
 
   // Active-only filters the table rows (the summary stays campaign-level).
   const campaigns = report.configured
@@ -248,6 +257,12 @@ export default async function AdsPage({
 
           <AdsDashboard totals={report.totals} adCount={ads.length} activeOnly={activeOnly} />
 
+          {Object.keys(verdictByAdId).length === 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-800">
+              Run the council backfill to activate verdict grading
+            </div>
+          )}
+
           <AdsTable
             campaigns={campaigns}
             adsets={adsets}
@@ -256,6 +271,7 @@ export default async function AdsPage({
             sort={sortKey}
             dir={sortDir}
             sortHref={sortHref}
+            verdictByAdId={verdictByAdId}
           />
         </>
       )}
@@ -331,6 +347,7 @@ function AdsTable({
   sort,
   dir,
   sortHref,
+  verdictByAdId,
 }: {
   campaigns: AdEntity[];
   adsets: AdEntity[];
@@ -339,6 +356,7 @@ function AdsTable({
   sort: SortKey;
   dir: 'asc' | 'desc';
   sortHref: (col: SortKey) => string;
+  verdictByAdId: Record<string, VerdictResult>;
 }) {
   const sortedCampaigns = [...campaigns].sort((a, b) => cmpBy(a, b, sort, dir));
   const adsetsByCampaign = new Map<string, AdEntity[]>();
@@ -367,6 +385,8 @@ function AdsTable({
             <tr className="border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.06em] text-slate-500">
               <th className="px-3 py-2 text-left font-medium">Name</th>
               <th className="px-3 py-2 text-left font-medium">Status</th>
+              <th className="px-3 py-2 text-left font-medium">Verdict</th>
+              <th className="px-3 py-2 text-left font-medium">Advise</th>
               {SORT_COLS.map(({ key, label }) => {
                 const active = sort === key;
                 return (
@@ -390,24 +410,45 @@ function AdsTable({
             </tr>
           </thead>
           <tbody>
-            {sortedCampaigns.map((camp) => (
-              <Fragment key={camp.id}>
-                <Row e={camp} benchmark={benchmark} indent={0} bold tint="bg-slate-50" />
-                {(adsetsByCampaign.get(camp.id) ?? []).map((aset) => (
-                  <Fragment key={aset.id}>
-                    <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" />
-                    {(adsByParent.get(aset.id) ?? []).map((ad) => (
-                      <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} />
-                    ))}
-                  </Fragment>
-                ))}
-              </Fragment>
-            ))}
+            {sortedCampaigns.map((camp) => {
+              // Roster counts for the campaign header (🟢n 🟡n 🔴n 🔵n) — tally
+              // verdict tiers across every ad nested under this campaign's ad sets.
+              const roster: Record<Tier, number> = { WINNING: 0, WATCH: 0, LOSER: 0, LEARNING: 0 };
+              for (const aset of adsetsByCampaign.get(camp.id) ?? []) {
+                for (const ad of adsByParent.get(aset.id) ?? []) {
+                  const v = verdictByAdId[ad.id];
+                  if (v) roster[v.verdict]++;
+                }
+              }
+              return (
+                <Fragment key={camp.id}>
+                  <Row
+                    e={camp}
+                    benchmark={benchmark}
+                    indent={0}
+                    bold
+                    tint="bg-slate-50"
+                    verdictByAdId={verdictByAdId}
+                    roster={roster}
+                  />
+                  {(adsetsByCampaign.get(camp.id) ?? []).map((aset) => (
+                    <Fragment key={aset.id}>
+                      <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" verdictByAdId={verdictByAdId} />
+                      {(adsByParent.get(aset.id) ?? []).map((ad) => (
+                        <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} />
+                      ))}
+                    </Fragment>
+                  ))}
+                </Fragment>
+              );
+            })}
             {orphans.length > 0 &&
-              orphans.map((ad) => <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} />)}
+              orphans.map((ad) => (
+                <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} />
+              ))}
             {campaigns.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-sm text-slate-400">
+                <td colSpan={12} className="px-3 py-6 text-center text-sm text-slate-400">
                   No campaign data in this period.
                 </td>
               </tr>
@@ -419,20 +460,36 @@ function AdsTable({
   );
 }
 
+function RosterCounts({ counts }: { counts: Record<Tier, number> }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-500">
+      <span>🟢{counts.WINNING}</span>
+      <span>🟡{counts.WATCH}</span>
+      <span>🔴{counts.LOSER}</span>
+      <span>🔵{counts.LEARNING}</span>
+    </span>
+  );
+}
+
 function Row({
   e,
   benchmark,
   indent,
   bold,
   tint,
+  verdictByAdId,
+  roster,
 }: {
   e: AdEntity;
   benchmark: number | null;
   indent: number;
   bold?: boolean;
   tint?: string;
+  verdictByAdId: Record<string, VerdictResult>;
+  roster?: Record<Tier, number>;
 }) {
   const levelLabel = e.level === 'campaign' ? 'Campaign' : e.level === 'adset' ? 'Ad set' : 'Ad';
+  const verdict = e.level === 'ad' ? verdictByAdId[e.id] : undefined;
   return (
     <tr className={`border-b border-slate-100 ${tint ?? ''}`}>
       <td className="px-3 py-2" style={{ paddingLeft: `${12 + indent * 16}px` }}>
@@ -457,6 +514,21 @@ function Row({
           <span className={`h-1.5 w-1.5 rounded-full ${e.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
           {e.active ? 'Active' : 'Paused'}
         </span>
+      </td>
+      <td className="px-3 py-2">
+        {e.level === 'campaign' && roster ? (
+          <RosterCounts counts={roster} />
+        ) : e.level === 'ad' ? (
+          <VerdictBadge v={verdict} />
+        ) : null}
+      </td>
+      <td className="px-3 py-2">
+        {e.level === 'ad' &&
+          (verdict ? (
+            <AdviseDrawer adId={e.id} adName={e.name} headline={verdict.headline} />
+          ) : (
+            <span className="text-slate-300">—</span>
+          ))}
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{peso(e.spend)}</td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-900">{intf(e.results)}</td>
