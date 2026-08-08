@@ -33,6 +33,7 @@ import { refreshPriors } from './priors';
 import { resolveDuePredictions } from './ledger';
 import { detectTriggers } from './triggers';
 import { runCouncilSession, settledDay } from './session';
+import { analyzeMissingCreatives } from './creative-context';
 import { buildBrief, dayQualityFor } from './brief';
 import type { AdSeries, Brand, VerdictResult } from './types';
 
@@ -308,6 +309,25 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
       } catch (err) {
         console.error('[council pipeline] runCouncilSession failed', errMsg(err));
       }
+    }
+
+    // Creative-context pickup — capped, non-blocking, AFTER the session so it
+    // never delays the time-critical verdict/brief. Brand-new ads get their
+    // format/angle/persona analyzed here and land in TOMORROW's council pack.
+    // On Vercel there's no ffmpeg binary, so VIDEO ads classify from their
+    // poster thumbnail + copy; IMAGE ads classify fully. Full-fidelity video
+    // (keyframes + Whisper transcript) + changed-creative refresh is the local
+    // backfill script's job. Any failure yields { failed }, logged, never thrown.
+    try {
+      const cc = await analyzeMissingCreatives(
+        brand,
+        eligibleSeries.map((s) => ({ adId: s.adId, adName: s.adName })),
+      );
+      if (cc.analyzed > 0 || cc.failed > 0) {
+        console.log(`[council pipeline] creative-context: ${cc.analyzed} analyzed, ${cc.failed} failed`);
+      }
+    } catch (err) {
+      console.error('[council pipeline] analyzeMissingCreatives failed', errMsg(err));
     }
   }
 

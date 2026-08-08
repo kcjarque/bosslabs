@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Tier, VerdictResult } from '@/lib/council/types';
+import type { CreativeDetail } from '@/lib/council/creative-context';
 
 /** Clickable headline → fixed right-side drawer with the ad's full council
  *  advice. Same overlay pattern as AdPreviewCell's modal (fixed inset-0
@@ -60,6 +61,7 @@ export function AdviseDrawer({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<VerdictResult[] | null>(null);
+  const [creative, setCreative] = useState<CreativeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function onOpen() {
@@ -70,10 +72,11 @@ export function AdviseDrawer({
     try {
       const res = await fetch(`/api/admin/council/ad-history?adId=${encodeURIComponent(adId)}`);
       const json = await res.json().catch(() => null);
-      if (!res.ok || !Array.isArray(json)) {
+      if (!res.ok || !json || !Array.isArray(json.history)) {
         setError((json && json.error) || `HTTP ${res.status}`);
       } else {
-        setHistory(json as VerdictResult[]);
+        setHistory(json.history as VerdictResult[]);
+        setCreative((json.creative as CreativeDetail | null) ?? null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -132,7 +135,50 @@ export function AdviseDrawer({
                 </div>
               )}
 
-              {!loading && !error && !latest && (
+              {!loading && !error && creative && (
+                <div className="mb-5 space-y-3 border-b border-slate-100 pb-5">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-slate-400">
+                      Creative
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {[creative.format, creative.angle, creative.persona, creative.awarenessLevel]
+                        .filter(Boolean)
+                        .map((t) => (
+                          <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                            {t.replace(/-/g, ' ')}
+                          </span>
+                        ))}
+                      {creative.visualQuality != null && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                          quality {creative.visualQuality}/5
+                        </span>
+                      )}
+                      {creative.onBrand === true && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">on-brand</span>
+                      )}
+                      {creative.onBrand === false && (
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700">off-brand</span>
+                      )}
+                    </div>
+                  </div>
+                  {creative.hook && (
+                    <div>
+                      <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-slate-400">Hook</div>
+                      <p className="mt-1 text-[13px] italic leading-relaxed text-slate-700">&ldquo;{creative.hook}&rdquo;</p>
+                    </div>
+                  )}
+                  {creative.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                      {creative.tags.map((t) => (
+                        <span key={t} className="text-[11px] text-slate-400">#{t.replace(/\s+/g, '')}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!loading && !error && !latest && !creative && (
                 <p className="text-[13px] text-slate-500">No verdict history yet for this ad.</p>
               )}
 

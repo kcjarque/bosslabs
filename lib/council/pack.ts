@@ -14,6 +14,7 @@ import { sumDfyIncomeCentavos } from '@/lib/dfy-crm';
 import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from './db';
 import { windowsFor } from './verdict-engine';
 import { getExpertWeights } from './ledger';
+import { getCreativeBriefs, type CreativeBrief } from './creative-context';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -23,6 +24,8 @@ export type CouncilPack = {
   ads: Array<{
     adId: string; adName: string; role: Role; verdict: Tier; daysInTier: number;
     windows: ReturnType<typeof windowsFor>; last14: AdDay[];
+    /** What the creative IS (angle/persona/hook/quality) — null until analyzed. */
+    creative: CreativeBrief | null;
   }>;
   campaign: {
     totalSpend7: number; blendedCpp7: number | null; blendedCppPrior7: number | null;
@@ -189,7 +192,7 @@ async function fetchOpenPredictions(brand: Brand): Promise<CouncilPack['openPred
  *  exactly once, here. */
 export async function assemblePack(brand: Brand, asOfSettled: string): Promise<CouncilPack> {
   const [series, verdicts, priors, settings, weights, signups,
-    webinarIncomeCentavos, dfyIncomeCentavos, openPredictions, lastVerdict] = await Promise.all([
+    webinarIncomeCentavos, dfyIncomeCentavos, openPredictions, lastVerdict, creativeBriefs] = await Promise.all([
     getAdSeries(brand),
     getLatestVerdicts(brand),
     getPriors(brand),
@@ -200,6 +203,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     sumDfyIncomeCentavos(),
     fetchOpenPredictions(brand),
     fetchLastVerdict(brand),
+    getCreativeBriefs(brand),
   ]);
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
@@ -241,6 +245,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
         daysInTier: v?.daysInTier ?? 0,
         windows: w,
         last14: s.days.filter((d) => d.date >= since14 && d.date <= asOfSettled),
+        creative: creativeBriefs.get(s.adId) ?? null,
       });
     }
   }

@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { isAdminLoggedIn, isSameOrigin } from '@/lib/admin-auth';
 import { getVerdictHistory } from '@/lib/council/db';
+import { getCreativeContext } from '@/lib/council/creative-context';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const adId = url.searchParams.get('adId');
   if (!adId) return NextResponse.json({ error: 'adId required' }, { status: 400 });
-  const history = await getVerdictHistory(adId, 60);
-  return NextResponse.json(history);
+  const [history, creative] = await Promise.all([
+    getVerdictHistory(adId, 60),
+    getCreativeContext(adId),
+  ]);
+  return NextResponse.json({ history, creative });
 }
