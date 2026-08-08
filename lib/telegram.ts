@@ -187,6 +187,32 @@ export async function sendTelegramTo(
 }
 
 /**
+ * Send PLAIN TEXT (no parse_mode) to a specific chat — safe for freeform
+ * model output that may contain stray `<`, `&`, etc. that would break HTML
+ * parse mode. Used by Prince's conversational replies. Never throws.
+ */
+export async function sendTelegramPlain(
+  chatId: string,
+  text: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    if (!chatId) return { ok: false, reason: 'no chat id' };
+    const token = (await getSettings()).telegramBotToken;
+    if (!token) return { ok: false, reason: 'telegram not configured' };
+    const res = await fetch(`${BASE}${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    });
+    const json = (await res.json()) as TgResponse;
+    if (!json.ok) return { ok: false, reason: json.description };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : 'error' };
+  }
+}
+
+/**
  * Second Telegram chat for the ABANDONED-CART sales team ("Bosslabs |
  * Closers"). Receives ONLY abandoned-cart + recovered-sale alerts — a pure
  * add-on alongside the main chat (which still gets everything). Configurable
