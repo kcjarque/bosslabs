@@ -141,6 +141,11 @@ export function AdviseDrawer({
                     <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-slate-400">
                       Creative
                     </div>
+                    <div className="mt-1.5">
+                      <span className="inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-[12px] font-semibold text-cyan-800 ring-1 ring-inset ring-cyan-600/20">
+                        {creative.creativeTag}
+                      </span>
+                    </div>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {[creative.format, creative.angle, creative.persona, creative.awarenessLevel]
                         .filter(Boolean)

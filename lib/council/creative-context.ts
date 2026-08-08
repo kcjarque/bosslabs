@@ -243,13 +243,40 @@ async function imageToBase64(url: string): Promise<string | null> {
 
 /* ── Council read ──────────────────────────────────────────────────────── */
 
+/** The controlled, human-facing Creative Tag vocabulary (<10) — one headline
+ *  label per ad, projected from the AI's finer-grained format + angle so the
+ *  ads table, the Advise drawer, and the council all speak the same words. */
+export const CREATIVE_TAGS = [
+  'Testimonial', 'Talking Head', 'Walkthrough', 'Problem-Based',
+  'Income Claim', 'Objection', 'Urgency', 'Graphic', 'Other',
+] as const;
+export type CreativeTag = (typeof CREATIVE_TAGS)[number];
+
+/** Deterministic projection of (format, angle) → one Creative Tag. Angle-first
+ *  (the strategy that matters) with two format-native exceptions (talking-head,
+ *  walkthrough). Pure — same inputs always map to the same tag, so every ad,
+ *  new or backfilled, is labelled consistently with no extra LLM cost. */
+export function deriveCreativeTag(format: string, angle: string): CreativeTag {
+  const f = format.toLowerCase();
+  const a = angle.toLowerCase();
+  if (a === 'testimonial' || f.includes('testimonial')) return 'Testimonial';
+  if (a === 'income-claim') return 'Income Claim';
+  if (a === 'problem-aware') return 'Problem-Based';
+  if (a === 'objection') return 'Objection';
+  if (a === 'urgency') return 'Urgency';
+  if (f.includes('walkthrough') || a === 'proof-build' || a === 'education') return 'Walkthrough';
+  if (f.includes('talkinghead') || a === 'founder') return 'Talking Head';
+  if (f.includes('graphic') || f.includes('static')) return 'Graphic';
+  return 'Other';
+}
+
 /** Compact creative-strategy view for the council pack — deliberately drops
  *  the transcript and hash so the JSON.stringify'd LLM prompt stays lean
  *  (the full transcript lives in the DB for the Advise drawer). */
 export type CreativeBrief = {
   mediaType: string; format: string; angle: string; persona: string;
   awarenessLevel: string; hook: string; visualQuality: number | null;
-  onBrand: boolean | null; tags: string[];
+  onBrand: boolean | null; tags: string[]; creativeTag: CreativeTag;
 };
 
 /** ad_id → CreativeBrief for every analyzed ad in the brand. Empty map when
@@ -262,13 +289,15 @@ export async function getCreativeBriefs(brand: Brand = 'BOSS'): Promise<Map<stri
     .eq('brand', brand);
   const m = new Map<string, CreativeBrief>();
   for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const format = String(r.format ?? ''), angle = String(r.angle ?? '');
     m.set(r.ad_id as string, {
-      mediaType: String(r.media_type ?? ''), format: String(r.format ?? ''),
-      angle: String(r.angle ?? ''), persona: String(r.persona ?? ''),
+      mediaType: String(r.media_type ?? ''), format, angle,
+      persona: String(r.persona ?? ''),
       awarenessLevel: String(r.awareness_level ?? ''), hook: String(r.hook_text ?? ''),
       visualQuality: typeof r.visual_quality === 'number' ? r.visual_quality : null,
       onBrand: typeof r.on_brand === 'boolean' ? r.on_brand : null,
       tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map(String) : [],
+      creativeTag: deriveCreativeTag(format, angle),
     });
   }
   return m;
@@ -288,13 +317,15 @@ export async function getCreativeContext(adId: string): Promise<CreativeDetail |
     .maybeSingle();
   if (!data) return null;
   const r = data as Record<string, unknown>;
+  const format = String(r.format ?? ''), angle = String(r.angle ?? '');
   return {
-    mediaType: String(r.media_type ?? ''), format: String(r.format ?? ''),
-    angle: String(r.angle ?? ''), persona: String(r.persona ?? ''),
+    mediaType: String(r.media_type ?? ''), format, angle,
+    persona: String(r.persona ?? ''),
     awarenessLevel: String(r.awareness_level ?? ''), hook: String(r.hook_text ?? ''),
     visualQuality: typeof r.visual_quality === 'number' ? r.visual_quality : null,
     onBrand: typeof r.on_brand === 'boolean' ? r.on_brand : null,
     tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map(String) : [],
+    creativeTag: deriveCreativeTag(format, angle),
     transcript: String(r.transcript ?? ''),
     confidence: typeof r.confidence === 'number' ? r.confidence : null,
     analyzedAt: r.analyzed_at ? String(r.analyzed_at) : null,

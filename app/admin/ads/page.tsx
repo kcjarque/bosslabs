@@ -7,7 +7,9 @@ import { AdsResultsView } from './AdsResultsView';
 import { AdPreviewCell } from '@/components/admin/ads/AdPreviewCell';
 import { VerdictBadge } from '@/components/admin/council/VerdictBadge';
 import { AdviseDrawer } from '@/components/admin/council/AdviseDrawer';
+import { CreativeTagCell } from '@/components/admin/council/CreativeTagCell';
 import { getLatestVerdicts } from '@/lib/council/db';
+import { getCreativeBriefs, type CreativeBrief } from '@/lib/council/creative-context';
 import type { Tier, VerdictResult } from '@/lib/council/types';
 import {
   getAdsReportCached,
@@ -165,9 +167,10 @@ export default async function AdsPage({
     if (activeOnly) p.set('active', '1');
     return `/admin/ads?${p.toString()}`;
   };
-  const [report, verdicts] = await Promise.all([
+  const [report, verdicts, creativeByAdId] = await Promise.all([
     getAdsReportCached(rangeKey),
     getLatestVerdicts('BOSS'),
+    getCreativeBriefs('BOSS'),
   ]);
   const verdictByAdId: Record<string, VerdictResult> = {};
   for (const v of verdicts) verdictByAdId[v.adId] = v;
@@ -286,6 +289,7 @@ export default async function AdsPage({
             dir={sortDir}
             sortHref={sortHref}
             verdictByAdId={verdictByAdId}
+            creativeByAdId={creativeByAdId}
           />
         </>
       )}
@@ -362,6 +366,7 @@ function AdsTable({
   dir,
   sortHref,
   verdictByAdId,
+  creativeByAdId,
 }: {
   campaigns: AdEntity[];
   adsets: AdEntity[];
@@ -371,6 +376,7 @@ function AdsTable({
   dir: 'asc' | 'desc';
   sortHref: (col: SortKey) => string;
   verdictByAdId: Record<string, VerdictResult>;
+  creativeByAdId: Map<string, CreativeBrief>;
 }) {
   const sortedCampaigns = [...campaigns].sort((a, b) => cmpBy(a, b, sort, dir));
   const adsetsByCampaign = new Map<string, AdEntity[]>();
@@ -401,6 +407,7 @@ function AdsTable({
               <th className="px-3 py-2 text-left font-medium">Status</th>
               <th className="px-3 py-2 text-left font-medium">Verdict</th>
               <th className="px-3 py-2 text-left font-medium">Advise</th>
+              <th className="px-3 py-2 text-left font-medium">Creative</th>
               {SORT_COLS.map(({ key, label }) => {
                 const active = sort === key;
                 return (
@@ -443,13 +450,14 @@ function AdsTable({
                     bold
                     tint="bg-slate-50"
                     verdictByAdId={verdictByAdId}
+                    creativeByAdId={creativeByAdId}
                     roster={roster}
                   />
                   {(adsetsByCampaign.get(camp.id) ?? []).map((aset) => (
                     <Fragment key={aset.id}>
-                      <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" verdictByAdId={verdictByAdId} />
+                      <Row e={aset} benchmark={benchmark} indent={1} tint="bg-slate-50/40" verdictByAdId={verdictByAdId} creativeByAdId={creativeByAdId} />
                       {(adsByParent.get(aset.id) ?? []).map((ad) => (
-                        <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} />
+                        <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} creativeByAdId={creativeByAdId} />
                       ))}
                     </Fragment>
                   ))}
@@ -458,11 +466,11 @@ function AdsTable({
             })}
             {orphans.length > 0 &&
               orphans.map((ad) => (
-                <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} />
+                <Row key={ad.id} e={ad} benchmark={benchmark} indent={2} verdictByAdId={verdictByAdId} creativeByAdId={creativeByAdId} />
               ))}
             {campaigns.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-sm text-slate-400">
+                <td colSpan={13} className="px-3 py-6 text-center text-sm text-slate-400">
                   No campaign data in this period.
                 </td>
               </tr>
@@ -492,6 +500,7 @@ function Row({
   bold,
   tint,
   verdictByAdId,
+  creativeByAdId,
   roster,
 }: {
   e: AdEntity;
@@ -500,6 +509,7 @@ function Row({
   bold?: boolean;
   tint?: string;
   verdictByAdId: Record<string, VerdictResult>;
+  creativeByAdId: Map<string, CreativeBrief>;
   roster?: Record<Tier, number>;
 }) {
   const levelLabel = e.level === 'campaign' ? 'Campaign' : e.level === 'adset' ? 'Ad set' : 'Ad';
@@ -543,6 +553,9 @@ function Row({
           ) : (
             <span className="text-slate-300">—</span>
           ))}
+      </td>
+      <td className="px-3 py-2">
+        {e.level === 'ad' ? <CreativeTagCell brief={creativeByAdId.get(e.id) ?? null} /> : null}
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{peso(e.spend)}</td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-900">{intf(e.results)}</td>
