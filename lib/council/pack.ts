@@ -14,7 +14,7 @@ import { sumDfyIncomeCentavos } from '@/lib/dfy-crm';
 import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from './db';
 import { windowsFor } from './verdict-engine';
 import { getExpertWeights } from './ledger';
-import { getCreativeBriefs, type CreativeBrief } from './creative-context';
+import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
 import { getCampaignStructures, type CampaignStructure } from '@/lib/meta-ads';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
@@ -34,6 +34,13 @@ export type CouncilPack = {
   /** Live campaign structure (CBO/ABO/Advantage+ + budgets + ad sets) so the
    *  council prescribes EXECUTABLE moves. Empty if Meta is unreachable. */
   structure: CampaignStructure[];
+  /** The current WINNERS' actual scripts — cheapest per-buyer ads with real
+   *  volume, plus their hook + transcript — so new creative ideas are grounded
+   *  in what's PROVEN to convert, not generic advice. */
+  winningCreatives: Array<{
+    adName: string; creativeTag: string; angle: string; persona: string;
+    cpp: number | null; cvr: number | null; hook: string; transcript: string;
+  }>;
   campaign: {
     totalSpend7: number; blendedCpp7: number | null; blendedCppPrior7: number | null;
     daysSinceLastCreativeLaunch: number | null;
@@ -389,10 +396,31 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     };
   });
 
+  // Winners = cheapest per-buyer ads with real volume (>=3 buyers in 7d).
+  // Pull their actual scripts so new creative ideas copy what converts.
+  const winners = ads
+    .filter((a) => a.windows.cpp7 != null && a.windows.purchases7 >= 3)
+    .sort((a, b) => (a.windows.cpp7 as number) - (b.windows.cpp7 as number))
+    .slice(0, 5);
+  const scripts = await getScripts(winners.map((a) => a.adId)).catch(() => new Map());
+  const winningCreatives = winners.map((a) => {
+    const sc = scripts.get(a.adId);
+    return {
+      adName: a.adName,
+      creativeTag: a.creative?.creativeTag ?? '',
+      angle: a.creative?.angle ?? '',
+      persona: a.creative?.persona ?? '',
+      cpp: a.windows.cpp7 ?? null,
+      cvr: a.windows.cvr7 ?? null,
+      hook: sc?.hook ?? a.creative?.hook ?? '',
+      transcript: sc?.transcript ?? '',
+    };
+  });
+
   return {
     brand, asOf: asOfSettled, dataMode,
     ads, campaign, cohorts,
-    structure,
+    structure, winningCreatives,
     weeklyTrend, pastPlans,
     priors, weights, openPredictions, lastVerdict, settings,
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },

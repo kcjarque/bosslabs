@@ -15,6 +15,7 @@ type SessionRow = {
     action?: string; kill_switch?: { text?: string }; dissent_on_record?: string;
     diagnosis?: { root_cause?: string; lever?: string; evidence?: string };
     action_plan?: Array<{ step?: string; because?: string; lever?: string }>;
+    creative_ideas?: Array<{ concept?: string; angle?: string; persona?: string; hook?: string; why?: string }>;
   } | null;
   model: string;
   created_at: string;
@@ -111,6 +112,18 @@ export async function CouncilView() {
                       <span key={i} className="mt-0.5 block pl-3">
                         {i + 1}. {st.step}
                         {st.because ? <span className="text-slate-400"> — {st.because}</span> : ''}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {s.verdict?.creative_ideas && s.verdict.creative_ideas.length > 0 && (
+                  <span className="mt-1 block text-[12px] text-slate-700">
+                    <b className="text-slate-500">💡 Creative to test:</b>
+                    {s.verdict.creative_ideas.map((idea, i) => (
+                      <span key={i} className="mt-0.5 block pl-3">
+                        • {idea.concept}
+                        {idea.persona ? <span className="text-slate-400"> ({idea.persona.replace(/-/g, ' ')})</span> : ''}
+                        {idea.hook ? <span className="block pl-3 text-slate-400 italic">“{idea.hook}”</span> : ''}
                       </span>
                     ))}
                   </span>

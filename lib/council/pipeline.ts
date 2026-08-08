@@ -95,8 +95,12 @@ async function sessionExistsToday(brand: Brand, todayManila: string): Promise<bo
 async function fetchTodaySessionAction(
   brand: Brand,
   todayManila: string,
-): Promise<{ action: string | null; plan: { rootCause: string; steps: string[] } | null }> {
-  if (!isSupabaseConfigured()) return { action: null, plan: null };
+): Promise<{
+  action: string | null;
+  plan: { rootCause: string; steps: string[] } | null;
+  ideas: Array<{ concept: string; hook: string }> | null;
+}> {
+  if (!isSupabaseConfigured()) return { action: null, plan: null, ideas: null };
   const { data, error } = await getSupabase()
     .from('council_sessions')
     .select('verdict')
@@ -106,11 +110,12 @@ async function fetchTodaySessionAction(
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`fetchTodaySessionAction: ${error.message}`);
-  if (!data) return { action: null, plan: null };
+  if (!data) return { action: null, plan: null, ideas: null };
   const verdict = (data as { verdict: unknown }).verdict as {
     action?: unknown;
     diagnosis?: { root_cause?: unknown } | null;
     action_plan?: Array<{ step?: unknown }> | null;
+    creative_ideas?: Array<{ concept?: unknown; hook?: unknown }> | null;
   } | null;
   const action = verdict && typeof verdict.action === 'string' && verdict.action.length > 0 ? verdict.action : null;
   const rootCause = typeof verdict?.diagnosis?.root_cause === 'string' ? verdict.diagnosis.root_cause : '';
@@ -118,7 +123,12 @@ async function fetchTodaySessionAction(
     ? verdict!.action_plan.map((s) => (typeof s?.step === 'string' ? s.step : '')).filter(Boolean)
     : [];
   const plan = steps.length > 0 ? { rootCause, steps } : null;
-  return { action, plan };
+  const ideas = Array.isArray(verdict?.creative_ideas)
+    ? verdict!.creative_ideas
+        .map((i) => ({ concept: typeof i?.concept === 'string' ? i.concept : '', hook: typeof i?.hook === 'string' ? i.hook : '' }))
+        .filter((i) => i.concept)
+    : [];
+  return { action, plan, ideas: ideas.length > 0 ? ideas : null };
 }
 
 /** Any prediction resolved to a MISS by THIS run — `resolveDuePredictions`
@@ -382,14 +392,16 @@ export async function runCouncilPipeline(
 
   const verdictsForBrief = alreadyRan ? storedVerdicts : gradedRows;
 
-  // Circuit-breaker for the daily pulse: an ad that spent more than one
-  // target-buyer's worth on the last SETTLED day yet made zero sales is
-  // genuinely bleeding — the only thing allowed to make the daily actionable.
+  // Circuit-breaker for the daily pulse: an ad that spent TWO target-buyers'
+  // worth on the last SETTLED day yet made zero sales is genuinely bleeding.
+  // 2x (not 1x) so a barely-over-target ad on one noisy day doesn't false-
+  // alarm — the whole point of the pulse is to NOT trigger over-management.
+  const fireFloor = settings.targetCppCentavos * 2;
   const fires: string[] = [];
   for (const s of series) {
     const day = s.days.find((d) => d.date === asOf);
-    if (day && day.purchases === 0 && day.spendCentavos >= settings.targetCppCentavos) {
-      fires.push(`'${s.adName}' spent ₱${Math.round(day.spendCentavos / 100).toLocaleString()} with 0 sales`);
+    if (day && day.purchases === 0 && day.spendCentavos >= fireFloor) {
+      fires.push(`${s.adName} — ₱${Math.round(day.spendCentavos / 100).toLocaleString()} spent, 0 sales`);
     }
   }
 
@@ -404,7 +416,8 @@ export async function runCouncilPipeline(
     const chairNote = sessionAction.action != null ? sessionAction.action : 'Analysis produced no single headline action.';
     brief = buildBrief({
       brand, dateManila: todayManila, yesterday, avg7Cpp, dayQuality,
-      verdicts: verdictsForBrief, cohort, chairNote, nextLine, plan: sessionAction.plan,
+      verdicts: verdictsForBrief, cohort, chairNote, nextLine,
+      plan: sessionAction.plan, ideas: sessionAction.ideas,
     });
   } else {
     // Daily pulse — deterministic heartbeat, no LLM, no action list.

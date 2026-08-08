@@ -142,33 +142,50 @@ export function buildPulse(args: {
   const yCpp = yesterday && yesterday.purchases > 0 ? yesterday.spendCentavos / yesterday.purchases : null;
   const pct = yCpp != null && avg7Cpp != null && avg7Cpp !== 0 ? ((yCpp - avg7Cpp) / avg7Cpp) * 100 : null;
 
-  let line: string;
+  const prettyDate = (() => {
+    const d = new Date(`${dateManila}T00:00:00Z`);
+    return isNaN(d.getTime())
+      ? dateManila
+      : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  })();
+
+  // ── Yesterday block ──────────────────────────────────────────────────
+  let yesterdayBlock: string;
   if (!yesterday || yCpp == null) {
-    line = 'Numbers still settling — check back later.';
+    yesterdayBlock = `💰 <b>Yesterday</b>\nNumbers still settling — check back later.`;
   } else {
     const compare = pct == null ? ''
-      : Math.abs(pct) < 8 ? ' (about usual)'
-      : pct < 0 ? ` (${Math.round(-pct)}% cheaper than usual)`
-      : ` (${Math.round(pct)}% pricier than usual)`;
-    line = `Spent ${peso(yesterday.spendCentavos)} · ${yesterday.purchases} buyers · <b>${peso(yCpp)} each</b>${compare}.`;
+      : Math.abs(pct) < 8 ? ' · about usual'
+      : pct < 0 ? ` · <b>${Math.round(-pct)}% cheaper</b> than usual`
+      : ` · ${Math.round(pct)}% pricier than usual`;
+    yesterdayBlock =
+      `💰 <b>Yesterday</b>\n` +
+      `${peso(yesterday.spendCentavos)} spent → ${yesterday.purchases} buyers\n` +
+      `<b>${peso(yCpp)}</b> per buyer${compare}`;
   }
 
+  // ── Ad-health block (2×2, easier to scan than one dense row) ──────────
   const c = tierCounts(verdicts);
-  const roster = `🟢 ${c.WINNING} · 🟡 ${c.WATCH} · 🔴 ${c.LOSER} · 🌱 ${c.LEARNING}`;
+  const healthBlock =
+    `📊 <b>Ad health</b>\n` +
+    `🟢 ${c.WINNING} winning · 🟡 ${c.WATCH} to watch\n` +
+    `🔴 ${c.LOSER} to cut · 🌱 ${c.LEARNING} learning`;
 
-  const status = fires.length > 0
-    ? `🔥 <b>Worth a look:</b>\n${fires.map((f) => `• ${escHtml(f)}`).join('\n')}`
+  // ── Status / circuit-breaker ─────────────────────────────────────────
+  const statusBlock = fires.length > 0
+    ? `🔥 <b>Worth a look</b>\n${fires.map((f) => `• ${escHtml(f)}`).join('\n')}`
     : dayQuality === 'RED FLAG'
-      ? '🟠 A bit pricey yesterday — not urgent. The Sunday analysis will dig in.'
-      : '✅ All steady — nothing to touch today.';
+      ? `🟠 <b>A bit pricey</b> yesterday — not urgent; Sunday’s analysis will dig in.`
+      : `✅ <b>All steady</b> — nothing to touch today.`;
 
+  // Blank lines between blocks = breathing room (fixes the cramped look).
   return [
-    `🤴 <b>Prince’s Pulse — ${dateManila}</b>`,
-    line,
-    `Ads: ${roster}`,
-    status,
-    `<i>Deep analysis Sundays 10am · ask me anytime with /prince</i>`,
-  ].join('\n');
+    `🤴 <b>Prince’s Pulse</b>\n<i>${prettyDate}</i>`,
+    yesterdayBlock,
+    healthBlock,
+    statusBlock,
+    `<i>Deep dive Sunday 10am · ask me anything with /prince</i>`,
+  ].join('\n\n');
 }
 
 export function buildBrief(args: {
@@ -181,6 +198,8 @@ export function buildBrief(args: {
   chairNote: string; nextLine: string;
   /** The council's root-cause + ranked plan (from today's session), if one ran. */
   plan?: { rootCause: string; steps: string[] } | null;
+  /** Net-new creative concepts to test (from the weekly analysis). */
+  ideas?: Array<{ concept: string; hook: string }> | null;
 }): string {
   const { dateManila, yesterday, avg7Cpp, dayQuality, verdicts, cohort, chairNote } = args;
 
@@ -244,6 +263,13 @@ export function buildBrief(args: {
       plan.steps.slice(0, 4).map((s, i) => `${i + 1}. ${escHtml(s)}`).join('\n')
     : null;
 
+  // ── Creative to test next (grounded in what's winning) ───────────────
+  const ideas = args.ideas;
+  const ideasBlock = ideas && ideas.length > 0
+    ? `💡 <b>Creative to test</b>\n` +
+      ideas.slice(0, 3).map((i) => `• ${escHtml(i.concept)}${i.hook ? `\n   <i>“${escHtml(i.hook)}”</i>` : ''}`).join('\n')
+    : null;
+
   // ── This week ────────────────────────────────────────────────────────
   const weekBlock = cohort ? `📈 <b>This week:</b> ${cohort.buyers} new buyers so far.` : null;
 
@@ -254,6 +280,7 @@ export function buildBrief(args: {
     moversBlock,
     actionBlock,
     planBlock,
+    ideasBlock,
     weekBlock,
   ].filter(Boolean).join('\n\n');
 }

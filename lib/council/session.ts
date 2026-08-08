@@ -25,6 +25,9 @@ type PredictionShape = {
  *  numbers. action_plan is 2–4 ordered steps, biggest CPP lever first. */
 type Diagnosis = { root_cause: string; lever: string; evidence: string };
 type ActionStep = { step: string; because: string; lever: string };
+/** Net-new creative concepts to test next week — grounded in what's winning
+ *  (angle/persona/hook), the untested tag whitespace, and the winning scripts. */
+type CreativeIdea = { concept: string; angle: string; persona: string; hook: string; why: string };
 
 type SessionJson = {
   snapshot: string[];
@@ -34,6 +37,7 @@ type SessionJson = {
   disagreement: string;
   diagnosis: Diagnosis;
   action_plan: ActionStep[];
+  creative_ideas: CreativeIdea[];
   verdict: { action: string; why_it_wins: string; what_it_costs: string;
     kill_switch: PredictionShape;
     dissent_on_record: string; also_cleared: string[] };
@@ -74,6 +78,10 @@ const STRUCTURE_RULE =
   '- ABO (budget on the ad set): move budget at the AD-SET level. Ads in the same ad set share ONE budget — to favor one, turn the weaker ads OFF or split the winner into its own ad set.\n' +
   '- ADVANTAGE+/ASC (automated): almost no manual control — do NOT suggest per-ad or per-adset budget tweaks. Only real levers: add fresh creative, exclude a bad creative, or change the CAMPAIGN budget.\n' +
   'NEVER write "lower/trim this ad\'s budget" — it is not a real action. Note that ALL ads in one ad set share a budget (e.g. if 25 ads sit in one ad set, cutting one means turning it OFF, not budgeting it down). When unsure of the structure, default to "turn off" (always possible).';
+
+/** Creative Ideas — propose the NEXT creatives to make, grounded in evidence. */
+const CREATIVE_IDEAS_RULE =
+  'PROPOSE CREATIVE IDEAS. Emit "creative_ideas": [2-3 net-new creative concepts to shoot/make next week]. Ground EVERY idea in the data, not generic advice: study pack.winningCreatives (the cheapest-per-buyer ads + their actual hooks/transcripts) for what is PROVEN to convert, and the creativeTag spread across ads for untested whitespace (tags/personas with little or no spend). Each idea = {concept (one line — what to make), angle (from the tag vocabulary), persona (from the persona vocabulary), hook (a specific opening line, in Taglish where natural, modeled on a winning script but for a fresh angle/persona), why (one line tying it to the evidence — a winning pattern to extend or a gap to fill)}. Favor angles/personas that are winning but under-produced, and the whitespace the roster is missing. Concrete enough that a creator could shoot it tomorrow.';
 
 /** Extracts the outermost JSON object substring from `text` via a
  *  balanced-brace scan: start at the first '{', walk forward tracking
@@ -152,6 +160,15 @@ function normalizeActionPlan(x: unknown): ActionStep[] {
     })
     .filter((s) => s.step);
 }
+function normalizeCreativeIdeas(x: unknown): CreativeIdea[] {
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((s) => {
+      const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return { concept: asStr(o.concept), angle: asStr(o.angle), persona: asStr(o.persona), hook: asStr(o.hook), why: asStr(o.why) };
+    })
+    .filter((s) => s.concept);
+}
 
 /** Minimal §5-shaped fallback rendered only when the model's own
  *  transcript_md is missing — not a reproduction of buildBrief's format,
@@ -216,6 +233,7 @@ export function validateSessionJson(parsed: unknown): SessionJson {
     disagreement: asStr(p.disagreement),
     diagnosis: normalizeDiagnosis(p.diagnosis),
     action_plan: normalizeActionPlan(p.action_plan),
+    creative_ideas: normalizeCreativeIdeas(p.creative_ideas),
     verdict: {
       action: v.action,
       why_it_wins: asStr(v.why_it_wins),
@@ -259,6 +277,13 @@ function sanitize(parsed: SessionJson): void {
     s.because = collapseNewlines(s.because);
     s.lever = collapseNewlines(s.lever);
   }
+  for (const i of parsed.creative_ideas) {
+    i.concept = collapseNewlines(i.concept);
+    i.hook = collapseNewlines(i.hook);
+    i.why = collapseNewlines(i.why);
+    i.angle = collapseNewlines(i.angle);
+    i.persona = collapseNewlines(i.persona);
+  }
 }
 
 export async function runCouncilSession(
@@ -273,7 +298,7 @@ export async function runCouncilSession(
   const model = opts.model || MODEL;
   const pack = await assemblePack(brand, settledDay());
   const doctrine = readFileSync(path.join(process.cwd(), 'docs/ads-council/DOCTRINE.md'), 'utf8');
-  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${MEMORY_RULE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
+  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${MEMORY_RULE}\n${STRUCTURE_RULE}\n${CREATIVE_IDEAS_RULE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
   // The 2nd real dry run parsed as valid JSON but crashed sanitize() on an
   // undefined verdict/prediction field — the brief's shorthand named
   // "kill_switch" and "prediction" without ever spelling out that each is
@@ -283,7 +308,7 @@ export async function runCouncilSession(
   // and safely defaults exactly this class of gap regardless of prompt
   // wording.
   const user = JSON.stringify({ trigger_reasons: triggerReasons, pack,
-    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer.' });
+    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), creative_ideas:[{concept:string, angle:string, persona:string, hook:string, why:string}] (2-3 net-new creative concepts to test, grounded in winningCreatives + the untested tag/persona whitespace), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer.' });
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -331,7 +356,7 @@ export async function runCouncilSession(
   const { data, error } = await sb.from('council_sessions').insert({
     date: today, brand, trigger_reasons: triggerReasons, data_mode: pack.dataMode,
     transcript_md: parsed.transcript_md,
-    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan },
+    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan, creative_ideas: parsed.creative_ideas },
     model,
     input_tokens: json.usage?.input_tokens ?? null, output_tokens: json.usage?.output_tokens ?? null,
   }).select('id').single();

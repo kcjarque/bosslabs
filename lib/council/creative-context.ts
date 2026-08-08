@@ -332,6 +332,25 @@ export async function getCreativeContext(adId: string): Promise<CreativeDetail |
   };
 }
 
+/** Transcripts + hooks for specific ads (the winners) — so the weekly analysis
+ *  can mine what actually-converting scripts have in common and ground new
+ *  creative ideas in them. Keyed by ad_id; only ads with a stored transcript. */
+export async function getScripts(adIds: string[]): Promise<Map<string, { hook: string; transcript: string }>> {
+  const m = new Map<string, { hook: string; transcript: string }>();
+  if (!isSupabaseConfigured() || adIds.length === 0) return m;
+  const { data } = await getSupabase()
+    .from('ad_creative_context')
+    .select('ad_id, hook_text, transcript')
+    .in('ad_id', adIds);
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    m.set(r.ad_id as string, {
+      hook: String(r.hook_text ?? ''),
+      transcript: String(r.transcript ?? '').slice(0, 600),
+    });
+  }
+  return m;
+}
+
 /** Nightly capped pickup: analyze at most `cap` eligible ads that have NO
  *  context row yet (brand-new creatives). Bounded by design — the heavy
  *  video path (~20s/ad) must never blow the pipeline's maxDuration, and
