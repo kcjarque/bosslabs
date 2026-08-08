@@ -133,6 +133,8 @@ export function buildBrief(args: {
   verdicts: VerdictResult[];
   cohort: { buyers: number; showUpPct: number | null; applications: number } | null;
   chairNote: string; nextLine: string;
+  /** The council's root-cause + ranked plan (from today's session), if one ran. */
+  plan?: { rootCause: string; steps: string[] } | null;
 }): string {
   const { dateManila, yesterday, avg7Cpp, dayQuality, verdicts, cohort, chairNote } = args;
 
@@ -188,6 +190,14 @@ export function buildBrief(args: {
     ? `🎯 <b>Do this today</b>\n${escHtml(tidyAction(chairNote))}`
     : `🎯 <b>Do this today</b>\nNothing needs touching — your ads are running fine.`;
 
+  // ── The plan (root cause + ranked steps the council agreed on) ───────
+  const plan = args.plan;
+  const planBlock = plan && plan.steps.length > 0
+    ? `🧭 <b>The plan</b>\n` +
+      (plan.rootCause ? `<i>${escHtml(plan.rootCause)}</i>\n` : '') +
+      plan.steps.slice(0, 4).map((s, i) => `${i + 1}. ${escHtml(s)}`).join('\n')
+    : null;
+
   // ── This week ────────────────────────────────────────────────────────
   const weekBlock = cohort ? `📈 <b>This week:</b> ${cohort.buyers} new buyers so far.` : null;
 
@@ -197,6 +207,7 @@ export function buildBrief(args: {
     rosterBlock,
     moversBlock,
     actionBlock,
+    planBlock,
     weekBlock,
   ].filter(Boolean).join('\n\n');
 }

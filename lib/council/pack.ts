@@ -30,6 +30,12 @@ export type CouncilPack = {
   campaign: {
     totalSpend7: number; blendedCpp7: number | null; blendedCppPrior7: number | null;
     daysSinceLastCreativeLaunch: number | null;
+    /** Campaign-level CPP decomposition (audience/creative/offer levers) — a
+     *  high CPM points at AUDIENCE, low link-CTR at CREATIVE, low CVR at the
+     *  OFFER/post-click. Blended across all ads (audience is shared, so these
+     *  read at the campaign level). */
+    blendedCpm7: number | null; blendedLinkCtr7: number | null; blendedCvr7: number | null;
+    avgFrequency7: number | null; totalReach7: number;
   };
   cohorts: Array<{
     weekStart: string; buyers: number; showUpPct: number | null;
@@ -217,6 +223,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   // and `ads[]` (only ads with >=1 delivery day in the last 21 days).
   const ads: CouncilPack['ads'] = [];
   let totalSpend7 = 0, totalPurchases7 = 0, totalSpendPrior7 = 0, totalPurchasesPrior7 = 0;
+  let totalImpressions7 = 0, totalLinkClicks7 = 0, totalReach7 = 0;
   let newestFirstDelivery: string | null = null;
   for (const s of series) {
     const w = windowsFor(s, asOfSettled);
@@ -224,6 +231,9 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     totalPurchases7 += w.purchases7;
     totalSpendPrior7 += w.spendPrior7;
     totalPurchasesPrior7 += w.purchasesPrior7;
+    totalImpressions7 += w.impressions7;
+    totalLinkClicks7 += w.linkClicks7;
+    totalReach7 += w.reach7;
 
     // s.days is ascending, so s.days[0] is the ad's true first-ever day —
     // but getAdSeries fetches relative to wall-clock "today", not
@@ -257,6 +267,13 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     daysSinceLastCreativeLaunch: newestFirstDelivery == null
       ? null
       : Math.floor((Date.parse(asOfSettled) - Date.parse(newestFirstDelivery)) / MS_DAY),
+    // CPP decomposition, blended across all ads. spend is centavos → /100 for
+    // the peso CPM; link-CTR and CVR are percentages.
+    blendedCpm7: totalImpressions7 > 0 ? (totalSpend7 / 100 / totalImpressions7) * 1000 : null,
+    blendedLinkCtr7: totalImpressions7 > 0 ? (totalLinkClicks7 / totalImpressions7) * 100 : null,
+    blendedCvr7: totalLinkClicks7 > 0 ? (totalPurchases7 / totalLinkClicks7) * 100 : null,
+    avgFrequency7: totalReach7 > 0 ? totalImpressions7 / totalReach7 : null,
+    totalReach7,
   };
 
   // One more pass over every fetched day, bounded to <= asOfSettled (again —

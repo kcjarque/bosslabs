@@ -19,12 +19,21 @@ type PredictionShape = {
   target_id: string | null; deadline_days: number;
 };
 
+/** The council's shared root-cause call (CPP decomposition) + the cohesive,
+ *  ranked plan they converge on. `lever` names WHICH part of the funnel is
+ *  the bottleneck; `root_cause` is one plain sentence; `evidence` cites the
+ *  numbers. action_plan is 2–4 ordered steps, biggest CPP lever first. */
+type Diagnosis = { root_cause: string; lever: string; evidence: string };
+type ActionStep = { step: string; because: string; lever: string };
+
 type SessionJson = {
   snapshot: string[];
   floor: Array<{ expert: 'CHARLEY'|'NICK'|'BEN'|'DARA'; read: string; diagnosis: string;
     action: string; prediction: PredictionShape; confidence: 'High'|'Medium'|'Low' }>;
   cross_examination: string[];
   disagreement: string;
+  diagnosis: Diagnosis;
+  action_plan: ActionStep[];
   verdict: { action: string; why_it_wins: string; what_it_costs: string;
     kill_switch: PredictionShape;
     dissent_on_record: string; also_cleared: string[] };
@@ -40,6 +49,17 @@ type SessionJson = {
  *  machine-graded prediction by 100x. Appended verbatim to RUNTIME RULES. */
 const UNIT_CONVENTIONS =
   'Prediction thresholds MUST be numeric in these units: cpp_7d and campaign_cpp_7d in CENTAVOS (₱600 = 60000); spend_share_7d as a FRACTION 0..1 (15% = 0.15). metric must be one of: cpp_7d, campaign_cpp_7d, spend_share_7d, or empty string for non-machine-checkable predictions. target_id = the ad_id for cpp_7d/spend_share_7d, null for campaign metrics.';
+
+/** The diagnostic spine — the council must first agree on WHY CPP is what it
+ *  is (the CPP decomposition) before prescribing anything, then converge on
+ *  one ranked plan. This is what turns per-ad verdicts into a strategy. */
+const DIAGNOSTIC_SPINE =
+  'DIAGNOSE THE ROOT CAUSE FIRST, then prescribe. CPP is driven by three levers: CPP ≈ CPM × (1/link-CTR) × (1/CVR). Using the numbers in the pack, the council must AGREE on which lever is the bottleneck:\n' +
+  '- AUDIENCE (campaign-level): campaign.blendedCpm7 high or rising → it is expensive to REACH people (auction/audience), not a creative problem. Fix = test new audiences / broaden / narrow / new placements.\n' +
+  '- CREATIVE (per-ad): the ad\'s linkCtr7 low or falling → the ad is not earning the click. Fix = a new creative; name the specific creativeTag + persona + hook to test, grounded in what is currently winning vs the untested whitespace in the creative mix (use each ad\'s creative object + the spread across ads).\n' +
+  '- OFFER / POST-CLICK (campaign or per-ad): link-CTR is FINE but cvr7 is low (people click but do not buy) → the leak is AFTER the click: the offer, the landing page, or the audience clicks but is not the buyer. Fix the offer/landing/targeting-intent, NOT the creative.\n' +
+  '- FATIGUE (per-ad): ctr7 falling AND freq7 rising across the window → creative wear-out. Fix = refresh the creative or cap frequency.\n' +
+  'Audience/CPM problems are CAMPAIGN-level (the audience is shared); creative/CTR/fatigue problems are PER-AD. After diagnosing, the WHOLE council converges on ONE cohesive, ranked action_plan (2–4 steps, biggest CPP lever first), each step tied to the lever it fixes and specific enough to execute tomorrow. Record honest disagreement in dissent_on_record — do NOT manufacture consensus. Emit "diagnosis": {root_cause (one plain sentence), lever (one of: audience|creative|offer|fatigue|mixed|healthy), evidence (cite the actual numbers)} and "action_plan": [{step, because, lever}]. verdict.action stays the ONE plain-English headline a busy owner reads on their phone.';
 
 /** Extracts the outermost JSON object substring from `text` via a
  *  balanced-brace scan: start at the first '{', walk forward tracking
@@ -103,6 +123,22 @@ function normalizePrediction(x: unknown): PredictionShape {
   };
 }
 
+/** Salvageable defaults — a dropped diagnosis/plan never loses the whole
+ *  (paid) session; it degrades to an empty call the UI just doesn't render. */
+function normalizeDiagnosis(x: unknown): Diagnosis {
+  const o = (typeof x === 'object' && x !== null ? x : {}) as Record<string, unknown>;
+  return { root_cause: asStr(o.root_cause), lever: asStr(o.lever), evidence: asStr(o.evidence) };
+}
+function normalizeActionPlan(x: unknown): ActionStep[] {
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((s) => {
+      const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return { step: asStr(o.step), because: asStr(o.because), lever: asStr(o.lever) };
+    })
+    .filter((s) => s.step);
+}
+
 /** Minimal §5-shaped fallback rendered only when the model's own
  *  transcript_md is missing — not a reproduction of buildBrief's format,
  *  just enough for a human to see what the Chair decided without losing
@@ -164,6 +200,8 @@ export function validateSessionJson(parsed: unknown): SessionJson {
     floor,
     cross_examination: asStrArray(p.cross_examination),
     disagreement: asStr(p.disagreement),
+    diagnosis: normalizeDiagnosis(p.diagnosis),
+    action_plan: normalizeActionPlan(p.action_plan),
     verdict: {
       action: v.action,
       why_it_wins: asStr(v.why_it_wins),
@@ -199,6 +237,14 @@ function sanitize(parsed: SessionJson): void {
   parsed.verdict.kill_switch.text = collapseNewlines(parsed.verdict.kill_switch.text);
   parsed.verdict.dissent_on_record = collapseNewlines(parsed.verdict.dissent_on_record);
   for (const f of parsed.floor) f.prediction.text = collapseNewlines(f.prediction.text);
+  parsed.diagnosis.root_cause = collapseNewlines(parsed.diagnosis.root_cause);
+  parsed.diagnosis.evidence = collapseNewlines(parsed.diagnosis.evidence);
+  parsed.diagnosis.lever = collapseNewlines(parsed.diagnosis.lever);
+  for (const s of parsed.action_plan) {
+    s.step = collapseNewlines(s.step);
+    s.because = collapseNewlines(s.because);
+    s.lever = collapseNewlines(s.lever);
+  }
 }
 
 export async function runCouncilSession(
@@ -209,7 +255,7 @@ export async function runCouncilSession(
   if (!key) throw new Error('ANTHROPIC_API_KEY not set');
   const pack = await assemblePack(brand, settledDay());
   const doctrine = readFileSync(path.join(process.cwd(), 'docs/ads-council/DOCTRINE.md'), 'utf8');
-  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
+  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
   // The 2nd real dry run parsed as valid JSON but crashed sanitize() on an
   // undefined verdict/prediction field — the brief's shorthand named
   // "kill_switch" and "prediction" without ever spelling out that each is
@@ -219,7 +265,7 @@ export async function runCouncilSession(
   // and safely defaults exactly this class of gap regardless of prompt
   // wording.
   const user = JSON.stringify({ trigger_reasons: triggerReasons, pack,
-    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer.' });
+    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer.' });
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -266,7 +312,9 @@ export async function runCouncilSession(
   const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
   const { data, error } = await sb.from('council_sessions').insert({
     date: today, brand, trigger_reasons: triggerReasons, data_mode: pack.dataMode,
-    transcript_md: parsed.transcript_md, verdict: parsed.verdict, model: MODEL,
+    transcript_md: parsed.transcript_md,
+    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan },
+    model: MODEL,
     input_tokens: json.usage?.input_tokens ?? null, output_tokens: json.usage?.output_tokens ?? null,
   }).select('id').single();
   if (error) throw new Error(`council_sessions insert: ${error.message}`);

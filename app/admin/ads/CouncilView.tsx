@@ -11,7 +11,11 @@ type SessionRow = {
   trigger_reasons: string[];
   data_mode: string;
   transcript_md: string;
-  verdict: { action?: string; kill_switch?: { text?: string }; dissent_on_record?: string } | null;
+  verdict: {
+    action?: string; kill_switch?: { text?: string }; dissent_on_record?: string;
+    diagnosis?: { root_cause?: string; lever?: string; evidence?: string };
+    action_plan?: Array<{ step?: string; because?: string; lever?: string }>;
+  } | null;
   model: string;
   created_at: string;
 };
@@ -94,6 +98,23 @@ export async function CouncilView() {
                 <span className="mt-1 block text-[13px] font-medium text-slate-800">
                   VERDICT: {s.verdict?.action ?? '—'}
                 </span>
+                {s.verdict?.diagnosis?.root_cause && (
+                  <span className="mt-1.5 block text-[12px] text-slate-600">
+                    <b className="text-slate-500">Problem{s.verdict.diagnosis.lever ? ` (${s.verdict.diagnosis.lever})` : ''}:</b>{' '}
+                    {s.verdict.diagnosis.root_cause}
+                  </span>
+                )}
+                {s.verdict?.action_plan && s.verdict.action_plan.length > 0 && (
+                  <span className="mt-1 block text-[12px] text-slate-700">
+                    <b className="text-slate-500">The plan:</b>
+                    {s.verdict.action_plan.map((st, i) => (
+                      <span key={i} className="mt-0.5 block pl-3">
+                        {i + 1}. {st.step}
+                        {st.because ? <span className="text-slate-400"> — {st.because}</span> : ''}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 {s.verdict?.kill_switch?.text && (
                   <span className="mt-0.5 block text-[12px] text-slate-500">Kill switch: {s.verdict.kill_switch.text}</span>
                 )}

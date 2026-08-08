@@ -88,8 +88,11 @@ async function sessionExistsToday(brand: Brand, todayManila: string): Promise<bo
  *  Mirrors pack.ts's private `fetchLastVerdict` but scoped to today only
  *  (rather than "most recent ever") — the brief cares whether the Council
  *  spoke TODAY, not what it last said days ago. */
-async function fetchTodaySessionAction(brand: Brand, todayManila: string): Promise<string | null> {
-  if (!isSupabaseConfigured()) return null;
+async function fetchTodaySessionAction(
+  brand: Brand,
+  todayManila: string,
+): Promise<{ action: string | null; plan: { rootCause: string; steps: string[] } | null }> {
+  if (!isSupabaseConfigured()) return { action: null, plan: null };
   const { data, error } = await getSupabase()
     .from('council_sessions')
     .select('verdict')
@@ -99,10 +102,19 @@ async function fetchTodaySessionAction(brand: Brand, todayManila: string): Promi
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`fetchTodaySessionAction: ${error.message}`);
-  if (!data) return null;
-  const verdict = (data as { verdict: unknown }).verdict as { action?: unknown } | null;
-  const action = verdict && typeof verdict.action === 'string' ? verdict.action : null;
-  return action && action.length > 0 ? action : null;
+  if (!data) return { action: null, plan: null };
+  const verdict = (data as { verdict: unknown }).verdict as {
+    action?: unknown;
+    diagnosis?: { root_cause?: unknown } | null;
+    action_plan?: Array<{ step?: unknown }> | null;
+  } | null;
+  const action = verdict && typeof verdict.action === 'string' && verdict.action.length > 0 ? verdict.action : null;
+  const rootCause = typeof verdict?.diagnosis?.root_cause === 'string' ? verdict.diagnosis.root_cause : '';
+  const steps = Array.isArray(verdict?.action_plan)
+    ? verdict!.action_plan.map((s) => (typeof s?.step === 'string' ? s.step : '')).filter(Boolean)
+    : [];
+  const plan = steps.length > 0 ? { rootCause, steps } : null;
+  return { action, plan };
 }
 
 /** Any prediction resolved to a MISS by THIS run — `resolveDuePredictions`
@@ -362,7 +374,7 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
   // Pass the FULL action — buildBrief's tidyAction trims it at a sentence
   // boundary (never mid-word) and strips the ad_id noise. The old slice(0,80)
   // chopped the one useful recommendation mid-sentence.
-  const chairNote = sessionAction != null ? sessionAction : 'Council not convened — no triggers.';
+  const chairNote = sessionAction.action != null ? sessionAction.action : 'Council not convened — no triggers.';
 
   const brief = buildBrief({
     brand,
@@ -374,6 +386,7 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
     cohort,
     chairNote,
     nextLine,
+    plan: sessionAction.plan,
   });
 
   return {

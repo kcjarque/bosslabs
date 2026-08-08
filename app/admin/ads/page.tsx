@@ -324,6 +324,7 @@ function AdsDashboard({
       <Stat label="CPM" value={c.cpm == null ? '—' : peso(c.cpm)} />
       <Stat label="Frequency" value={dec(c.frequency)} tone={freqTone(c.frequency)} />
       <Stat label="ROAS" value={roasf(c.roas)} tone={roasTone(c.roas)} />
+      <Stat label="Total reach" value={intf(c.reach)} sub="summed across ads" />
     </div>
   );
 }

@@ -31,6 +31,10 @@ export function windowsFor(series: AdSeries, asOf: string) {
   const spendPrior7 = sum(p7.map((d) => d.spendCentavos));
   const purchases7 = sum(t7.map((d) => d.purchases));
   const purchasesPrior7 = sum(p7.map((d) => d.purchases));
+  // Link clicks + reach power the CPP decomposition (CPM=audience, link-CTR=
+  // creative, CVR=post-click/offer, frequency+CTR-trend=fatigue).
+  const linkClicks7 = sum(t7.map((d) => d.linkClicks));
+  const linkClicksPrior7 = sum(p7.map((d) => d.linkClicks));
   const first = upTo[0]?.date;
   const ageDays = first ? Math.floor((Date.parse(asOf) - Date.parse(first)) / MS_DAY) + 1 : 0;
   return {
@@ -40,8 +44,18 @@ export function windowsFor(series: AdSeries, asOf: string) {
     freq7: avg(t7.map((d) => d.frequency).filter((x): x is number => x != null)),
     ctr7: avg(t7.map((d) => d.ctr).filter((x): x is number => x != null)),
     ctrPrior7: avg(p7.map((d) => d.ctr).filter((x): x is number => x != null)),
+    // link-CTR (intent clicks) is the truer creative signal than all-CTR.
+    linkCtr7: avg(t7.map((d) => d.linkCtr).filter((x): x is number => x != null)),
+    linkCtrPrior7: avg(p7.map((d) => d.linkCtr).filter((x): x is number => x != null)),
     cpm7: avg(t7.map((d) => d.cpm).filter((x): x is number => x != null)),
     cpmPrior7: avg(p7.map((d) => d.cpm).filter((x): x is number => x != null)),
+    // CVR = purchases per link click, as a percentage. The post-click lever:
+    // good CTR + high CPP → the leak is here (offer/landing/audience-intent).
+    cvr7: linkClicks7 > 0 ? (purchases7 / linkClicks7) * 100 : null,
+    cvrPrior7: linkClicksPrior7 > 0 ? (purchasesPrior7 / linkClicksPrior7) * 100 : null,
+    linkClicks7, linkClicksPrior7,
+    impressions7: sum(t7.map((d) => d.impressions)),
+    reach7: sum(t7.map((d) => d.reach)),
     lifetimePurchases: sum(upTo.map((d) => d.purchases)),
     lifetimeSpend: sum(upTo.map((d) => d.spendCentavos)),
     ageDays,
