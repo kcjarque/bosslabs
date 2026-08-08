@@ -239,7 +239,14 @@ export type CampaignStructure = {
    *  (minimal manual control — feed creative, adjust campaign budget only). */
   budgetType: 'CBO' | 'ABO' | 'ADVANTAGE+' | 'unknown';
   dailyBudgetCentavos: number | null;
-  adSets: Array<{ id: string; name: string; dailyBudgetCentavos: number | null; active: boolean }>;
+  adSets: Array<{
+    id: string; name: string; dailyBudgetCentavos: number | null; active: boolean;
+    /** Meta learning phase: LEARNING (don't judge yet) / LEARNING_LIMITED
+     *  (stuck — too little budget/conversions to exit) / SUCCESS (learned). */
+    learningStatus: string | null;
+    /** Days since the last SIGNIFICANT edit (which resets learning). null if none. */
+    lastSignificantEditDays: number | null;
+  }>;
 };
 
 /** Live campaign structure from Meta: CBO/ABO/Advantage+ + budgets + ad sets.
@@ -259,14 +266,20 @@ export async function getCampaignStructures(): Promise<CampaignStructure[]> {
       const campLifetime = camp.lifetime_budget ? Number(camp.lifetime_budget) : 0;
       const adsetsRaw = (await graph(
         `${t.id}/adsets`,
-        'id,name,daily_budget,lifetime_budget,effective_status',
+        'id,name,daily_budget,lifetime_budget,effective_status,learning_stage_info',
       )) as { data?: Array<Record<string, unknown>> };
-      const adSets = (adsetsRaw?.data ?? []).map((a) => ({
-        id: String(a.id ?? ''),
-        name: String(a.name ?? ''),
-        dailyBudgetCentavos: a.daily_budget ? Number(a.daily_budget) : a.lifetime_budget ? Number(a.lifetime_budget) : null,
-        active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
-      }));
+      const nowSec = Date.now() / 1000;
+      const adSets = (adsetsRaw?.data ?? []).map((a) => {
+        const lsi = (a.learning_stage_info ?? {}) as { status?: string; last_sig_edit_ts?: number };
+        return {
+          id: String(a.id ?? ''),
+          name: String(a.name ?? ''),
+          dailyBudgetCentavos: a.daily_budget ? Number(a.daily_budget) : a.lifetime_budget ? Number(a.lifetime_budget) : null,
+          active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+          learningStatus: typeof lsi.status === 'string' ? lsi.status : null,
+          lastSignificantEditDays: lsi.last_sig_edit_ts ? Math.floor((nowSec - lsi.last_sig_edit_ts) / 86400) : null,
+        };
+      });
       const anyAdsetBudget = adSets.some((s) => s.dailyBudgetCentavos != null);
       const budgetType: CampaignStructure['budgetType'] = camp.smart_promotion_type
         ? 'ADVANTAGE+'
@@ -282,6 +295,56 @@ export async function getCampaignStructures(): Promise<CampaignStructure[]> {
         dailyBudgetCentavos: campDaily || campLifetime || null,
         adSets,
       });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export type AccountChange = { daysAgo: number; what: string; object: string };
+
+/** Meaningful change events from the account activity log → readable labels.
+ *  Everything not listed (billing charges, ad reviews, pixel noise) is dropped. */
+const CHANGE_EVENTS: Record<string, string> = {
+  update_campaign_run_status: 'campaign turned on/off',
+  update_ad_set_run_status: 'ad set turned on/off',
+  update_ad_run_status: 'ad turned on/off',
+  update_campaign_budget: 'campaign budget changed',
+  update_ad_set_budget: 'ad set budget changed',
+  ad_set_budget_opt: 'ad set budget changed',
+  create_ad: 'new ad launched',
+  create_ad_set: 'new ad set built',
+  create_campaign: 'new campaign built',
+  update_ad_creative: 'ad creative swapped',
+};
+
+/** Operational MOVEMENT from Meta's account activity log — what actually
+ *  changed (budgets moved, ads on/off, new ads/ad sets built) in the last
+ *  `sinceDays`. Lets the council attribute performance shifts to real edits
+ *  instead of guessing. Best-effort → [] on failure. */
+export async function getRecentChanges(sinceDays = 8): Promise<AccountChange[]> {
+  const token = process.env.META_ADS_TOKEN;
+  if (!token) return [];
+  try {
+    const acct = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
+    const cutoff = Date.now() - sinceDays * 86400000;
+    const json = (await graph(`act_${acct}/activities`, 'event_type,event_time,object_name')) as {
+      data?: Array<{ event_type?: string; event_time?: string; object_name?: string }>;
+    };
+    const out: AccountChange[] = [];
+    const seen = new Set<string>();
+    for (const a of json?.data ?? []) {
+      const label = a.event_type ? CHANGE_EVENTS[a.event_type] : undefined;
+      if (!label) continue;
+      const t = a.event_time ? Date.parse(a.event_time) : NaN;
+      if (isNaN(t) || t < cutoff) continue;
+      const obj = a.object_name ?? '';
+      const key = `${label}|${obj}`;
+      if (seen.has(key)) continue; // collapse repeats of the same edit
+      seen.add(key);
+      out.push({ daysAgo: Math.max(0, Math.floor((Date.now() - t) / 86400000)), what: label, object: obj });
+      if (out.length >= 15) break;
     }
     return out;
   } catch {

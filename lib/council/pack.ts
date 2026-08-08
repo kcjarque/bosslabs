@@ -15,7 +15,7 @@ import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from '.
 import { windowsFor } from './verdict-engine';
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
-import { getCampaignStructures, type CampaignStructure } from '@/lib/meta-ads';
+import { getCampaignStructures, getRecentChanges, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -27,13 +27,20 @@ export type CouncilPack = {
     /** Which campaign + ad set this ad lives in — so recommendations respect
      *  the structure (budget is set on the campaign/ad set, never the ad). */
     campaignName: string; adSetName: string;
+    /** Days the ad has been delivering — a <~5-day-old ad is too young to judge. */
+    ageDays: number;
     windows: ReturnType<typeof windowsFor>; last14: AdDay[];
     /** What the creative IS (angle/persona/hook/quality) — null until analyzed. */
     creative: CreativeBrief | null;
   }>;
-  /** Live campaign structure (CBO/ABO/Advantage+ + budgets + ad sets) so the
-   *  council prescribes EXECUTABLE moves. Empty if Meta is unreachable. */
+  /** Live campaign structure (CBO/ABO/Advantage+ + budgets + ad sets + each ad
+   *  set's LEARNING status) so the council prescribes EXECUTABLE moves and never
+   *  judges an ad still in learning. Empty if Meta is unreachable. */
   structure: CampaignStructure[];
+  /** Operational MOVEMENT — budgets moved, ads on/off, new ads/ad sets built in
+   *  the last ~week (from Meta's activity log) — so shifts are attributed to
+   *  real edits, not guessed. Empty if Meta is unreachable. */
+  recentChanges: AccountChange[];
   /** The current WINNERS' actual scripts — cheapest per-buyer ads with real
    *  volume, plus their hook + transcript — so new creative ideas are grounded
    *  in what's PROVEN to convert, not generic advice. */
@@ -282,9 +289,13 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     getCreativeBriefs(brand),
     fetchPastPlans(brand),
   ]);
-  // Live structure (CBO/ABO/Advantage+) — separate best-effort call; a Meta
-  // hiccup must never sink the whole pack, so it's not in the Promise.all.
-  const structure = await getCampaignStructures().catch(() => [] as CampaignStructure[]);
+  // Live structure (CBO/ABO/Advantage+ + learning phase) and the operational
+  // change feed — separate best-effort calls; a Meta hiccup must never sink the
+  // whole pack, so they're not in the Promise.all.
+  const [structure, recentChanges] = await Promise.all([
+    getCampaignStructures().catch(() => [] as CampaignStructure[]),
+    getRecentChanges().catch(() => [] as AccountChange[]),
+  ]);
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
   const since21 = isoDaysBefore(asOfSettled, 20); // 21-day trailing window, inclusive of asOfSettled
@@ -328,6 +339,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
         verdict: v?.verdict ?? 'LEARNING',
         daysInTier: v?.daysInTier ?? 0,
         campaignName: s.campaignName ?? '', adSetName: s.adsetName ?? '',
+        ageDays: w.ageDays,
         windows: w,
         last14: s.days.filter((d) => d.date >= since14 && d.date <= asOfSettled),
         creative: creativeBriefs.get(s.adId) ?? null,
@@ -420,7 +432,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   return {
     brand, asOf: asOfSettled, dataMode,
     ads, campaign, cohorts,
-    structure, winningCreatives,
+    structure, recentChanges, winningCreatives,
     weeklyTrend, pastPlans,
     priors, weights, openPredictions, lastVerdict, settings,
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },
