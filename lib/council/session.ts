@@ -66,6 +66,15 @@ const DIAGNOSTIC_SPINE =
 const MEMORY_RULE =
   'USE THE MEMORY. The pack carries weeklyTrend (the last 4 weeks of blended CPP/CPM/link-CTR/CVR — read the ARC, is CPP trending up or down over the month?) and pastPlans (your last analyses + how many of each one\'s predictions HIT vs MISSED). Before prescribing, grade your OWN last plan: did it work? If a past plan\'s predictions MISSED or CPP kept climbing after you acted on that lever, say so explicitly and CHANGE approach — do not re-prescribe a move that already failed. If it HIT, build on it. Reference the trend in your reasoning (e.g. "third straight week CPM has climbed"). This is a weekly review, not a daily snapshot — think in weeks.';
 
+/** Structure-awareness — recommendations must be EXECUTABLE given how each
+ *  campaign is actually budgeted. Budget is never per-ad in Meta. */
+const STRUCTURE_RULE =
+  'RESPECT THE AD STRUCTURE. The pack\'s "structure" gives each campaign\'s budgetType (CBO/ABO/ADVANTAGE+) + ad sets, and every ad carries its campaignName/adSetName. Budget is NEVER set per-ad in Meta, so recommendations must use the RIGHT lever:\n' +
+  '- CBO (budget on the campaign): you CANNOT lower one ad\'s budget. To cut a loser → turn the AD OFF (Meta reallocates its spend). To scale a winner → raise the CAMPAIGN budget or duplicate the winner into its own ad set/campaign.\n' +
+  '- ABO (budget on the ad set): move budget at the AD-SET level. Ads in the same ad set share ONE budget — to favor one, turn the weaker ads OFF or split the winner into its own ad set.\n' +
+  '- ADVANTAGE+/ASC (automated): almost no manual control — do NOT suggest per-ad or per-adset budget tweaks. Only real levers: add fresh creative, exclude a bad creative, or change the CAMPAIGN budget.\n' +
+  'NEVER write "lower/trim this ad\'s budget" — it is not a real action. Note that ALL ads in one ad set share a budget (e.g. if 25 ads sit in one ad set, cutting one means turning it OFF, not budgeting it down). When unsure of the structure, default to "turn off" (always possible).';
+
 /** Extracts the outermost JSON object substring from `text` via a
  *  balanced-brace scan: start at the first '{', walk forward tracking
  *  nesting depth, and stop at the brace that closes depth back to 0.

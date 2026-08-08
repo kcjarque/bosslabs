@@ -230,6 +230,65 @@ export async function getCampaignBudget(): Promise<{
   }
 }
 
+export type CampaignStructure = {
+  id: string;
+  name: string;
+  /** How budget is set — this determines which levers are even possible.
+   *  CBO: budget on the campaign (can't set per-ad; turn ads off / raise
+   *  campaign budget). ABO: budget on the ad set. ADVANTAGE+: automated
+   *  (minimal manual control — feed creative, adjust campaign budget only). */
+  budgetType: 'CBO' | 'ABO' | 'ADVANTAGE+' | 'unknown';
+  dailyBudgetCentavos: number | null;
+  adSets: Array<{ id: string; name: string; dailyBudgetCentavos: number | null; active: boolean }>;
+};
+
+/** Live campaign structure from Meta: CBO/ABO/Advantage+ + budgets + ad sets.
+ *  This is what lets the council recommend EXECUTABLE moves (budget is never
+ *  per-ad). Best-effort — any failure returns [] so callers degrade to the
+ *  numbers-only view. Budgets are centavos (Meta's minor currency unit). */
+export async function getCampaignStructures(): Promise<CampaignStructure[]> {
+  if (!process.env.META_ADS_TOKEN) return [];
+  try {
+    const targets = await resolveTrackedTargets();
+    const out: CampaignStructure[] = [];
+    for (const t of targets) {
+      const camp = (await graph(t.id, 'id,name,daily_budget,lifetime_budget,smart_promotion_type')) as {
+        name?: string; daily_budget?: string; lifetime_budget?: string; smart_promotion_type?: string;
+      };
+      const campDaily = camp.daily_budget ? Number(camp.daily_budget) : 0;
+      const campLifetime = camp.lifetime_budget ? Number(camp.lifetime_budget) : 0;
+      const adsetsRaw = (await graph(
+        `${t.id}/adsets`,
+        'id,name,daily_budget,lifetime_budget,effective_status',
+      )) as { data?: Array<Record<string, unknown>> };
+      const adSets = (adsetsRaw?.data ?? []).map((a) => ({
+        id: String(a.id ?? ''),
+        name: String(a.name ?? ''),
+        dailyBudgetCentavos: a.daily_budget ? Number(a.daily_budget) : a.lifetime_budget ? Number(a.lifetime_budget) : null,
+        active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
+      }));
+      const anyAdsetBudget = adSets.some((s) => s.dailyBudgetCentavos != null);
+      const budgetType: CampaignStructure['budgetType'] = camp.smart_promotion_type
+        ? 'ADVANTAGE+'
+        : campDaily || campLifetime
+          ? 'CBO'
+          : anyAdsetBudget
+            ? 'ABO'
+            : 'unknown';
+      out.push({
+        id: t.id,
+        name: camp.name || t.name,
+        budgetType,
+        dailyBudgetCentavos: campDaily || campLifetime || null,
+        adSets,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** Tracked campaigns (Ads → Settings), or the legacy single campaign when
  *  none are configured yet / everything got unchecked. */
 async function resolveTrackedTargets(): Promise<{ id: string; name: string }[]> {

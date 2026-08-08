@@ -15,6 +15,7 @@ import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from '.
 import { windowsFor } from './verdict-engine';
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, type CreativeBrief } from './creative-context';
+import { getCampaignStructures, type CampaignStructure } from '@/lib/meta-ads';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -23,10 +24,16 @@ export type CouncilPack = {
   brand: Brand; asOf: string; dataMode: 'A' | 'B';
   ads: Array<{
     adId: string; adName: string; role: Role; verdict: Tier; daysInTier: number;
+    /** Which campaign + ad set this ad lives in — so recommendations respect
+     *  the structure (budget is set on the campaign/ad set, never the ad). */
+    campaignName: string; adSetName: string;
     windows: ReturnType<typeof windowsFor>; last14: AdDay[];
     /** What the creative IS (angle/persona/hook/quality) — null until analyzed. */
     creative: CreativeBrief | null;
   }>;
+  /** Live campaign structure (CBO/ABO/Advantage+ + budgets + ad sets) so the
+   *  council prescribes EXECUTABLE moves. Empty if Meta is unreachable. */
+  structure: CampaignStructure[];
   campaign: {
     totalSpend7: number; blendedCpp7: number | null; blendedCppPrior7: number | null;
     daysSinceLastCreativeLaunch: number | null;
@@ -268,6 +275,9 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     getCreativeBriefs(brand),
     fetchPastPlans(brand),
   ]);
+  // Live structure (CBO/ABO/Advantage+) — separate best-effort call; a Meta
+  // hiccup must never sink the whole pack, so it's not in the Promise.all.
+  const structure = await getCampaignStructures().catch(() => [] as CampaignStructure[]);
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
   const since21 = isoDaysBefore(asOfSettled, 20); // 21-day trailing window, inclusive of asOfSettled
@@ -310,6 +320,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
         role: v?.role ?? 'HYBRID',
         verdict: v?.verdict ?? 'LEARNING',
         daysInTier: v?.daysInTier ?? 0,
+        campaignName: s.campaignName ?? '', adSetName: s.adsetName ?? '',
         windows: w,
         last14: s.days.filter((d) => d.date >= since14 && d.date <= asOfSettled),
         creative: creativeBriefs.get(s.adId) ?? null,
@@ -381,6 +392,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   return {
     brand, asOf: asOfSettled, dataMode,
     ads, campaign, cohorts,
+    structure,
     weeklyTrend, pastPlans,
     priors, weights, openPredictions, lastVerdict, settings,
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },
