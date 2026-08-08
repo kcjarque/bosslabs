@@ -34,7 +34,7 @@ export function CreativeTagCell({ brief }: { brief: CreativeBrief | null }) {
       onMouseLeave={() => setHover(false)}
     >
       <span
-        className={`inline-flex cursor-default items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+        className={`inline-flex cursor-default items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
           TAG_STYLE[brief.creativeTag] ?? TAG_STYLE.Other
         }`}
       >
