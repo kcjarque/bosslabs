@@ -61,6 +61,11 @@ const DIAGNOSTIC_SPINE =
   '- FATIGUE (per-ad): ctr7 falling AND freq7 rising across the window → creative wear-out. Fix = refresh the creative or cap frequency.\n' +
   'Audience/CPM problems are CAMPAIGN-level (the audience is shared); creative/CTR/fatigue problems are PER-AD. After diagnosing, the WHOLE council converges on ONE cohesive, ranked action_plan (2–4 steps, biggest CPP lever first), each step tied to the lever it fixes and specific enough to execute tomorrow. Record honest disagreement in dissent_on_record — do NOT manufacture consensus. Emit "diagnosis": {root_cause (one plain sentence), lever (one of: audience|creative|offer|fatigue|mixed|healthy), evidence (cite the actual numbers)} and "action_plan": [{step, because, lever}]. verdict.action stays the ONE plain-English headline a busy owner reads on their phone.';
 
+/** Weekly memory — read the 4-week arc + grade your own past advice. This is
+ *  what makes the analysis compound instead of resetting every week. */
+const MEMORY_RULE =
+  'USE THE MEMORY. The pack carries weeklyTrend (the last 4 weeks of blended CPP/CPM/link-CTR/CVR — read the ARC, is CPP trending up or down over the month?) and pastPlans (your last analyses + how many of each one\'s predictions HIT vs MISSED). Before prescribing, grade your OWN last plan: did it work? If a past plan\'s predictions MISSED or CPP kept climbing after you acted on that lever, say so explicitly and CHANGE approach — do not re-prescribe a move that already failed. If it HIT, build on it. Reference the trend in your reasoning (e.g. "third straight week CPM has climbed"). This is a weekly review, not a daily snapshot — think in weeks.';
+
 /** Extracts the outermost JSON object substring from `text` via a
  *  balanced-brace scan: start at the first '{', walk forward tracking
  *  nesting depth, and stop at the brace that closes depth back to 0.
@@ -250,12 +255,16 @@ function sanitize(parsed: SessionJson): void {
 export async function runCouncilSession(
   brand: Brand,
   triggerReasons: string[],
+  opts: { model?: string } = {},
 ): Promise<{ sessionId: string; failedPredictionInserts: number }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  // Per-surface model: the weekly deep-dive passes Opus (highest stakes, low
+  // frequency); the manual/on-demand run inherits the Sonnet default.
+  const model = opts.model || MODEL;
   const pack = await assemblePack(brand, settledDay());
   const doctrine = readFileSync(path.join(process.cwd(), 'docs/ads-council/DOCTRINE.md'), 'utf8');
-  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
+  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${MEMORY_RULE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
   // The 2nd real dry run parsed as valid JSON but crashed sanitize() on an
   // undefined verdict/prediction field — the brief's shorthand named
   // "kill_switch" and "prediction" without ever spelling out that each is
@@ -282,7 +291,7 @@ export async function runCouncilSession(
     // for a deterministic guarantee that the whole budget goes to the
     // required output — confirmed working on the 3rd (successful) live run.
     body: JSON.stringify({
-      model: MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content: user }],
+      model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }],
       thinking: { type: 'disabled' },
     }),
   });
@@ -314,7 +323,7 @@ export async function runCouncilSession(
     date: today, brand, trigger_reasons: triggerReasons, data_mode: pack.dataMode,
     transcript_md: parsed.transcript_md,
     verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan },
-    model: MODEL,
+    model,
     input_tokens: json.usage?.input_tokens ?? null, output_tokens: json.usage?.output_tokens ?? null,
   }).select('id').single();
   if (error) throw new Error(`council_sessions insert: ${error.message}`);

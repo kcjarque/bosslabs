@@ -96,7 +96,7 @@ function AdsTabs({ view }: { view: 'live' | 'results' | 'council' }) {
   const tabs = [
     { key: 'live' as const, label: 'Live (Meta)', href: '/admin/ads' },
     { key: 'results' as const, label: 'Results over time', href: '/admin/ads?view=results' },
-    { key: 'council' as const, label: 'Council', href: '/admin/ads?view=council' },
+    { key: 'council' as const, label: 'Run Analysis', href: '/admin/ads?view=council' },
     { key: 'settings' as const, label: 'Settings', href: '/admin/ads/settings' },
   ];
   return (

@@ -82,7 +82,7 @@ export async function CouncilView() {
 
       {/* Sessions */}
       <section className="card">
-        <h2 className="text-base font-semibold text-slate-900">Council sessions</h2>
+        <h2 className="text-base font-semibold text-slate-900">Prince’s analyses</h2>
         {sessions.length === 0 && <p className="mt-2 text-[13px] text-slate-400">No sessions yet.</p>}
         <div className="mt-3 space-y-3">
           {sessions.map((s) => (

@@ -34,10 +34,14 @@ import { resolveDuePredictions } from './ledger';
 import { detectTriggers } from './triggers';
 import { runCouncilSession, settledDay } from './session';
 import { analyzeMissingCreatives } from './creative-context';
-import { buildBrief, dayQualityFor } from './brief';
+import { buildBrief, buildPulse, dayQualityFor } from './brief';
 import type { AdSeries, Brand, VerdictResult } from './types';
 
 const MS_DAY = 86400000;
+
+/** The weekly deep-dive runs on Opus (highest-stakes call of the week, ~4×/mo);
+ *  the daily path runs NO LLM at all (deterministic pulse). */
+const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-opus-5';
 
 /** Manila calendar "today" — same "+8h then slice UTC date" convention
  *  session.ts's `today` (and settledDay()) already use, so `asOf` and
@@ -191,7 +195,11 @@ export type CouncilPipelineResult = {
   failedPredictionInserts?: number;
 };
 
-export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineResult> {
+export async function runCouncilPipeline(
+  brand: Brand,
+  opts: { weekly?: boolean } = {},
+): Promise<CouncilPipelineResult> {
+  const weekly = opts.weekly ?? false;
   const todayManila = manilaToday();
   const asOf = settledDay();
   // Verdict rows are dated `asOf` (the settled day), not `todayManila` —
@@ -312,17 +320,6 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
       isMondayManila: isMondayManila(todayManila),
     });
 
-    if (triggers.length > 0 && !(await sessionExistsToday(brand, todayManila))) {
-      // Council failure must never block the brief.
-      try {
-        const result = await runCouncilSession(brand, triggers);
-        sessionId = result.sessionId;
-        failedPredictionInserts = result.failedPredictionInserts;
-      } catch (err) {
-        console.error('[council pipeline] runCouncilSession failed', errMsg(err));
-      }
-    }
-
     // Creative-context pickup — capped, non-blocking, AFTER the session so it
     // never delays the time-critical verdict/brief. Brand-new ads get their
     // format/angle/persona analyzed here and land in TOMORROW's council pack.
@@ -340,6 +337,23 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
       }
     } catch (err) {
       console.error('[council pipeline] analyzeMissingCreatives failed', errMsg(err));
+    }
+  }
+
+  // The full LLM analysis runs ONLY on the weekly path (Sunday 10am) — never
+  // daily. Deliberately OUTSIDE the !alreadyRan guard: the daily pulse has
+  // already graded today, so alreadyRan is true by the time the weekly cron
+  // fires — but the weekly session must still convene. sessionExistsToday
+  // prevents a double LLM call. Daily = deterministic pulse (no LLM); on-demand
+  // goes through the admin button / runCouncilSession directly.
+  if (weekly && !(await sessionExistsToday(brand, todayManila))) {
+    try {
+      const reasons = triggers.length > 0 ? triggers : ['Weekly scheduled analysis'];
+      const result = await runCouncilSession(brand, reasons, { model: WEEKLY_MODEL });
+      sessionId = result.sessionId;
+      failedPredictionInserts = result.failedPredictionInserts;
+    } catch (err) {
+      console.error('[council pipeline] weekly runCouncilSession failed', errMsg(err));
     }
   }
 
@@ -366,28 +380,36 @@ export async function runCouncilPipeline(brand: Brand): Promise<CouncilPipelineR
   const avg7Cpp = blendedCpp7Centavos;
   const dayQuality = dayQualityFor(yCpp, avg7Cpp, priors);
 
-  const [cohort, sessionAction, nextLine] = await Promise.all([
-    fetchCohortThisWeek(todayManila),
-    fetchTodaySessionAction(brand, todayManila),
-    fetchNextLine(brand),
-  ]);
-  // Pass the FULL action — buildBrief's tidyAction trims it at a sentence
-  // boundary (never mid-word) and strips the ad_id noise. The old slice(0,80)
-  // chopped the one useful recommendation mid-sentence.
-  const chairNote = sessionAction.action != null ? sessionAction.action : 'Council not convened — no triggers.';
+  const verdictsForBrief = alreadyRan ? storedVerdicts : gradedRows;
 
-  const brief = buildBrief({
-    brand,
-    dateManila: todayManila,
-    yesterday,
-    avg7Cpp,
-    dayQuality,
-    verdicts: alreadyRan ? storedVerdicts : gradedRows,
-    cohort,
-    chairNote,
-    nextLine,
-    plan: sessionAction.plan,
-  });
+  // Circuit-breaker for the daily pulse: an ad that spent more than one
+  // target-buyer's worth on the last SETTLED day yet made zero sales is
+  // genuinely bleeding — the only thing allowed to make the daily actionable.
+  const fires: string[] = [];
+  for (const s of series) {
+    const day = s.days.find((d) => d.date === asOf);
+    if (day && day.purchases === 0 && day.spendCentavos >= settings.targetCppCentavos) {
+      fires.push(`'${s.adName}' spent ₱${Math.round(day.spendCentavos / 100).toLocaleString()} with 0 sales`);
+    }
+  }
+
+  let brief: string;
+  if (weekly) {
+    // Full analysis brief — root cause + ranked plan from the session just run.
+    const [cohort, sessionAction, nextLine] = await Promise.all([
+      fetchCohortThisWeek(todayManila),
+      fetchTodaySessionAction(brand, todayManila),
+      fetchNextLine(brand),
+    ]);
+    const chairNote = sessionAction.action != null ? sessionAction.action : 'Analysis produced no single headline action.';
+    brief = buildBrief({
+      brand, dateManila: todayManila, yesterday, avg7Cpp, dayQuality,
+      verdicts: verdictsForBrief, cohort, chairNote, nextLine, plan: sessionAction.plan,
+    });
+  } else {
+    // Daily pulse — deterministic heartbeat, no LLM, no action list.
+    brief = buildPulse({ dateManila: todayManila, yesterday, avg7Cpp, dayQuality, verdicts: verdictsForBrief, fires });
+  }
 
   return {
     brief,

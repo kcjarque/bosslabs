@@ -22,6 +22,10 @@
       "schedule": "20 16 * * *"
     },
     {
+      "path": "/api/cron/weekly-analysis",
+      "schedule": "0 2 * * 0"
+    },
+    {
       "path": "/api/cron/abandoned",
       "schedule": "*/10 * * * *"
     },

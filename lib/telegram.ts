@@ -255,3 +255,13 @@ export async function sendSalesTeamPhoto(
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+/**
+ * Render a light markdown string (from an LLM) into Telegram-safe HTML.
+ * Escapes EVERYTHING first — so a stray `<` or `&` in the model's prose can
+ * never break the parse — then re-introduces ONLY the tags we generate:
+ * `**bold**` → <b>bold</b>. Nothing else is interpreted, so it's bulletproof.
+ */
+export function mdToTelegramHtml(s: string): string {
+  return esc(s).replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+}

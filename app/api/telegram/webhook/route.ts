@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import { getSettings } from '@/lib/db';
-import { sendTelegramPlain } from '@/lib/telegram';
+import { sendTelegramPlain, sendTelegramTo, mdToTelegramHtml } from '@/lib/telegram';
 import { askPrince } from '@/lib/council/prince';
 
 export const runtime = 'nodejs';
@@ -58,6 +58,6 @@ export async function POST(req: Request) {
   }
   await sendTelegramPlain(chatId, '🤴 On it — pulling the latest numbers…');
   const answer = await askPrince(question);
-  await sendTelegramPlain(chatId, `🤴 Prince\n\n${answer}`);
+  await sendTelegramTo(chatId, `🤴 <b>Prince</b>\n\n${mdToTelegramHtml(answer)}`);
   return NextResponse.json({ ok: true });
 }

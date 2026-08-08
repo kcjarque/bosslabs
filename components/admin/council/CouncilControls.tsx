@@ -39,7 +39,7 @@ export function CouncilControls({
     setMsg(null);
     startRun(async () => {
       const r = await runCouncilNowAction();
-      setMsg(r.ok ? 'Session complete — see Sessions below.' : r.error ?? 'Session failed');
+      setMsg(r.ok ? 'Analysis complete — see below.' : r.error ?? 'Analysis failed');
       if (r.ok) router.refresh();
     });
   }
@@ -47,14 +47,14 @@ export function CouncilControls({
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-900">Council controls</h2>
+        <h2 className="text-base font-semibold text-slate-900">🤴 Prince — Run Analysis</h2>
         <button
           type="button"
           onClick={runNow}
           disabled={running}
           className="rounded-full bg-slate-900 px-4 py-1.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
         >
-          {running ? 'Council in session…' : 'Run council now'}
+          {running ? 'Analyzing…' : 'Run Analysis now'}
         </button>
       </div>
 

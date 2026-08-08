@@ -42,6 +42,19 @@ export type CouncilPack = {
     applications: number; frontRevenueCentavos: number; adSpendCentavos: number;
     cohortProfitCentavos: number | null;
   }>;
+  /** 4-week arc so the weekly analysis sees the month, not just this week —
+   *  the trend that makes the advice compound. cpp/spend in centavos; cpm in
+   *  pesos; linkCtr/cvr as percentages. Oldest → newest. */
+  weeklyTrend: Array<{
+    weekStart: string; spendCentavos: number; cpp: number | null;
+    cpm: number | null; linkCtr: number | null; cvr: number | null;
+  }>;
+  /** The last few analyses + whether their predictions came true — Prince
+   *  grades his OWN past advice ("we cut X two weeks ago; did CPP drop?"). */
+  pastPlans: Array<{
+    date: string; lever: string; rootCause: string; steps: string[];
+    predictionsHit: number; predictionsMiss: number;
+  }>;
   priors: PriorsRow | null;
   weights: Record<'CHARLEY' | 'NICK' | 'BEN' | 'DARA' | 'CHAIR', number>;
   openPredictions: Array<{ expert: string; text: string; deadline: string }>;
@@ -192,13 +205,56 @@ async function fetchOpenPredictions(brand: Brand): Promise<CouncilPack['openPred
   }));
 }
 
+/** The last 4 analyses' diagnosis + plan + how their predictions resolved —
+ *  the self-grading memory. hit/miss counts come from council_predictions
+ *  joined by session_id, so the weekly council can see whether its OWN past
+ *  calls worked and adjust (compounding). */
+async function fetchPastPlans(brand: Brand): Promise<CouncilPack['pastPlans']> {
+  if (!isSupabaseConfigured()) return [];
+  const { data: sessions } = await getSupabase()
+    .from('council_sessions')
+    .select('id, date, verdict')
+    .eq('brand', brand)
+    .order('date', { ascending: false })
+    .limit(4);
+  const rows = (sessions ?? []) as { id: string; date: string; verdict: Record<string, unknown> | null }[];
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const { data: preds } = await getSupabase()
+    .from('council_predictions')
+    .select('session_id, outcome')
+    .in('session_id', ids);
+  const tally = new Map<string, { hit: number; miss: number }>();
+  for (const p of (preds ?? []) as { session_id: string; outcome: string | null }[]) {
+    const t = tally.get(p.session_id) ?? { hit: 0, miss: 0 };
+    if (p.outcome === 'hit') t.hit++;
+    else if (p.outcome === 'miss') t.miss++;
+    tally.set(p.session_id, t);
+  }
+  return rows.map((r) => {
+    const v = (r.verdict ?? {}) as { diagnosis?: { lever?: unknown; root_cause?: unknown }; action_plan?: Array<{ step?: unknown }> };
+    const steps = Array.isArray(v.action_plan)
+      ? v.action_plan.map((s) => (typeof s?.step === 'string' ? s.step : '')).filter(Boolean)
+      : [];
+    const g = tally.get(r.id) ?? { hit: 0, miss: 0 };
+    return {
+      date: r.date,
+      lever: typeof v.diagnosis?.lever === 'string' ? v.diagnosis.lever : '',
+      rootCause: typeof v.diagnosis?.root_cause === 'string' ? v.diagnosis.root_cause : '',
+      steps,
+      predictionsHit: g.hit,
+      predictionsMiss: g.miss,
+    };
+  });
+}
+
 /** Assembles the full council data pack — everything Task 9 hands the LLM.
  *  Every fetch below is independent of every other, so they all run
  *  concurrently. `getSignups()` is the one heavy call (~2k rows) — called
  *  exactly once, here. */
 export async function assemblePack(brand: Brand, asOfSettled: string): Promise<CouncilPack> {
   const [series, verdicts, priors, settings, weights, signups,
-    webinarIncomeCentavos, dfyIncomeCentavos, openPredictions, lastVerdict, creativeBriefs] = await Promise.all([
+    webinarIncomeCentavos, dfyIncomeCentavos, openPredictions, lastVerdict, creativeBriefs, pastPlans] = await Promise.all([
     getAdSeries(brand),
     getLatestVerdicts(brand),
     getPriors(brand),
@@ -210,6 +266,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     fetchOpenPredictions(brand),
     fetchLastVerdict(brand),
     getCreativeBriefs(brand),
+    fetchPastPlans(brand),
   ]);
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
@@ -286,20 +343,45 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   //    counts its settled days so far, not the full calendar week.
   const distinctDates = new Set<string>();
   const spendByWeek = new Map<string, number>();
+  // Rich per-ISO-week aggregate for the 4-week trend (spend/impr/clicks/purch).
+  type WeekAgg = { spend: number; impr: number; clicks: number; purch: number };
+  const weekAgg = new Map<string, WeekAgg>();
   for (const s of series) {
     for (const d of s.days) {
       if (d.date > asOfSettled) continue;
       distinctDates.add(d.date);
       const wk = weekStartOf(d.date);
       spendByWeek.set(wk, (spendByWeek.get(wk) ?? 0) + d.spendCentavos);
+      const a = weekAgg.get(wk) ?? { spend: 0, impr: 0, clicks: 0, purch: 0 };
+      a.spend += d.spendCentavos;
+      a.impr += d.impressions;
+      a.clicks += d.linkClicks;
+      a.purch += d.purchases;
+      weekAgg.set(wk, a);
     }
   }
   const dataMode: 'A' | 'B' = distinctDates.size >= 14 ? 'B' : 'A';
   const cohorts = buildCohorts(signups, asOfSettled, spendByWeek);
 
+  // Last 4 ISO weeks (oldest → newest) — the month arc for the weekly analysis.
+  const currentWeek = weekStartOf(asOfSettled);
+  const weeklyTrend = [3, 2, 1, 0].map((back) => {
+    const weekStart = isoDaysBefore(currentWeek, back * 7);
+    const a = weekAgg.get(weekStart) ?? { spend: 0, impr: 0, clicks: 0, purch: 0 };
+    return {
+      weekStart,
+      spendCentavos: a.spend,
+      cpp: a.purch > 0 ? a.spend / a.purch : null,
+      cpm: a.impr > 0 ? (a.spend / 100 / a.impr) * 1000 : null,
+      linkCtr: a.impr > 0 ? (a.clicks / a.impr) * 100 : null,
+      cvr: a.clicks > 0 ? (a.purch / a.clicks) * 100 : null,
+    };
+  });
+
   return {
     brand, asOf: asOfSettled, dataMode,
     ads, campaign, cohorts,
+    weeklyTrend, pastPlans,
     priors, weights, openPredictions, lastVerdict, settings,
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },
   };

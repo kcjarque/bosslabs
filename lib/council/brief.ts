@@ -125,6 +125,52 @@ function tierCounts(verdicts: VerdictResult[]): Record<Tier, number> {
   return counts;
 }
 
+/** Prince's DAILY pulse — a deterministic heartbeat (no LLM, ₱0). Its job is
+ *  to reassure ("all steady, nothing to touch") 6 days out of 7 and only raise
+ *  a flag when the circuit-breaker trips (`fires` = ads bleeding money with no
+ *  sales). The deep thinking is the weekly Run Analysis + on-demand /prince —
+ *  the daily deliberately gives NO action list, so it can't push over-management. */
+export function buildPulse(args: {
+  dateManila: string;
+  yesterday: { spendCentavos: number; purchases: number } | null;
+  avg7Cpp: number | null;
+  dayQuality: DayQuality;
+  verdicts: VerdictResult[];
+  fires: string[]; // pre-formatted "'Ad' spent ₱X with 0 sales" lines
+}): string {
+  const { dateManila, yesterday, avg7Cpp, dayQuality, verdicts, fires } = args;
+  const yCpp = yesterday && yesterday.purchases > 0 ? yesterday.spendCentavos / yesterday.purchases : null;
+  const pct = yCpp != null && avg7Cpp != null && avg7Cpp !== 0 ? ((yCpp - avg7Cpp) / avg7Cpp) * 100 : null;
+
+  let line: string;
+  if (!yesterday || yCpp == null) {
+    line = 'Numbers still settling — check back later.';
+  } else {
+    const compare = pct == null ? ''
+      : Math.abs(pct) < 8 ? ' (about usual)'
+      : pct < 0 ? ` (${Math.round(-pct)}% cheaper than usual)`
+      : ` (${Math.round(pct)}% pricier than usual)`;
+    line = `Spent ${peso(yesterday.spendCentavos)} · ${yesterday.purchases} buyers · <b>${peso(yCpp)} each</b>${compare}.`;
+  }
+
+  const c = tierCounts(verdicts);
+  const roster = `🟢 ${c.WINNING} · 🟡 ${c.WATCH} · 🔴 ${c.LOSER} · 🌱 ${c.LEARNING}`;
+
+  const status = fires.length > 0
+    ? `🔥 <b>Worth a look:</b>\n${fires.map((f) => `• ${escHtml(f)}`).join('\n')}`
+    : dayQuality === 'RED FLAG'
+      ? '🟠 A bit pricey yesterday — not urgent. The Sunday analysis will dig in.'
+      : '✅ All steady — nothing to touch today.';
+
+  return [
+    `🤴 <b>Prince’s Pulse — ${dateManila}</b>`,
+    line,
+    `Ads: ${roster}`,
+    status,
+    `<i>Deep analysis Sundays 10am · ask me anytime with /prince</i>`,
+  ].join('\n');
+}
+
 export function buildBrief(args: {
   brand: Brand; dateManila: string;
   yesterday: { spendCentavos: number; purchases: number } | null;
