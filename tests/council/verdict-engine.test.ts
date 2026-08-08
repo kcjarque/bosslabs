@@ -7,7 +7,7 @@ const SETTINGS = { brand: 'BOSS' as const, mode: 'recommend' as const, targetCpp
 
 function day(date: string, over: Partial<AdDay> = {}): AdDay {
   return { date, spendCentavos: 100000, impressions: 10000, reach: 8000, frequency: 1.2,
-    ctr: 2.0, linkCtr: 1.2, cpm: 100, linkClicks: 120, purchases: 2, revenueCentavos: 199800, ...over };
+    ctr: 2.0, linkCtr: 1.2, cpm: 100, linkClicks: 120, purchases: 2, revenueCentavos: 199800, video3s: 0, thruplays: 0, lpViews: 0, ...over };
 }
 /** n days ending at endDate (inclusive), ascending. */
 function daysEnding(endDate: string, n: number, over: (i: number) => Partial<AdDay> = () => ({})): AdDay[] {

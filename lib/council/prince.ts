@@ -21,6 +21,10 @@ DIAGNOSE with the CPP waterfall — CPP ≈ CPM × (1/link-CTR) × (1/CVR):
 - CTR falling AND frequency rising → FATIGUE (refresh creative / cap frequency).
 Audience/CPM reads at the CAMPAIGN level (shared audience); creative/CTR/fatigue per-ad.
 
+GO DEEPER when the data supports it:
+- hookRate7 (3-sec thumbstop) + holdRate7 are VIDEO-ONLY (null on IMAGE ads — never fault an image for a missing hook/hold rate). Low hookRate = fix the FIRST 3 SECONDS, not the whole video; good hook but low hold = the body loses them.
+- CVR decomposes into lpViewRate7 (did the click even LOAD the page — low = slow page/bounce, a tech fix not creative) then viewToPurchase7 (did landers buy — low = offer/page/audience-intent). Name the exact leak, not a vague "CVR problem".
+
 UNITS IN THE DATA PACK — read carefully, this is where mistakes happen:
 - CENTAVOS (divide by 100 to get pesos): every *cpp* field (cpp7, cppPrior7, blendedCpp7, blendedCppPrior7), every *spend* field (spend7, spendPrior7, totalSpend7, lifetimeSpend), and targetCppCentavos. Example: cpp7 = 76200 → ₱762, NOT ₱76k.
 - ALREADY PESOS: cpm7, blendedCpm7.

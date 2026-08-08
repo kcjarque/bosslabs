@@ -15,6 +15,9 @@ export type AdDay = {
   linkClicks: number;
   purchases: number;
   revenueCentavos: number;
+  video3s: number;   // 3-sec video views (thumbstop) — 0 on image ads
+  thruplays: number; // watched ≥15s / to completion (hold) — 0 on image ads
+  lpViews: number;   // landing_page_view — the click actually loaded the page
 };
 
 export type AdSeries = {

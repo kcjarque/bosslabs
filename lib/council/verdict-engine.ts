@@ -56,6 +56,24 @@ export function windowsFor(series: AdSeries, asOf: string) {
     linkClicks7, linkClicksPrior7,
     impressions7: sum(t7.map((d) => d.impressions)),
     reach7: sum(t7.map((d) => d.reach)),
+    // Creative-quality (VIDEO only — null on image ads so they aren't scored on
+    // metrics they can't have) + funnel decomposition of CVR.
+    ...(() => {
+      const impr = sum(t7.map((d) => d.impressions));
+      const video3s = sum(t7.map((d) => d.video3s));
+      const thruplays = sum(t7.map((d) => d.thruplays));
+      const lpViews = sum(t7.map((d) => d.lpViews));
+      // A real VIDEO ad's plays are a large fraction of impressions; an IMAGE ad
+      // logs at most a few stray plays. Require plays >= 10% of impressions
+      // before reporting hook/hold, so images read as N/A (not a bogus ~0%).
+      const isVideo = impr > 0 && video3s >= impr * 0.1;
+      return {
+        hookRate7: isVideo ? (video3s / impr) * 100 : null, // thumbstop % (video only)
+        holdRate7: isVideo ? (thruplays / video3s) * 100 : null, // % of stoppers who held (video only)
+        lpViewRate7: linkClicks7 > 0 ? (lpViews / linkClicks7) * 100 : null, // % of clicks that loaded the page
+        viewToPurchase7: lpViews > 0 ? (purchases7 / lpViews) * 100 : null, // % of landers who bought
+      };
+    })(),
     lifetimePurchases: sum(upTo.map((d) => d.purchases)),
     lifetimeSpend: sum(upTo.map((d) => d.spendCentavos)),
     ageDays,

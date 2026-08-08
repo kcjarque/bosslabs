@@ -30,6 +30,7 @@ type AdMetricsRow = {
   spend_centavos: number; impressions: number; reach: number;
   frequency: number | null; ctr: number | null; link_ctr: number | null; cpm: number | null;
   link_clicks: number; purchases: number; revenue_centavos: number;
+  video_3s?: number | null; thruplays?: number | null; lp_views?: number | null;
 };
 
 function rowToAdDay(r: AdMetricsRow): AdDay {
@@ -45,6 +46,9 @@ function rowToAdDay(r: AdMetricsRow): AdDay {
     linkClicks: r.link_clicks,
     purchases: r.purchases,
     revenueCentavos: r.revenue_centavos,
+    video3s: r.video_3s ?? 0,
+    thruplays: r.thruplays ?? 0,
+    lpViews: r.lp_views ?? 0,
   };
 }
 

@@ -23,12 +23,28 @@ type InsightRow = {
   ctr?: string; inline_link_click_ctr?: string; cpm?: string; inline_link_clicks?: string;
   actions?: { action_type: string; value: string }[];
   action_values?: { action_type: string; value: string }[];
+  // Video engagement (VIDEO ads only — absent/empty on image ads).
+  video_play_actions?: { action_type: string; value: string }[];
+  video_thruplay_watched_actions?: { action_type: string; value: string }[];
 };
 
 function purchasesOf(r: InsightRow): number {
   const a = r.actions ?? [];
   const pick = (t: string) => a.find((x) => x.action_type === t)?.value;
   const v = pick('omni_purchase') ?? pick('purchase') ?? pick('offsite_conversion.fb_pixel_purchase');
+  return v ? Math.round(num(v)) : 0;
+}
+/** Video plays (thumbstop signal) — 0 on image ads (no video actions). */
+function video3sOf(r: InsightRow): number {
+  return Math.round((r.video_play_actions ?? []).reduce((s, x) => s + num(x.value), 0));
+}
+/** ThruPlays (watched ≥15s or to completion) — the hold signal. 0 on images. */
+function thruplaysOf(r: InsightRow): number {
+  return Math.round((r.video_thruplay_watched_actions ?? []).reduce((s, x) => s + num(x.value), 0));
+}
+/** Landing-page views — the click actually LOADED the page. From actions[]. */
+function landingViewsOf(r: InsightRow): number {
+  const v = (r.actions ?? []).find((x) => x.action_type === 'landing_page_view')?.value;
   return v ? Math.round(num(v)) : 0;
 }
 function revenueOf(r: InsightRow): number {
@@ -46,6 +62,7 @@ export async function syncAdMetricsDaily(opts: { since: string; until: string })
     'date_start', 'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'ad_id', 'ad_name',
     'spend', 'impressions', 'reach', 'frequency', 'ctr', 'inline_link_click_ctr', 'cpm',
     'inline_link_clicks', 'actions', 'action_values',
+    'video_play_actions', 'video_thruplay_watched_actions',
   ].join(',');
   let url: string | null =
     `https://graph.facebook.com/${GRAPH}/act_${ACCOUNT}/insights` +
@@ -74,6 +91,7 @@ export async function syncAdMetricsDaily(opts: { since: string; until: string })
         cpm: r.cpm != null ? num(r.cpm) : null,
         link_clicks: num(r.inline_link_clicks ?? 0),
         purchases: purchasesOf(r), revenue_centavos: revenueOf(r),
+        video_3s: video3sOf(r), thruplays: thruplaysOf(r), lp_views: landingViewsOf(r),
         synced_at: new Date().toISOString(),
       });
     }
