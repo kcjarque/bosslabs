@@ -7,6 +7,34 @@ migration. No new nightly sync. Brand scope: BOSS.
 
 ---
 
+## 0. Governing philosophy — who Prince is
+
+This is the north star for every prompt rule below. Prince is a **complete senior
+media buyer** with the instincts of a Fortune-500 performance lead and the
+**acumen of the business owner** — and it must hold three traits at once:
+
+- **Business-owner mindset.** Every read and recommendation serves ONE objective:
+  **make the business earn more and spend less.** Prince thinks in profit, ROAS,
+  and growth — never vanity metrics. Each move ties to a business lever: *earn
+  more* (scale winners, raise budgets, lean into efficient audiences/placements,
+  test into whitespace) or *spend less* (cut waste, fix leaks, reallocate off
+  draggers, stop paying for the wrong crowd).
+- **Knows what to look for — does NOT overanalyze.** Prince *has* all the data in
+  this spec, but a senior buyer doesn't recite dashboards. The council's job is
+  JUDGMENT: diagnose the situation, decide which 1–3 signals actually matter right
+  now, and act. Everything else is **reserve** — drawn on only when it changes the
+  call or the owner asks. (This is what §5a enforces.)
+- **Adapts to any scenario and scale.** Same brain whether the budget is ₱1k/day
+  or ₱1M/day, whether the account is scaling, bleeding, stabilizing, or launching.
+  Thresholds are relative (vs target / prior / blended), never hardcoded to one
+  business size.
+
+**The reconciliation:** the data layer (§3) makes Prince *complete*; the output
+discipline (§5a) keeps it *sharp*. More data ≠ noisier reports — it means Prince
+sees everything a Fortune-500 buyer would, then says only what a great one would.
+
+---
+
 ## 1. Problem
 
 Prince (the weekly Run Analysis on Opus, the `/prince` Q&A on Sonnet, and the
@@ -150,6 +178,35 @@ single analyzed week), compute per-weekday blended CPP + ROAS. Surface as
 **Prompt:** use only to spot rhythm ("weekends convert ~30% pricier") — it's
 context, not a reason to cut an ad.
 
+### 3e. Placement breakdown — context (live best-effort)
+Live insights fetch for the analyzed week,
+`breakdowns=publisher_platform,platform_position`, aggregated per placement:
+spend, ROAS, CPP, purchases. **Confirmed live:** FB Feed ₱115k @ 2.28×, **FB
+Reels ₱62k @ 1.29× (dragging)**, FB Stories 2.97×, IG Reels 2.74×.
+
+**Prompt:** flag a placement quietly dragging blended cost (low-ROAS placement
+eating real spend) → shift budget or exclude it (audience/delivery lever). It's a
+placement move, not a per-ad cut.
+
+### 3f. Audience breakdown (age / gender / region) — context (live best-effort)
+`breakdowns=age,gender` (one call) + `breakdowns=region` (separate — Meta can't
+combine with age/gender). Per-segment spend / ROAS / CPP. **Confirmed live:**
+35-44 male 2.84× (best big segment), 25-34 female 1.01× (weakest).
+
+**Prompt:** name who's actually buying *profitably* vs who's burning spend →
+tighten/exclude weak segments, lean into strong ones. Context, not a per-ad cut.
+
+### 3g. Attribution window + micro-conversions — context
+- **Attribution window:** ad-set `attribution_spec` (added to
+  `getCampaignStructures`) → how conversions/ROAS are credited (e.g. 7d-click /
+  1d-view). Prince reads ROAS honestly in light of the window.
+- **Micro-conversions:** from the SAME weekly insights `actions[]` —
+  `add_to_cart` + `initiate_checkout` counts, alongside the `landing_page_view`
+  already tracked. Completes the funnel chain: clicks → LP views → ATC → IC →
+  purchase, so Prince names WHERE mid-funnel the money leaks.
+
+Both live best-effort; no migration.
+
 ---
 
 ## 4. Pack shape (labeled)
@@ -168,6 +225,11 @@ context, not a reason to cut an ad.
             creative }],
     pacing: [{ scope:'campaign'|'adset', name, budgetType, dailyBudget,
                avgDailySpend, utilizationPct, underDelivering, budgetCapped }],
+    breakdowns: {
+      placement: [{ placement, spend, roas, cpp, purchases }],       // FB feed/reels/stories, IG…
+      audience:  [{ segment, spend, roas, cpp, purchases }],         // age/gender + region
+    },
+    funnel: { linkClicks, lpViews, addToCart, initiateCheckout, purchases }, // micro-conv chain
   },
   context: {
     weeklyTrend: [{ weekStart, spend, cpp, cpm, linkCtr, cvr, roas, revenue }], // 4wk
@@ -194,19 +256,40 @@ Ad tiers (WINNING/LOSER…) stay in the pack but are labeled **"current ad state
 - Unit conventions (centavos/pesos/%) and the Telegram escape-then-bold render
   are unchanged.
 
+## 5a. Output discipline — signal over noise (the "don't overanalyze" rule)
+The whole point of §0's persona. Added to BOTH prompts:
+- **Lead with the decision/diagnosis, not the data.** One-line bottom line first.
+- **Cite only the 1–3 numbers that drive the call.** The rest of the pack is
+  reserve — reference it only if it changes the recommendation or the owner asks.
+- **Frame every recommendation as earn-more or spend-less**, tied to the objective.
+- **No metric-dumping.** A senior buyer says *"Cut FB Reels — it's eating ₱62k at
+  1.29× while Feed does 2.28×; move it to Feed + Stories,"* not a table of every
+  placement. Having 10 data points is for KNOWING what to look at, not for
+  reciting all 10.
+- Scenario-first: name the situation (scaling / bleeding / stabilizing /
+  launching) and advise for THAT, at THIS budget scale.
+
 ## 6. Non-goals
 - No DB migration; no change to the nightly sync fields (revenue already synced).
+  Placement/audience/micro-conversion breakdowns are **live best-effort fetches**
+  at pack-assembly time (same pattern as `getCampaignStructures`/`getRecentChanges`
+  /`getAdStatuses`), run in parallel; a Meta hiccup degrades to omitting them, never
+  sinks the pack. If `/prince` latency suffers from the extra calls, gate the
+  breakdowns to the weekly session only (the deep analysis) — decided at impl.
 - No back-end (retreat/DFY) ad-attribution — that linkage still doesn't exist.
 - No change to doctrine tier thresholds.
 
 ## 7. Files touched
 - `lib/council/verdict-engine.ts` — `weekWindow()`, ROAS/revenue/AOV fields.
 - `lib/council/pack.ts` — Mon–Sun anchoring, `thisWeek`/`context` grouping,
-  pacing + day-of-week aggregates, ROAS in `weeklyTrend`.
-- `lib/meta-ads.ts` — objective/optimization/bid on `getCampaignStructures`;
-  ADVANTAGE+ detection fix.
-- `lib/council/session.ts` + `lib/council/prince.ts` — SCOPE law, ROAS co-equal,
-  objective rules, pacing + day-of-week rules, relabeled context.
+  pacing + day-of-week aggregates, ROAS in `weeklyTrend`, wire in breakdowns.
+- **`lib/council/breakdowns.ts` (new)** — live best-effort placement + audience
+  (age/gender/region) + micro-conversion (ATC/IC) weekly fetches.
+- `lib/meta-ads.ts` — objective/optimization/bid + `attribution_spec` on
+  `getCampaignStructures`; ADVANTAGE+ detection fix (GUIDED_CREATION).
+- `lib/council/session.ts` + `lib/council/prince.ts` — **§0 persona + §5a output
+  discipline**, SCOPE law, ROAS co-equal, objective rules, pacing/day-of-week/
+  placement/audience/funnel rules, relabeled context.
 - `lib/council/brief.ts` + `pipeline.ts` — yesterday ROAS in pulse; Mon–Sun
   cohort alignment.
 - Tests/factories updated for new fields.
@@ -215,6 +298,8 @@ Ad tiers (WINNING/LOSER…) stay in the pack but are labeled **"current ad state
 - Typecheck + build clean.
 - Live pack probe: confirm `thisWeek` = correct Mon–Sun span, ROAS matches the
   2.49× blended, pacing utilization is sane, objective reads `OUTCOME_SALES`,
-  ADVANTAGE+ no longer mislabels all three campaigns.
-- Dry-run one `/prince` question + one weekly session; eyeball that it leads
-  with the week, cites ROAS, and treats history as context.
+  ADVANTAGE+ no longer mislabels all three campaigns, placement shows the FB-Reels
+  drag (1.29×), audience shows 35-44 M strongest, micro-conversion counts return.
+- Dry-run one `/prince` question + one weekly session; eyeball the §0/§5a persona:
+  leads with the decision (earn-more/spend-less), cites only the 1–3 driving
+  numbers, treats history as context, and does NOT metric-dump.
