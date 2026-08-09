@@ -496,8 +496,9 @@ export async function runCouncilSession(
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    // max_tokens 16000 (not the brief's 8000) — headroom for this account's
-    // genuinely large 4-expert transcript_md. thinking explicitly disabled:
+    // max_tokens 32000 (raised from 16000 — the full floor debate + a
+    // transcript_md covering ~49 ads truncated the JSON at 16k). It's a ceiling,
+    // not spend, so it's free on a normal-length run. thinking explicitly disabled:
     // claude-sonnet-5 thinks ADAPTIVELY BY DEFAULT when `thinking` is
     // omitted, and max_tokens is a hard cap on thinking + response text
     // combined. The first real dry run (no `thinking` param, default high
@@ -509,7 +510,7 @@ export async function runCouncilSession(
     // for a deterministic guarantee that the whole budget goes to the
     // required output — confirmed working on the 3rd (successful) live run.
     body: JSON.stringify({
-      model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }],
+      model, max_tokens: 32000, system, messages: [{ role: 'user', content: user }],
       thinking: { type: 'disabled' },
     }),
   });
@@ -596,7 +597,7 @@ export function settledDay(): string {
  *  matters as the default for a caller that omits opts.model. The two
  *  constants stay intentionally duplicated, not shared, so neither module
  *  depends on the other's env var / default. */
-const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-opus-5';
+const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-sonnet-5';
 
 /** §5a severity floor — "a problem whose plausible impact is < ~5% of
  *  pack.thisWeek.campaign.spend" belongs in watchlist, not problems. */
@@ -633,13 +634,13 @@ function addUsage(a: TokenUsage | null, b: TokenUsage | null): TokenUsage | null
  *  don't each duplicate the fetch/parse boilerplate. This is NEW code, not
  *  a refactor of runCouncilSession — its own inline call is untouched. */
 async function callClaude(
-  key: string, model: string, system: string, user: string,
+  key: string, model: string, system: string, user: string, maxTokens = 16000,
 ): Promise<{ text: string; usage: TokenUsage | null; stopReason: string | undefined }> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }],
+      model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }],
       thinking: { type: 'disabled' },
     }),
   });
@@ -797,7 +798,12 @@ async function runSynthesisStage(
   key: string, model: string, system: string, user: string,
 ): Promise<{ session: SessionJson; usage: TokenUsage | null }> {
   try {
-    const { text, usage, stopReason } = await callClaude(key, model, system, user);
+    // Pass 4 emits the full floor debate + a transcript_md covering the whole
+    // roster; 16k truncated it on a large account (49 ads) → the JSON came back
+    // cut off and the entire synthesis/verdict was lost to the fallback. 32k
+    // gives headroom (max_tokens is a ceiling, not spend — you only pay for the
+    // tokens actually generated, so this costs nothing on a normal-length run).
+    const { text, usage, stopReason } = await callClaude(key, model, system, user, 32000);
     let session: SessionJson;
     try {
       session = validateSessionJson(JSON.parse(extractJson(text)));

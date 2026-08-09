@@ -40,9 +40,11 @@ import type { AdSeries, Brand, VerdictResult } from './types';
 
 const MS_DAY = 86400000;
 
-/** The weekly deep-dive runs on Opus (highest-stakes call of the week, ~4×/mo);
- *  the daily path runs NO LLM at all (deterministic pulse). */
-const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-opus-5';
+/** The weekly deep-dive model. Defaults to Sonnet 5 (same as on-demand /prince):
+ *  the 4-pass staged cross-examination is the quality mechanism, and Sonnet keeps
+ *  a full weekly run ≈ ₱60 vs ≈ ₱430 on Opus (4× pack re-sends dominate the cost).
+ *  Set COUNCIL_WEEKLY_MODEL=claude-opus-5 to restore Opus. Daily path = NO LLM. */
+const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-sonnet-5';
 
 /** Manila calendar "today" — same "+8h then slice UTC date" convention
  *  session.ts's `today` (and settledDay()) already use, so `asOf` and

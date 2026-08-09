@@ -56,8 +56,42 @@ async function sendWithMigrationRetry(
   return { ok: true };
 }
 
+/** Telegram hard-caps a single message at 4096 chars. Split longer text on
+ *  blank-line (\n\n) block boundaries so each chunk stays valid HTML — our
+ *  briefs balance every <b>/<i> tag WITHIN a block, so a block-boundary split
+ *  never orphans a tag. A block that alone exceeds the limit falls back to a
+ *  line-boundary split (each rendered line is also tag-balanced), then a raw
+ *  char cut as a last resort. Uses 3900 for headroom under 4096. */
+export function splitForTelegram(text: string, limit = 3900): string[] {
+  if (text.length <= limit) return [text];
+  const chunks: string[] = [];
+  let cur = '';
+  const flush = () => { if (cur) { chunks.push(cur); cur = ''; } };
+  const addLarge = (block: string) => {
+    let rest = block;
+    while (rest.length > limit) {
+      let cut = rest.lastIndexOf('\n', limit);
+      if (cut <= 0) cut = limit;
+      chunks.push(rest.slice(0, cut));
+      rest = rest.slice(cut).replace(/^\n+/, '');
+    }
+    cur = rest;
+  };
+  for (const block of text.split('\n\n')) {
+    const piece = cur ? `${cur}\n\n${block}` : block;
+    if (piece.length <= limit) { cur = piece; continue; }
+    flush();
+    if (block.length <= limit) { cur = block; } else { addLarge(block); }
+  }
+  flush();
+  return chunks;
+}
+
 /**
- * Send a Telegram message to the configured group chat.
+ * Send a Telegram message to the configured group chat. Messages over
+ * Telegram's 4096-char cap are split into ordered chunks (see splitForTelegram)
+ * — the v2 weekly brief regularly exceeds it. Short messages are a single send,
+ * unchanged.
  *
  * Returns `{ ok: true }` on success or `{ ok: false, reason }` on skip/error.
  * Never throws — callers can fire-and-forget with `void sendTelegram(...)`.
@@ -74,7 +108,12 @@ export async function sendTelegram(
       return { ok: false, reason: 'telegram not configured' };
     }
 
-    return await sendWithMigrationRetry(token, chatId, text);
+    const chunks = splitForTelegram(text);
+    for (let i = 0; i < chunks.length; i++) {
+      const res = await sendWithMigrationRetry(token, chatId, chunks[i]);
+      if (!res.ok) return { ok: false, reason: `chunk ${i + 1}/${chunks.length}: ${res.reason}` };
+    }
+    return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Network error';
     console.warn('[telegram] sendMessage error:', msg);
