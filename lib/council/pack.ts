@@ -12,7 +12,8 @@ import { getSignups, type Signup } from '@/lib/db';
 import { sumWebinarIncomeCentavos } from '@/lib/retreat-crm';
 import { sumDfyIncomeCentavos } from '@/lib/dfy-crm';
 import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from './db';
-import { windowsFor } from './verdict-engine';
+import { windowsFor, weekWindow } from './verdict-engine';
+import { economicsFromSettings, dailyNetCentavos, targetNetSpendCentavos, netGapCentavos, type Economics } from './economics';
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
 import { getCampaignStructures, getRecentChanges, getAdStatuses, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
@@ -22,6 +23,10 @@ const MS_DAY = 86400000;
 
 export type CouncilPack = {
   brand: Brand; asOf: string; dataMode: 'A' | 'B';
+  /** The just-finished Mon–Sun narrative window (spec §2) that `thisWeek`
+   *  below is anchored to. `settledCutoff` = `asOf` (today−3); weekEnd is
+   *  always the Sunday of the week containing settledCutoff+3 (today). */
+  weekStart: string; weekEnd: string; settledCutoff: string;
   ads: Array<{
     adId: string; adName: string; role: Role; verdict: Tier; daysInTier: number;
     /** Which campaign + ad set this ad lives in — so recommendations respect
@@ -65,6 +70,33 @@ export type CouncilPack = {
     blendedCpm7: number | null; blendedLinkCtr7: number | null; blendedCvr7: number | null;
     avgFrequency7: number | null; totalReach7: number;
   };
+  /** The Mon–Sun NARRATIVE week (spec §2/§3a) — separate from the settled
+   *  trailing-7 `ads[]`/`campaign` above, which stay untouched for back-compat
+   *  during the Phase-3 prompt migration (new prompts read `thisWeek`).
+   *  `campaign` blends `weekWindow` across every ad with delivery this week;
+   *  `ads[].week` is each ad's own `weekWindow` result; `northStar` is the
+   *  §3h profit-anchor read (current daily net vs `dailyNetTargetCentavos`). */
+  thisWeek: {
+    campaign: {
+      spend: number; revenue: number; roas: number | null; cpp: number | null;
+      aov: number | null; cpm: number | null; linkCtr: number | null; cvr: number | null;
+      reach: number; freq: number | null;
+      /** cpp omitted here (unlike `settled` below) — weekWindow's per-ad
+       *  `priorWeek` exposes roas/cpp but not the underlying purchase count
+       *  needed to blend cpp across ads; roas blends cleanly from summed
+       *  revenue/spend, cpp does not. */
+      priorWeek: { spend: number; revenue: number; roas: number | null };
+      settled: { spend: number; revenue: number; purchases: number; roas: number | null; cpp: number | null };
+    };
+    ads: Array<{
+      adId: string; adName: string;
+      /** Same `adStatus` map already fetched for the back-compat `ads[]`
+       *  above — reused, not re-fetched. */
+      active: boolean; status: string;
+      week: ReturnType<typeof weekWindow>;
+    }>;
+    northStar: { currentDailyNetCentavos: number; targetNetSpendCentavos: number; netGapCentavos: number };
+  };
   cohorts: Array<{
     weekStart: string; buyers: number; showUpPct: number | null;
     applications: number; frontRevenueCentavos: number; adSpendCentavos: number;
@@ -87,7 +119,7 @@ export type CouncilPack = {
   weights: Record<'CHARLEY' | 'NICK' | 'BEN' | 'DARA' | 'CHAIR', number>;
   openPredictions: Array<{ expert: string; text: string; deadline: string }>;
   lastVerdict: { action: string; killSwitch: string; date: string } | null;
-  settings: CouncilSettingsRow;
+  settings: CouncilSettingsRow & { economics: Economics };
   /** Lifetime back-end income totals — NOT cohort-attributed (see the note on
    *  `cohorts[].cohortProfitCentavos` below). Surfaced so the council has
    *  backend-income context even though per-cohort linkage doesn't exist yet. */
@@ -99,6 +131,21 @@ export type CouncilPack = {
  *  for its t7/p7 windows. */
 function isoDaysBefore(dateStr: string, days: number): string {
   return new Date(Date.parse(dateStr) - days * MS_DAY).toISOString().slice(0, 10);
+}
+
+/** Mon–Sun bounds of the just-finished narrative week (spec §2), derived from
+ *  `asOfSettled` (= today−3, the settled cutoff). The weekly cron runs
+ *  Sunday, so "today" for bounds purposes is `asOfSettled+3`; weekEnd is the
+ *  Sunday of today's ISO week, weekStart the Monday 6 days before. Exported
+ *  (pure, no network) so `pack.test.ts` can unit-test the math directly. */
+export function deriveWeekBounds(asOfSettled: string): { weekStart: string; weekEnd: string; settledCutoff: string } {
+  const today = new Date(Date.parse(asOfSettled) + 3 * MS_DAY).toISOString().slice(0, 10);
+  const d = new Date(`${today}T00:00:00Z`);
+  const dow = d.getUTCDay(); // 0=Sun..6=Sat
+  d.setUTCDate(d.getUTCDate() + (dow === 0 ? 0 : 7 - dow));
+  const weekEnd = d.toISOString().slice(0, 10);
+  const weekStart = isoDaysBefore(weekEnd, 6);
+  return { weekStart, weekEnd, settledCutoff: asOfSettled };
 }
 
 /** Monday-start of the week `dateStr` falls in. Mirrors `lib/ads-results.ts`'s
@@ -439,12 +486,73 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     };
   });
 
+  // Mon–Sun narrative week (spec §2/§3a) + §3h profit-anchor north star.
+  // Blends `weekWindow` (imported, not recreated) across every ad with
+  // delivery this week, alongside the settled-trailing-7 `ads`/`campaign`
+  // built above (kept as-is for back-compat).
+  const { weekStart, weekEnd, settledCutoff } = deriveWeekBounds(asOfSettled);
+  const econ = economicsFromSettings(settings);
+  const weekAds = series
+    .map((s) => ({ s, w: weekWindow(s, weekStart, weekEnd, settledCutoff) }))
+    .filter(({ w }) => w.spend > 0 || w.impressions > 0);
+  const twSpend = weekAds.reduce((a, { w }) => a + w.spend, 0);
+  const twRev = weekAds.reduce((a, { w }) => a + w.revenue, 0);
+  const twPurch = weekAds.reduce((a, { w }) => a + w.purchases, 0);
+  const twImpr = weekAds.reduce((a, { w }) => a + w.impressions, 0);
+  const twClicks = weekAds.reduce((a, { w }) => a + w.linkClicks, 0);
+  const twReach = weekAds.reduce((a, { w }) => a + w.reach, 0);
+  const blendedRoas = twSpend > 0 ? twRev / twSpend : null;
+  const priorSpend = weekAds.reduce((a, { w }) => a + w.priorWeek.spend, 0);
+  const priorRevenue = weekAds.reduce((a, { w }) => a + w.priorWeek.revenue, 0);
+  const settledSpend = weekAds.reduce((a, { w }) => a + w.settled.spend, 0);
+  const settledRevenue = weekAds.reduce((a, { w }) => a + w.settled.revenue, 0);
+  const settledPurchases = weekAds.reduce((a, { w }) => a + w.settled.purchases, 0);
+
+  const days = Math.max(1, (Date.parse(weekEnd) - Date.parse(weekStart)) / MS_DAY + 1);
+  const currentDailyNet = blendedRoas != null ? dailyNetCentavos(twSpend / days, blendedRoas, econ.processingFeePct) : 0;
+  const northStar = {
+    currentDailyNetCentavos: Math.round(currentDailyNet),
+    targetNetSpendCentavos: targetNetSpendCentavos(econ.dailyNetTargetCentavos, econ.targetRoas, econ.processingFeePct),
+    netGapCentavos: netGapCentavos(Math.round(currentDailyNet), econ.dailyNetTargetCentavos),
+  };
+
+  const thisWeek: CouncilPack['thisWeek'] = {
+    campaign: {
+      spend: twSpend, revenue: twRev, roas: blendedRoas,
+      cpp: twPurch > 0 ? twSpend / twPurch : null,
+      aov: twPurch > 0 ? Math.round(twRev / twPurch) : null,
+      cpm: twImpr > 0 ? (twSpend / 100 / twImpr) * 1000 : null,
+      linkCtr: twImpr > 0 ? (twClicks / twImpr) * 100 : null,
+      cvr: twClicks > 0 ? (twPurch / twClicks) * 100 : null,
+      reach: twReach,
+      freq: twReach > 0 ? twImpr / twReach : null,
+      priorWeek: {
+        spend: priorSpend, revenue: priorRevenue,
+        roas: priorSpend > 0 ? priorRevenue / priorSpend : null,
+      },
+      settled: {
+        spend: settledSpend, revenue: settledRevenue, purchases: settledPurchases,
+        roas: settledSpend > 0 ? settledRevenue / settledSpend : null,
+        cpp: settledPurchases > 0 ? settledSpend / settledPurchases : null,
+      },
+    },
+    ads: weekAds.map(({ s, w }) => ({
+      adId: s.adId, adName: s.adName,
+      active: (adStatus.get(s.adId) ?? '') === 'ACTIVE',
+      status: adStatus.get(s.adId) ?? '',
+      week: w,
+    })),
+    northStar,
+  };
+
   return {
     brand, asOf: asOfSettled, dataMode,
-    ads, campaign, cohorts,
+    weekStart, weekEnd, settledCutoff,
+    ads, campaign, thisWeek, cohorts,
     structure, recentChanges, winningCreatives,
     weeklyTrend, pastPlans,
-    priors, weights, openPredictions, lastVerdict, settings,
+    priors, weights, openPredictions, lastVerdict,
+    settings: { ...settings, economics: econ },
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },
   };
 }
