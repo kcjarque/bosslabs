@@ -233,6 +233,8 @@ export async function getCampaignBudget(): Promise<{
 export type CampaignStructure = {
   id: string;
   name: string;
+  /** Meta's declared campaign objective (e.g. OUTCOME_SALES, OUTCOME_LEADS). */
+  objective: string;
   /** How budget is set — this determines which levers are even possible.
    *  CBO: budget on the campaign (can't set per-ad; turn ads off / raise
    *  campaign budget). ABO: budget on the ad set. ADVANTAGE+: automated
@@ -246,8 +248,33 @@ export type CampaignStructure = {
     learningStatus: string | null;
     /** Days since the last SIGNIFICANT edit (which resets learning). null if none. */
     lastSignificantEditDays: number | null;
+    /** What the ad set is optimizing delivery for (e.g. OFFSITE_CONVERSIONS). */
+    optimizationGoal: string | null;
+    /** Bid strategy (e.g. LOWEST_COST_WITHOUT_CAP). */
+    bidStrategy: string | null;
+    /** Pixel custom-conversion event being optimized for, from promoted_object. */
+    customEventType: string | null;
+    /** JSON-stringified attribution_spec array (attribution window config). */
+    attributionSpec: string | null;
   }>;
 };
+
+/** Pure classifier for how a campaign's budget is set. GUIDED_CREATION is a
+ *  normal guided-flow marker Meta stamps on manually-built campaigns — NOT
+ *  Advantage+ (BUG-3: previously any truthy smart_promotion_type was treated
+ *  as ADVANTAGE+, mislabeling every guided-creation campaign). Only
+ *  SMART_PROMOTION means the campaign is actually Advantage+/automated. */
+export function deriveBudgetType(x: {
+  smartPromotionType: string;
+  campDaily: number;
+  campLifetime: number;
+  anyAdsetBudget: boolean;
+}): 'CBO' | 'ABO' | 'ADVANTAGE+' | 'unknown' {
+  if (x.smartPromotionType === 'SMART_PROMOTION') return 'ADVANTAGE+';
+  if (x.campDaily || x.campLifetime) return 'CBO';
+  if (x.anyAdsetBudget) return 'ABO';
+  return 'unknown';
+}
 
 /** Live campaign structure from Meta: CBO/ABO/Advantage+ + budgets + ad sets.
  *  This is what lets the council recommend EXECUTABLE moves (budget is never
@@ -259,18 +286,19 @@ export async function getCampaignStructures(): Promise<CampaignStructure[]> {
     const targets = await resolveTrackedTargets();
     const out: CampaignStructure[] = [];
     for (const t of targets) {
-      const camp = (await graph(t.id, 'id,name,daily_budget,lifetime_budget,smart_promotion_type')) as {
-        name?: string; daily_budget?: string; lifetime_budget?: string; smart_promotion_type?: string;
+      const camp = (await graph(t.id, 'id,name,daily_budget,lifetime_budget,smart_promotion_type,objective')) as {
+        name?: string; daily_budget?: string; lifetime_budget?: string; smart_promotion_type?: string; objective?: string;
       };
       const campDaily = camp.daily_budget ? Number(camp.daily_budget) : 0;
       const campLifetime = camp.lifetime_budget ? Number(camp.lifetime_budget) : 0;
       const adsetsRaw = (await graph(
         `${t.id}/adsets`,
-        'id,name,daily_budget,lifetime_budget,effective_status,learning_stage_info',
+        'id,name,daily_budget,lifetime_budget,effective_status,learning_stage_info,optimization_goal,bid_strategy,promoted_object,attribution_spec',
       )) as { data?: Array<Record<string, unknown>> };
       const nowSec = Date.now() / 1000;
       const adSets = (adsetsRaw?.data ?? []).map((a) => {
         const lsi = (a.learning_stage_info ?? {}) as { status?: string; last_sig_edit_ts?: number };
+        const promotedObject = (a.promoted_object ?? {}) as { custom_event_type?: string };
         return {
           id: String(a.id ?? ''),
           name: String(a.name ?? ''),
@@ -278,19 +306,23 @@ export async function getCampaignStructures(): Promise<CampaignStructure[]> {
           active: String(a.effective_status ?? '').toUpperCase() === 'ACTIVE',
           learningStatus: typeof lsi.status === 'string' ? lsi.status : null,
           lastSignificantEditDays: lsi.last_sig_edit_ts ? Math.floor((nowSec - lsi.last_sig_edit_ts) / 86400) : null,
+          optimizationGoal: typeof a.optimization_goal === 'string' ? a.optimization_goal : null,
+          bidStrategy: typeof a.bid_strategy === 'string' ? a.bid_strategy : null,
+          customEventType: typeof promotedObject.custom_event_type === 'string' ? promotedObject.custom_event_type : null,
+          attributionSpec: a.attribution_spec ? JSON.stringify(a.attribution_spec) : null,
         };
       });
       const anyAdsetBudget = adSets.some((s) => s.dailyBudgetCentavos != null);
-      const budgetType: CampaignStructure['budgetType'] = camp.smart_promotion_type
-        ? 'ADVANTAGE+'
-        : campDaily || campLifetime
-          ? 'CBO'
-          : anyAdsetBudget
-            ? 'ABO'
-            : 'unknown';
+      const budgetType = deriveBudgetType({
+        smartPromotionType: camp.smart_promotion_type ?? '',
+        campDaily,
+        campLifetime,
+        anyAdsetBudget,
+      });
       out.push({
         id: t.id,
         name: camp.name || t.name,
+        objective: camp.objective ?? '',
         budgetType,
         dailyBudgetCentavos: campDaily || campLifetime || null,
         adSets,
