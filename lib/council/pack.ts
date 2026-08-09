@@ -15,7 +15,7 @@ import { getAdSeries, getLatestVerdicts, getPriors, getCouncilSettings } from '.
 import { windowsFor } from './verdict-engine';
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
-import { getCampaignStructures, getRecentChanges, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
+import { getCampaignStructures, getRecentChanges, getAdStatuses, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -32,6 +32,13 @@ export type CouncilPack = {
     windows: ReturnType<typeof windowsFor>; last14: AdDay[];
     /** What the creative IS (angle/persona/hook/quality) — null until analyzed. */
     creative: CreativeBrief | null;
+    /** Is this ad DELIVERING right now (effective_status === 'ACTIVE')? Its
+     *  metrics are always historical, so a paused ad still carries data —
+     *  never recommend turning OFF (or "letting run") an ad that isn't active. */
+    active: boolean;
+    /** Raw Meta effective_status (ACTIVE / PAUSED / ADSET_PAUSED /
+     *  CAMPAIGN_PAUSED / WITH_ISSUES / …). '' if Meta was unreachable. */
+    status: string;
   }>;
   /** Live campaign structure (CBO/ABO/Advantage+ + budgets + ad sets + each ad
    *  set's LEARNING status) so the council prescribes EXECUTABLE moves and never
@@ -292,9 +299,10 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   // Live structure (CBO/ABO/Advantage+ + learning phase) and the operational
   // change feed — separate best-effort calls; a Meta hiccup must never sink the
   // whole pack, so they're not in the Promise.all.
-  const [structure, recentChanges] = await Promise.all([
+  const [structure, recentChanges, adStatus] = await Promise.all([
     getCampaignStructures().catch(() => [] as CampaignStructure[]),
     getRecentChanges().catch(() => [] as AccountChange[]),
+    getAdStatuses().catch(() => new Map<string, string>()),
   ]);
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
@@ -343,6 +351,8 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
         windows: w,
         last14: s.days.filter((d) => d.date >= since14 && d.date <= asOfSettled),
         creative: creativeBriefs.get(s.adId) ?? null,
+        active: (adStatus.get(s.adId) ?? '') === 'ACTIVE',
+        status: adStatus.get(s.adId) ?? '',
       });
     }
   }

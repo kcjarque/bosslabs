@@ -302,6 +302,26 @@ export async function getCampaignStructures(): Promise<CampaignStructure[]> {
   }
 }
 
+/** Current on/off status per ad id (Meta effective_status). Only 'ACTIVE'
+ *  means it's actually delivering right now; PAUSED / ADSET_PAUSED /
+ *  CAMPAIGN_PAUSED all mean it is NOT running. Lets the council avoid
+ *  recommending "turn off" an already-paused ad (or "keep running" one that's
+ *  already off). Best-effort → empty map on failure. */
+export async function getAdStatuses(): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  if (!process.env.META_ADS_TOKEN) return m;
+  try {
+    const acct = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
+    const json = (await graph(`act_${acct}/ads`, 'id,effective_status')) as {
+      data?: Array<{ id?: string; effective_status?: string }>;
+    };
+    for (const a of json?.data ?? []) if (a.id) m.set(a.id, String(a.effective_status ?? ''));
+    return m;
+  } catch {
+    return m;
+  }
+}
+
 export type AccountChange = { daysAgo: number; what: string; object: string };
 
 /** Meaningful change events from the account activity log → readable labels.
