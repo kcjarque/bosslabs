@@ -509,7 +509,8 @@ export async function runCouncilSession(
   const { data, error } = await sb.from('council_sessions').insert({
     date: today, brand, trigger_reasons: triggerReasons, data_mode: pack.dataMode,
     transcript_md: parsed.transcript_md,
-    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan, creative_ideas: parsed.creative_ideas },
+    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan, creative_ideas: parsed.creative_ideas,
+      problems: parsed.problems, solutions: parsed.solutions, synthesis: parsed.synthesis, watchlist: parsed.watchlist },
     model,
     input_tokens: json.usage?.input_tokens ?? null, output_tokens: json.usage?.output_tokens ?? null,
   }).select('id').single();
