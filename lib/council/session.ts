@@ -121,7 +121,7 @@ const PROFIT_ANCHOR_RULE =
  *  pack is background that explains it, never the thing being graded. */
 const SCOPE_RULE =
   'SCOPE LAW (§2) — you are judging THE WEEK: pack.thisWeek (the just-finished Mon-Sun, pack.weekStart to pack.weekEnd). Its last ~3 days (after pack.settledCutoff) are still inside Meta\'s attribution window — carried but ROUGH; lean hard calls on the settled Mon-Thu portion and treat the fresh tail as directional. Everything else in the pack is CONTEXT that EXPLAINS the week, never the subject you grade:\n' +
-  '- pack.ads[] / pack.campaign (the older settled trailing-7 figures), pack.weeklyTrend (4-week arc), pack.pastPlans (self-grade), pack.cohorts, pack.structure, pack.recentChanges — all CONTEXT. Use them to explain WHY the week looks the way it does ("CPP up this week — third straight week frequency climbed"), never grade the history itself, and never let a lifetime/blended figure override what pack.thisWeek actually shows.\n' +
+  '- pack.ads[] / pack.campaign (the older settled trailing-7 figures), pack.weeklyTrend (4-week arc), pack.pastPlans (self-grade), pack.cohorts, pack.structure, pack.recentChanges, pack.thisWeek.breakdowns, pack.thisWeek.funnel (placement/audience/funnel breakdowns, §3e/f/g — DIRECTIONAL by nature, never the sole basis for a cut/scale/exclude call on their own) — all CONTEXT. Use them to explain WHY the week looks the way it does ("CPP up this week — third straight week frequency climbed"), never grade the history itself, and never let a lifetime/blended figure override what pack.thisWeek actually shows.\n' +
   '- When this-week and history disagree, THE WEEK WINS as the subject of the verdict; history only supplies the "why."';
 
 /** §5a — signal over noise: the output discipline that keeps the persona
@@ -572,10 +572,12 @@ export function settledDay(): string {
  * ========================================================================== */
 
 /** The weekly deep-dive's model. Mirrors pipeline.ts's own (private)
- *  WEEKLY_MODEL constant rather than importing it — pipeline.ts still calls
- *  runCouncilSession directly today; wiring it to call runStagedCouncil
- *  instead is a later task, so the two constants are intentionally
- *  duplicated for now, not shared. */
+ *  WEEKLY_MODEL constant rather than importing it — pipeline.ts calls
+ *  runStagedCouncil for the weekly path (since commit 77b4526) and always
+ *  passes its own WEEKLY_MODEL explicitly as opts.model, so this copy only
+ *  matters as the default for a caller that omits opts.model. The two
+ *  constants stay intentionally duplicated, not shared, so neither module
+ *  depends on the other's env var / default. */
 const WEEKLY_MODEL = process.env.COUNCIL_WEEKLY_MODEL || 'claude-opus-5';
 
 /** §5a severity floor — "a problem whose plausible impact is < ~5% of
@@ -691,7 +693,7 @@ function stage1System(pack: CouncilPack): string {
  *  pass prunes THIS week's problems, it does not grade past plans). */
 function stage2System(pack: CouncilPack): string {
   return `STAGED COUNCIL — PASS 2 of 4 (cross-examine Pass 1, then Stage 2: pick the data). ${stageDataModeNote(pack)}\n` +
-    `${PERSONA_RULE}\n${METHOD_RULE}\n${PROFIT_ANCHOR_RULE}\n${SCOPE_RULE}\n${OUTPUT_DISCIPLINE_RULE}\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${MOVEMENT_LEARNING_RULE}\n${STRUCTURE_RULE}\n` +
+    `${PERSONA_RULE}\n${METHOD_RULE}\n${PROFIT_ANCHOR_RULE}\n${SCOPE_RULE}\n${OUTPUT_DISCIPLINE_RULE}\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${BREAKDOWNS_RULE}\n${MOVEMENT_LEARNING_RULE}\n${STRUCTURE_RULE}\n` +
     'THIS PASS = cross-examine stage1_output (in the user message) as a skeptical second reader, THEN do STAGE 2. For every problem Pass 1 found, challenge it: is the type right, is pesoImpact realistic, is evidence.confidence honestly derived? PRUNE: a problem survives into your "problems" output ONLY if pesoImpact >= severity_floor_pesos AND evidence.confidence is NOT "NOISE" — EXCEPT type="malfunction" problems, which are EXEMPT from both checks (a broken pixel or disapproved ad is worth fixing regardless of its current dollar size, and you often cannot even measure its true impact while it is broken — never demote a real malfunction for being "small"). Anything that does not survive goes into "watchlist" instead — merge with Pass 1\'s own watchlist, do not drop entries. Cross-check pack.malfunctions against the survivors too: if any malfunction is not represented, add it now as a malfunction problem (Pass 1 may have missed it). For every SURVIVING problem, do STAGE 2: append to its evidence.text which diagnostic metric(s) it should be judged against (creative→link-CTR/hook, fatigue→CTR-trend+frequency, audience→CPM/placement/demo, offer→CVR/funnel, setup→structure/optimization, malfunction→status/metric-cliff, market→cross-account CPM/CPP simultaneity), so the next pass knows exactly where to gather evidence. Do NOT propose solutions and do NOT write a verdict yet. ' +
     'Respond with ONLY a JSON object matching output_schema in the user message.';
 }
@@ -701,7 +703,7 @@ function stage2System(pack: CouncilPack): string {
  *  metric-layer rules to know where to look). */
 function stage3System(pack: CouncilPack): string {
   return `STAGED COUNCIL — PASS 3 of 4 (Stage 3: find the evidence). ${stageDataModeNote(pack)}\n` +
-    `${PERSONA_RULE}\n${METHOD_RULE}\n${PROFIT_ANCHOR_RULE}\n${SCOPE_RULE}\n${OUTPUT_DISCIPLINE_RULE}\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${MOVEMENT_LEARNING_RULE}\n${STRUCTURE_RULE}\n` +
+    `${PERSONA_RULE}\n${METHOD_RULE}\n${PROFIT_ANCHOR_RULE}\n${SCOPE_RULE}\n${OUTPUT_DISCIPLINE_RULE}\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${BREAKDOWNS_RULE}\n${MOVEMENT_LEARNING_RULE}\n${STRUCTURE_RULE}\n` +
     'THIS PASS = STAGE 3 ONLY, on stage2_output\'s survivors (in the user message). For each problem, REPLACE its evidence.text with the SPECIFIC proof: real numbers, the exact ad/placement/segment/day, using the diagnostic metric(s) Stage 2 named — not vibes. Use pack.thisWeek.ads[].confidence for the relevant ad(s) to finalize each problem\'s evidence.confidence (MINIMUM-SIGNAL RULE: SOLID >= ~10 purchases or spend >= ~3x blended CPA, DIRECTIONAL >= 3 purchases or spend >= ~1x blended CPA, else NOISE; day-of-week context is capped at DIRECTIONAL). If gathering real evidence shows a problem is weaker than Pass 1/2 thought — confidence actually NOISE, or the real pesoImpact actually below severity_floor_pesos — demote it to watchlist now rather than carrying it forward on stale confidence (malfunction-type problems stay exempt from the floor, per Pass 2\'s rule). Do not invent brand-new problem types at this stage (that was Stage 1\'s job), though you may still add a malfunction problem if pack.malfunctions surfaces one the prior passes missed. Do NOT propose solutions and do NOT write a verdict yet — that is the next (final) pass. ' +
     'Respond with ONLY a JSON object matching output_schema in the user message.';
 }
@@ -719,7 +721,7 @@ function stage4System(pack: CouncilPack, doctrine: string): string {
     'Obey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\n' +
     'The verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad \'X\' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\n' +
     'Each ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n' +
-    `${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${MEMORY_RULE}\n${STRUCTURE_RULE}\n${MOVEMENT_LEARNING_RULE}\n${CREATIVE_IDEAS_RULE}\n${UNIT_CONVENTIONS}\n` +
+    `${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${BREAKDOWNS_RULE}\n${MEMORY_RULE}\n${STRUCTURE_RULE}\n${MOVEMENT_LEARNING_RULE}\n${CREATIVE_IDEAS_RULE}\n${UNIT_CONVENTIONS}\n` +
     'THIS PASS = STAGES 4-5 ONLY. finalized_problems and finalized_watchlist (in the user message) are ALREADY found, cross-examined, and evidenced by Stages 1-3 in the prior 3 passes — do NOT re-derive, add, drop, or renumber them, and do NOT emit "problems"/"watchlist" fields yourself (they are attached automatically after your response). Ground everything below in finalized_problems: cite their pesoImpact/evidence.text, never invent new numbers. STAGE 4: emit "solutions" — one concrete, structure-aware, earn-more-or-spend-less fix per finalized problem (a market/auction hold, or a pure watch item, may legitimately have none). STAGE 5: synthesize everything — the full floor debate (CHARLEY/NICK/BEN/DARA + cross-examination + disagreement per the Conflict Map), "diagnosis" (root cause + lever + evidence), "action_plan", "creative_ideas", "synthesis" (one cohesive briefing paragraph ranked by business impact), and the Chair\'s "verdict". If finalized_problems is empty, this is a healthy-week write-up per the NULL-RESULT LAW: say so plainly in synthesis and verdict.action, and floor/action_plan/solutions may legitimately be sparse or near-empty — do not manufacture debate just to fill the format.\n' +
     'Respond with ONLY a JSON object matching output_schema in the user message — transcript_md holds the human-readable §5-format transcript.';
 }

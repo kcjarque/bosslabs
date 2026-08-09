@@ -4,6 +4,7 @@
 // []/zeros, never throws. Raw-fetch pattern mirrors lib/council/meta-sync.ts
 // (lib/meta-ads.ts's graph()/token/version consts aren't exported).
 import { brandFromCampaignName } from './meta-sync';
+import { getTrackedCampaigns } from '@/lib/db';
 
 const GRAPH = process.env.META_GRAPH_VERSION || 'v23.0';
 const ACCOUNT = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
@@ -101,21 +102,32 @@ export function aggregateBreakdown(rows: InsightRow[], keyFields: string[]): Row
 
 /** One best-effort `act_/insights` call for [weekStart, weekEnd]. Returns []
  *  on missing token, a Graph error, or any fetch/parse failure — callers
- *  never need their own try/catch around this. */
+ *  never need their own try/catch around this. When `campaignIds` is
+ *  non-empty, adds Meta's server-side `filtering` param so the 500-row page
+ *  Meta returns is scoped to those campaigns BEFORE the 500-cap applies —
+ *  see getWeekBreakdowns for why (this account is multi-brand, so an
+ *  unfiltered whole-account page can truncate before every BOSS row is even
+ *  fetched, silently dropping rows the client-side isBoss filter never gets
+ *  a chance to see). Omitted (falls back to today's unfiltered pull) when
+ *  `campaignIds` is empty/undefined. */
 async function fetchInsights(
   weekStart: string,
   weekEnd: string,
   fields: string,
   breakdowns?: string,
+  campaignIds?: string[],
 ): Promise<InsightRow[]> {
   const token = process.env.META_ADS_TOKEN;
   if (!token) return [];
   try {
     const timeRange = encodeURIComponent(JSON.stringify({ since: weekStart, until: weekEnd }));
     const bd = breakdowns ? `&breakdowns=${breakdowns}` : '';
+    const filtering = campaignIds && campaignIds.length > 0
+      ? `&filtering=${encodeURIComponent(JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campaignIds }]))}`
+      : '';
     const url =
       `https://graph.facebook.com/${GRAPH}/act_${ACCOUNT}/insights` +
-      `?level=ad&time_range=${timeRange}&fields=${fields}${bd}&limit=500&access_token=${token}`;
+      `?level=ad&time_range=${timeRange}&fields=${fields}${bd}${filtering}&limit=500&access_token=${token}`;
     const res = await fetch(url, { cache: 'no-store' });
     const json = (await res.json()) as { data?: InsightRow[]; error?: { message?: string } };
     if (json.error || !Array.isArray(json.data)) return [];
@@ -136,16 +148,38 @@ export async function getWeekBreakdowns(
   weekEnd: string,
 ): Promise<{ placement: Row[]; audience: Row[]; funnel: Funnel }> {
   const spendFields = 'spend,actions,action_values,campaign_name';
+
+  // Server-side BOSS scope: fetch the tracked campaign ids (the same BOSS
+  // campaigns the rest of the pack analyzes) so each insights call below can
+  // ask Meta to filter BEFORE the 500-row cap applies — an unfiltered
+  // whole-account page can truncate at 500 rows before every BOSS row is
+  // even returned, which the client-side isBoss filter further down can
+  // only ever filter, not recover. getTrackedCampaigns() is itself
+  // best-effort/never-throws, but the try/catch here is belt-and-suspenders
+  // for the same reason as everywhere else in this file: an empty result
+  // (or any failure) must fall back to today's account-wide pull, not break
+  // the whole week's breakdowns.
+  let bossIds: string[] = [];
+  try {
+    const tracked = await getTrackedCampaigns();
+    bossIds = tracked.filter((c) => c.tracked).map((c) => c.campaignId);
+  } catch {
+    bossIds = [];
+  }
+
   const [placementRowsRaw, ageGenderRowsRaw, regionRowsRaw, funnelRowsRaw] = await Promise.all([
-    fetchInsights(weekStart, weekEnd, spendFields, 'publisher_platform,platform_position'),
-    fetchInsights(weekStart, weekEnd, spendFields, 'age,gender'),
-    fetchInsights(weekStart, weekEnd, spendFields, 'region'),
-    fetchInsights(weekStart, weekEnd, 'actions,inline_link_clicks,campaign_name'),
+    fetchInsights(weekStart, weekEnd, spendFields, 'publisher_platform,platform_position', bossIds),
+    fetchInsights(weekStart, weekEnd, spendFields, 'age,gender', bossIds),
+    fetchInsights(weekStart, weekEnd, spendFields, 'region', bossIds),
+    fetchInsights(weekStart, weekEnd, 'actions,inline_link_clicks,campaign_name', undefined, bossIds),
   ]);
 
   // This account is multi-brand (BOSS + CONX + LEO) — filter to BOSS BEFORE
   // aggregating so every breakdown/funnel figure below matches BOSS's real
-  // spend, not the inflated whole-account total (see isBoss above).
+  // spend, not the inflated whole-account total (see isBoss above). Kept as
+  // a belt-and-suspenders backstop even though the fetch above is now
+  // server-side scoped to bossIds — covers the empty-bossIds fallback path
+  // and any campaign mistakenly marked tracked that isn't actually BOSS.
   const placementRows = placementRowsRaw.filter(isBoss);
   const ageGenderRows = ageGenderRowsRaw.filter(isBoss);
   const regionRows = regionRowsRaw.filter(isBoss);
