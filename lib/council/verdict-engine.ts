@@ -227,3 +227,56 @@ export function gradeAd(args: {
     `7d CPP ${w.cpp7 != null ? peso(w.cpp7) : '—'} ≤ target ${peso(target)}, spend share ${Math.round(share7 * 100)}% ${shareDelta != null && shareDelta >= 0 ? 'rising' : 'stable'}, ${role.toLowerCase()} metrics healthy. Demotes to WATCH on any single deterioration signal (CPP +10%, share −20%, freq↑/CTR↓, CPM +25%).`,
     `Demotes to WATCH if spend share drops >20% or CPP rises >10% week-over-week.`);
 }
+
+/** YYYY-MM-DD `days` before `dateStr` (calendar, UTC-midnight). */
+const isoBefore = (d: string, days: number) => new Date(Date.parse(d) - days * MS_DAY).toISOString().slice(0, 10);
+
+/** The Mon–Sun NARRATIVE window for Prince v2 (spec §2, §3a) — separate from the
+ *  deterministic `windowsFor`/`gradeAd` tiers (those stay settled-trailing-7).
+ *  Computes the full calendar-week span [weekStart..weekEnd] with ROAS/AOV, a
+ *  settled-only sub-total (days ≤ settledCutoff = today−3, for hard calls), and
+ *  the immediately-preceding Mon–Sun (fully settled) for week-over-week deltas.
+ *  Money in centavos; roas a ratio; ctr/cvr/rates percentages. */
+export function weekWindow(series: AdSeries, weekStart: string, weekEnd: string, settledCutoff: string) {
+  const inRange = (d: string, a: string, b: string) => d >= a && d <= b;
+  const wk = series.days.filter((d) => inRange(d.date, weekStart, weekEnd));
+  const settled = wk.filter((d) => d.date <= settledCutoff);
+  const pStart = isoBefore(weekStart, 7), pEnd = isoBefore(weekStart, 1);
+  const pw = series.days.filter((d) => inRange(d.date, pStart, pEnd));
+
+  const agg = (rows: AdSeries['days']) => {
+    const spend = sum(rows.map((d) => d.spendCentavos));
+    const revenue = sum(rows.map((d) => d.revenueCentavos));
+    const purchases = sum(rows.map((d) => d.purchases));
+    const linkClicks = sum(rows.map((d) => d.linkClicks));
+    const impressions = sum(rows.map((d) => d.impressions));
+    const reach = sum(rows.map((d) => d.reach));
+    const video3s = sum(rows.map((d) => d.video3s));
+    const thruplays = sum(rows.map((d) => d.thruplays));
+    const lpViews = sum(rows.map((d) => d.lpViews));
+    // Same image-vs-video guard as windowsFor: real video plays are a large
+    // fraction of impressions; images log a few stray plays → hook/hold = null.
+    const isVideo = impressions > 0 && video3s >= impressions * 0.1;
+    return {
+      spend, revenue, purchases, linkClicks, impressions, reach,
+      roas: spend > 0 ? revenue / spend : null,
+      cpp: purchases > 0 ? spend / purchases : null,
+      aov: purchases > 0 ? Math.round(revenue / purchases) : null,
+      cpm: impressions > 0 ? (spend / 100 / impressions) * 1000 : null,
+      linkCtr: impressions > 0 ? (linkClicks / impressions) * 100 : null,
+      cvr: linkClicks > 0 ? (purchases / linkClicks) * 100 : null,
+      freq: reach > 0 ? impressions / reach : null,
+      hookRate: isVideo ? (video3s / impressions) * 100 : null,
+      holdRate: isVideo ? (thruplays / video3s) * 100 : null,
+      lpViewRate: linkClicks > 0 ? (lpViews / linkClicks) * 100 : null,
+      viewToPurchase: lpViews > 0 ? (purchases / lpViews) * 100 : null,
+    };
+  };
+
+  const full = agg(wk), s = agg(settled), p = agg(pw);
+  return {
+    ...full,
+    settled: { spend: s.spend, revenue: s.revenue, purchases: s.purchases, roas: s.roas, cpp: s.cpp },
+    priorWeek: { spend: p.spend, revenue: p.revenue, roas: p.roas, cpp: p.cpp },
+  };
+}
