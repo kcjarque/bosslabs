@@ -55,7 +55,7 @@ export async function bulkSubscribeAction(
   signupIds: string[],
   sequenceId: string,
 ): Promise<{ subscribed: number; skipped: number }> {
-  requireAdmin();
+  await requireAdmin();
   if (!sequenceId) throw new Error('sequenceId required');
   if (signupIds.length === 0) throw new Error('No customers selected');
   const result = await subscribeManyToSequence(sequenceId, signupIds);
@@ -71,7 +71,7 @@ export async function bulkSubscribeAction(
 export async function bulkDeleteAction(
   signupIds: string[],
 ): Promise<{ count: number }> {
-  requireAdmin();
+  await requireAdmin();
   if (signupIds.length === 0) throw new Error('No customers selected');
   const count = await deleteSignups(signupIds);
   revalidatePath('/admin/customers');
@@ -88,7 +88,7 @@ export async function bulkDeleteAction(
  * 404 page after their row vanished.
  */
 export async function deleteCustomerAction(signupId: string): Promise<void> {
-  const session = getAdminSession();
+  const session = await getAdminSession();
   if (!session) throw new Error('Not signed in.');
   if (session.role !== 'admin') {
     throw new Error('Admin role required — staff cannot delete customers.');
@@ -116,7 +116,7 @@ export async function bulkSendAction(
   channel: 'email' | 'sms',
   templateId: string,
 ): Promise<{ sent: number; failed: number; noPhone: number }> {
-  requireAdmin();
+  await requireAdmin();
   if (signupIds.length === 0) throw new Error('No customers selected');
   if (!templateId) throw new Error('Pick a template');
 
@@ -181,7 +181,7 @@ export async function setRemarksAction(
   signupId: string,
   remarks: string,
 ): Promise<{ ok: boolean }> {
-  requireAdmin();
+  await requireAdmin();
   await setSignupRemarks(signupId, remarks);
   revalidatePath(`/admin/customers/${signupId}`);
   return { ok: true };
@@ -198,7 +198,7 @@ export async function resendCommAction(
   channel: 'email' | 'sms',
   templateId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   if (!templateId) return { ok: false, error: 'No template on this event to resend.' };
   const signup = await getSignupById(signupId);
   if (!signup) return { ok: false, error: 'Customer not found.' };

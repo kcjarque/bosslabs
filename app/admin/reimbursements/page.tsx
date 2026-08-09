@@ -21,8 +21,8 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default async function MyReimbursementsPage() {
-  requireAdmin();
-  const session = getAdminSession();
+  await requireAdmin();
+  const session = await getAdminSession();
   // The shared Admin login has no staff_accounts row to attach a claim to —
   // send it to the side of this feature that's actually theirs.
   if (!session || session.role !== 'staff' || !session.id) {

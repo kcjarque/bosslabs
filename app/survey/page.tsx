@@ -8,7 +8,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function SurveyPage({ searchParams }: { searchParams: { c?: string } }) {
+export default async function SurveyPage(props: { searchParams: Promise<{ c?: string }> }) {
+  const searchParams = await props.searchParams;
   const token = searchParams.c ?? '';
   const contactId = verifyContactToken(token);
 

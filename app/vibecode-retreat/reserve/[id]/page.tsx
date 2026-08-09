@@ -15,11 +15,12 @@ export const metadata: Metadata = {
   title: 'Complete your VibeCode Retreat reservation',
 };
 
-export default async function ReservePaymentPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ReservePaymentPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const r = await getRetreatReservation(params.id);
   if (!r) notFound();
   // Card payment already cleared — don't show the pay options again.

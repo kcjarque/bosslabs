@@ -12,11 +12,12 @@ import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 // drives the Purchase pixel on /oto, so both landing pages report identical
 // value/bumped to Meta. eventID dedups the two fires.
 
-export default async function ThankYouPage({
-  searchParams,
-}: {
-  searchParams: { order?: string; oto?: string };
-}) {
+export default async function ThankYouPage(
+  props: {
+    searchParams: Promise<{ order?: string; oto?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const webinar = await getWebinarInfo();
   const purchase = await resolvePurchaseAmount(searchParams.order, searchParams.oto);
   // Standalone 1:1 buyers (bought via a shared /oto link) have no webinar seat —
@@ -137,7 +138,7 @@ export default async function ThankYouPage({
 
           {standalone ? (
             /* Standalone 1:1 — what happens next */
-            <div className="mt-16">
+            (<div className="mt-16">
               <div className="eyebrow">What happens next</div>
               <h2 className="h-sub mt-3">Two steps before your session.</h2>
               <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5">
@@ -154,7 +155,7 @@ export default async function ThankYouPage({
                   Icon={LiveIcon}
                 />
               </div>
-            </div>
+            </div>)
           ) : (
             <>
               {/* Webinar details card */}

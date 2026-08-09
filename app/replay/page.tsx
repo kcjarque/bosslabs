@@ -27,11 +27,12 @@ const RETREAT_URL = 'https://www.bosslabs.live/vibecode-retreat';
 // single line to move the close date. Webinar: August 6 → +7d = August 13.
 const REPLAY_CLOSES_AT = '2026-08-13T23:59:00+08:00';
 
-export default function ReplayPage({
-  searchParams,
-}: {
-  searchParams: { t?: string; closed?: string };
-}) {
+export default async function ReplayPage(
+  props: {
+    searchParams: Promise<{ t?: string; closed?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // `?t=<seconds>` overrides the 5-min offer delay (for previewing the popup).
   const seconds = Number(searchParams.t);
   const delayMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 5 * 60 * 1000;

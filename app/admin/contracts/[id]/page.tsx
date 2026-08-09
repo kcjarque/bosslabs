@@ -8,7 +8,8 @@ import type { LinkedCustomer } from '@/components/admin/CustomerLinkPicker';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const c = await getContract(params.id);
   return {
     title: c?.clientCompanyName
@@ -17,8 +18,9 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
   };
 }
 
-export default async function ContractEditPage({ params }: { params: { id: string } }) {
-  requireAdmin();
+export default async function ContractEditPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAdmin();
   const contract = await getContract(params.id);
   if (!contract) return notFound();
 

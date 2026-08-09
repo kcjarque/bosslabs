@@ -15,11 +15,12 @@ import { ShareCard } from '@/components/ShareCard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AcceptedPage({
-  searchParams,
-}: {
-  searchParams: { order?: string };
-}) {
+export default async function AcceptedPage(
+  props: {
+    searchParams: Promise<{ order?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const webinar = await getWebinarInfo();
 
   // Resolve the buyer's first name when we have an order id so the page can

@@ -31,12 +31,13 @@ const RANGES: { key: RangeKey; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
-export default async function PnlPage({
-  searchParams,
-}: {
-  searchParams: { range?: string; from?: string; to?: string };
-}) {
-  requireAdmin();
+export default async function PnlPage(
+  props: {
+    searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   let range: RangeKey =
     searchParams.range === '7d' || searchParams.range === 'mtd' || searchParams.range === 'custom'
       ? searchParams.range

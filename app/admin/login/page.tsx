@@ -4,8 +4,8 @@ import { LoginForm } from '@/components/LoginForm';
 
 export const metadata = { title: 'Sign in · BOSSLABS Admin' };
 
-export default function AdminLoginPage() {
-  if (isAdminLoggedIn()) redirect('/admin');
+export default async function AdminLoginPage() {
+  if (await isAdminLoggedIn()) redirect('/admin');
   return (
     <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-8 text-center">

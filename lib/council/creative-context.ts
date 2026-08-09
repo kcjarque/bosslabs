@@ -231,6 +231,7 @@ async function claudeVision(frames: string[], transcript: string, copy: string):
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: VISION_MODEL, max_tokens: 1024, system: TAXONOMY, thinking: { type: 'disabled' }, messages: [{ role: 'user', content }] }),
+    signal: AbortSignal.timeout(90_000),
   });
   const json = (await res.json()) as { content?: { text?: string }[]; error?: { message: string } };
   if (json.error) throw new Error(`anthropic: ${json.error.message}`);

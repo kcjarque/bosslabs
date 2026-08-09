@@ -32,7 +32,7 @@ export function usePrefersReducedMotion(): boolean {
 /* ─── in-view hook ────────────────────────────────────────────────────── */
 
 export function useInView<T extends HTMLElement>(threshold = 0.2): [
-  React.RefObject<T>,
+  React.RefObject<T | null>,
   boolean,
 ] {
   const ref = useRef<T>(null);

@@ -143,6 +143,7 @@ export async function askPrince(question: string, brand: Brand = 'BOSS'): Promis
         thinking: { type: 'disabled' },
         messages: [{ role: 'user', content: user }],
       }),
+      signal: AbortSignal.timeout(60_000),
     });
     const json = (await res.json()) as { content?: { type?: string; text?: string }[]; error?: { message: string } };
     if (json.error) return `Prince hit an error: ${json.error.message}`;

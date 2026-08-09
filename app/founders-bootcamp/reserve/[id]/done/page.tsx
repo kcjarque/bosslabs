@@ -12,13 +12,14 @@ export const metadata: Metadata = {
   title: "Reservation confirmed — AI Founder's Bootcamp",
 };
 
-export default async function DonePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { paid?: string };
-}) {
+export default async function DonePage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ paid?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const r = await getBootcampReservation(params.id);
   if (!r) notFound();
   const cardPaid = searchParams?.paid === 'card' || r.status === 'paid';

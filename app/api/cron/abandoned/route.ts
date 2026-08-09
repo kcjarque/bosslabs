@@ -18,6 +18,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import { getSignups, updateSignup, sessionHasRecording } from '@/lib/db';
 import { sendSalesTeam, sendAbandonedTeam, esc } from '@/lib/telegram';
 
@@ -26,13 +27,8 @@ export const runtime = 'nodejs';
 const GRACE_MINUTES = 15;
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const now = Date.now();
   const graceMs = GRACE_MINUTES * 60 * 1000;

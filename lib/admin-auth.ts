@@ -159,8 +159,8 @@ export type AdminSession = { role: 'admin' | 'staff'; name: string; perms: strin
 /** The current verified session, or null. Admin = full access (perms `['*']`,
  *  no staff_accounts row so `id` is unset); staff = the allowlist + account id
  *  baked into their signed cookie at login. */
-export function getAdminSession(): AdminSession | null {
-  const raw = cookies().get(ADMIN_COOKIE)?.value;
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const raw = (await cookies()).get(ADMIN_COOKIE)?.value;
   if (!raw || !isValidSession(raw)) return null;
   const [val] = raw.split('.');
   if (/^\d+$/.test(val)) return { role: 'admin', name: 'Admin', perms: ['*'] };
@@ -177,14 +177,14 @@ export function getAdminSession(): AdminSession | null {
 }
 
 /** Server-component guard. Redirects to /admin/login if not signed in. */
-export function requireAdmin() {
-  const c = cookies().get(ADMIN_COOKIE)?.value;
+export async function requireAdmin() {
+  const c = (await cookies()).get(ADMIN_COOKIE)?.value;
   if (!isValidSession(c)) redirect('/admin/login');
 }
 
 /** For pages that just want to know without redirecting. */
-export function isAdminLoggedIn() {
-  const c = cookies().get(ADMIN_COOKIE)?.value;
+export async function isAdminLoggedIn() {
+  const c = (await cookies()).get(ADMIN_COOKIE)?.value;
   return isValidSession(c);
 }
 

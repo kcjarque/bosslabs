@@ -12,13 +12,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const [cards, customers] = await Promise.all([listVipCards(), listVipCandidates()]);
   return NextResponse.json({ cards, customers });
 }
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   try {
     const body = (await req.json()) as Record<string, unknown>;

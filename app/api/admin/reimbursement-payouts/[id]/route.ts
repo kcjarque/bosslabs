@@ -11,23 +11,23 @@ import { listRequestsByPayout, voidReimbursementPayout } from '@/lib/reimburseme
 
 export const runtime = 'nodejs';
 
-function requireRealAdmin(req: Request): NextResponse | null {
+async function requireRealAdmin(req: Request): Promise<NextResponse | null> {
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const session = getAdminSession();
+  const session = await getAdminSession();
   if (!session || session.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return null;
 }
 
-export async function GET(req: Request, ctx: { params: { id: string } }) {
-  const fail = requireRealAdmin(req);
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const fail = await requireRealAdmin(req);
   if (fail) return fail;
-  const requests = await listRequestsByPayout(ctx.params.id);
+  const requests = await listRequestsByPayout((await ctx.params).id);
   return NextResponse.json({ requests });
 }
 
-export async function DELETE(req: Request, ctx: { params: { id: string } }) {
-  const fail = requireRealAdmin(req);
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const fail = await requireRealAdmin(req);
   if (fail) return fail;
-  await voidReimbursementPayout(ctx.params.id);
+  await voidReimbursementPayout((await ctx.params).id);
   return NextResponse.json({ ok: true });
 }

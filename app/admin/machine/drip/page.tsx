@@ -32,7 +32,7 @@ function clickTone(rate: number, delivered: number): string {
 }
 
 export default async function DripPerformancePage() {
-  requireAdmin();
+  await requireAdmin();
   const rows = await getDripPerformance();
   const totals = rows.reduce(
     (t, r) => ({

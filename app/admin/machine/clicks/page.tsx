@@ -34,12 +34,13 @@ function fmtManila(ts: string): string {
   });
 }
 
-export default async function ClickDrilldownPage({
-  searchParams,
-}: {
-  searchParams: { tag?: string };
-}) {
-  requireAdmin();
+export default async function ClickDrilldownPage(
+  props: {
+    searchParams: Promise<{ tag?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const tag = (searchParams.tag || '').trim() || null;
   const events = await listClickEvents(tag);
   const people = new Set(events.map((e) => e.contactId).filter(Boolean)).size;

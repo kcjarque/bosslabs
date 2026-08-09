@@ -10,7 +10,7 @@ export async function saveCloserSettingsAction(input: {
   workStartHour: number;
   workEndHour: number;
 }): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   if (!(input.holdHours > 0)) return { ok: false, error: 'Hold hours must be greater than 0.' };
   if (!(input.workStartHour >= 0 && input.workEndHour <= 24 && input.workEndHour > input.workStartHour)) {
     return { ok: false, error: 'Work end must be after start (0–24).' };
@@ -32,7 +32,7 @@ export async function createCloserAction(input: {
   password: string;
   commissionPercent?: number;
 }): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   if (!input.name?.trim() || !input.username?.trim() || !input.password) {
     return { ok: false, error: 'Name, username and password are required.' };
   }
@@ -50,7 +50,7 @@ export async function updateCloserAction(
   id: string,
   patch: { name?: string; email?: string; commissionPercent?: number; active?: boolean; password?: string },
 ): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   try {
     await updateCloser(id, patch);
     revalidatePath('/admin/closers');

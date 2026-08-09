@@ -48,12 +48,13 @@ function monthLabel(year: number, month: number): string {
   });
 }
 
-export default async function FinanceExpensesPage({
-  searchParams,
-}: {
-  searchParams: { ym?: string };
-}) {
-  requireAdmin();
+export default async function FinanceExpensesPage(
+  props: {
+    searchParams: Promise<{ ym?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const { year, month } = parseYm(searchParams.ym);
   const [data, categories, payers, paymentMethods] = await Promise.all([
     getMonthlyConsolidation(year, month),

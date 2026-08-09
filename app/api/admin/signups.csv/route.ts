@@ -4,7 +4,7 @@ import { getSignups } from '@/lib/db';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  if (!isAdminLoggedIn()) {
+  if (!(await isAdminLoggedIn())) {
     return new Response('Unauthorized', { status: 401 });
   }
   const rows = await getSignups();

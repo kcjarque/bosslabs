@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Attendance · BOSSLABS AI' };
 
 export default async function AttendancePage() {
-  requireAdmin();
+  await requireAdmin();
   const events = await getEvents();
   return (
     <div>

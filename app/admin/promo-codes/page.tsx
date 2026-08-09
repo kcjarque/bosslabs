@@ -5,7 +5,7 @@ import { PromoCodesEditor } from '@/components/PromoCodesEditor';
 export const dynamic = 'force-dynamic';
 
 export default async function PromoCodesPage() {
-  requireAdmin();
+  await requireAdmin();
   const codes = await getPromoCodes();
   return (
     <div className="space-y-6">

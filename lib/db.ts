@@ -847,6 +847,40 @@ export const getSignups = cache(async (): Promise<Signup[]> => {
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 });
 
+/** Lightweight dashboard projection. Migration 0058 extracts only the five
+ * metadata fields used by dashboard calculations instead of transferring each
+ * signup's complete metadata blob. Falls back safely before the migration is
+ * deployed. */
+export async function getDashboardSignups(): Promise<Signup[]> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase().rpc('dashboard_signups');
+    if (!error && Array.isArray(data)) return data as Signup[];
+    if (error && !/dashboard_signups/i.test(error.message)) {
+      throw new Error(`getDashboardSignups: ${error.message}`);
+    }
+  }
+  return getSignups();
+}
+
+/** One cache-safe page of the dashboard projection. Keeping each item bounded
+ * below Next.js's 2 MB Data Cache limit prevents large audiences from turning
+ * a performance optimization into a runtime error. */
+export async function getDashboardSignupsPage(offset: number, limit = 500): Promise<Signup[]> {
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase().rpc('dashboard_signups', {
+      p_offset: safeOffset,
+      p_limit: safeLimit,
+    });
+    if (!error && Array.isArray(data)) return data as Signup[];
+    if (error && !/dashboard_signups/i.test(error.message)) {
+      throw new Error(`getDashboardSignupsPage: ${error.message}`);
+    }
+  }
+  return (await getSignups()).slice(safeOffset, safeOffset + safeLimit);
+}
+
 /** Server-side paginated + filtered signups fetch. Only pulls the requested
  *  page of rows + an exact filtered count, so /admin/customers stays fast as
  *  the table grows (the old getSignups() ships every row → ~4 MB at 2k rows).
@@ -1410,6 +1444,48 @@ export async function getVisitBuckets(opts: {
     uniqueSessions: Math.max(b.uniqueSessions, b._sessions.size),
     total: b.total,
   }));
+}
+
+export type DashboardPageViewMetrics = {
+  all: PageViewCounts;
+  checkout: PageViewCounts;
+  abAUnique: number;
+  abBUnique: number;
+  currentBuckets: Array<{ bucketStart: string; uniqueSessions: number; total: number }>;
+  previousBuckets: Array<{ bucketStart: string; uniqueSessions: number; total: number }>;
+};
+
+/** Dashboard-specific combined analytics. New deployments use one SQL scan and
+ * one network round trip; the fallback preserves compatibility until migration
+ * 0058 has been applied. */
+export async function getDashboardPageViewMetrics(opts: {
+  sinceIso: string;
+  untilIso: string;
+  previousSinceIso: string;
+  bucketMs: number;
+}): Promise<DashboardPageViewMetrics> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabase().rpc('dashboard_page_view_metrics', {
+      p_since: opts.sinceIso,
+      p_until: opts.untilIso,
+      p_previous_since: opts.previousSinceIso,
+      p_bucket_seconds: Math.round(opts.bucketMs / 1000),
+    });
+    if (!error && data) return data as DashboardPageViewMetrics;
+    if (error && !/dashboard_page_view_metrics/i.test(error.message)) {
+      throw new Error(`getDashboardPageViewMetrics: ${error.message}`);
+    }
+  }
+
+  const [all, checkout, currentBuckets, previousBuckets, abA, abB] = await Promise.all([
+    countPageViews({ sinceIso: opts.sinceIso, untilIso: opts.untilIso }),
+    countPageViews({ sinceIso: opts.sinceIso, untilIso: opts.untilIso, pathPrefix: '/checkout' }),
+    getVisitBuckets({ sinceIso: opts.sinceIso, untilIso: opts.untilIso, bucketMs: opts.bucketMs }),
+    getVisitBuckets({ sinceIso: opts.previousSinceIso, untilIso: opts.sinceIso, bucketMs: opts.bucketMs }),
+    countPageViews({ sinceIso: opts.sinceIso, untilIso: opts.untilIso, pathPrefix: '/__ab/home-a' }),
+    countPageViews({ sinceIso: opts.sinceIso, untilIso: opts.untilIso, pathPrefix: '/__ab/home-b' }),
+  ]);
+  return { all, checkout, currentBuckets, previousBuckets, abAUnique: abA.uniqueSessions, abBUnique: abB.uniqueSessions };
 }
 
 /* --------------------------------------------------------------------- */

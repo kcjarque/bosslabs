@@ -143,7 +143,7 @@ export async function POST(req: Request) {
     // Affiliate attribution — read the first-touch referral cookie and stamp
     // it onto the signup so even abandoned carts are credited; the Xendit
     // webhook turns it into a commission once the invoice clears.
-    const refJar = cookies();
+    const refJar = await cookies();
     const affiliateCode = refJar.get(REF_COOKIE)?.value || undefined;
     const affiliateMeta = affiliateCode
       ? {

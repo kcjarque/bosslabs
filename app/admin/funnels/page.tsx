@@ -10,7 +10,7 @@ function peso(centavos?: number | null): string {
 }
 
 export default async function FunnelsPage() {
-  requireAdmin();
+  await requireAdmin();
   const funnels = await getFunnels();
 
   return (

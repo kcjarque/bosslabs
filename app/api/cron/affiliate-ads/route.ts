@@ -7,16 +7,15 @@
  * Requires META_ADS_TOKEN; no-ops cleanly when no ads are linked.
  */
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import { syncAffiliateAdInsights } from '@/lib/affiliate-ads';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     const result = await syncAffiliateAdInsights();
     return NextResponse.json({ ok: true, ...result });

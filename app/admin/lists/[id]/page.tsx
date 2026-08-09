@@ -21,12 +21,13 @@ const FILTER_LABELS: Record<ListFilterType, string> = {
   no_show: 'No-show (after-webinar)',
 };
 
-export default async function ListMembersPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  requireAdmin();
+export default async function ListMembersPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  await requireAdmin();
 
   const [list, events] = await Promise.all([getList(params.id), getEvents()]);
   if (!list) notFound();

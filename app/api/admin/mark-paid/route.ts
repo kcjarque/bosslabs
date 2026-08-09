@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const form = await req.formData();

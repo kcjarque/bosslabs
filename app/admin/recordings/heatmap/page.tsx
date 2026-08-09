@@ -20,7 +20,7 @@ export default async function HeatmapPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  requireAdmin();
+  await requireAdmin();
   const sp = await searchParams;
   const tab: FunnelTab = isFunnelTab(sp.tab) && sp.tab !== 'all' ? sp.tab : 'main';
 

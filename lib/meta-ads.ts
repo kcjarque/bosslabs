@@ -190,8 +190,31 @@ async function graph(path: string, fields: string): Promise<unknown> {
   const url =
     `https://graph.facebook.com/${GRAPH_VERSION}/${path}` +
     `?fields=${encodeURIComponent(fields)}&limit=500&access_token=${encodeURIComponent(token)}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  return res.json();
+  const first = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
+  if (!first.ok) throw new Error(`Meta Graph HTTP ${first.status}`);
+  const json = (await first.json()) as {
+    data?: unknown[];
+    paging?: { next?: string };
+    error?: { message?: string };
+  };
+  if (json.error) throw new Error(`Meta Graph: ${json.error.message ?? 'unknown error'}`);
+
+  // Campaign edge endpoints are paginated. Follow Meta's signed `paging.next`
+  // URL so accounts above 500 ads/ad sets never silently truncate.
+  if (Array.isArray(json.data)) {
+    const rows = [...json.data];
+    let next = json.paging?.next;
+    for (let page = 1; next && page < 20; page++) {
+      const res = await fetch(next, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
+      if (!res.ok) throw new Error(`Meta Graph page HTTP ${res.status}`);
+      const body = (await res.json()) as typeof json;
+      if (body.error) throw new Error(`Meta Graph: ${body.error.message ?? 'unknown error'}`);
+      rows.push(...(body.data ?? []));
+      next = body.paging?.next;
+    }
+    return { ...json, data: rows, paging: undefined };
+  }
+  return json;
 }
 
 /**
@@ -541,17 +564,24 @@ import type { AdPreviewFormat } from './meta-ads-formats';
  *  body field. We extract src + width + height so we can render our own
  *  sandboxed iframe (safer than dangerouslySetInnerHTML). Any regex miss
  *  falls back to the raw HTML string. */
-function parsePreviewIframe(html: string): { src?: string; width?: number; height?: number; raw: string } {
-  const src = /src=["']([^"']+)["']/i.exec(html)?.[1];
+function parsePreviewIframe(html: string): { src?: string; width?: number; height?: number } {
+  const candidate = /src=["']([^"']+)["']/i.exec(html)?.[1];
+  let src: string | undefined;
+  try {
+    const parsed = candidate ? new URL(candidate) : null;
+    if (parsed?.protocol === 'https:' && /(^|\.)facebook\.com$/.test(parsed.hostname)) src = parsed.toString();
+  } catch {
+    src = undefined;
+  }
   const width = Number(/width=["']?(\d+)/i.exec(html)?.[1]) || undefined;
   const height = Number(/height=["']?(\d+)/i.exec(html)?.[1]) || undefined;
-  return { src, width, height, raw: html };
+  return { src, width, height };
 }
 
 export async function getAdPreview(
   adId: string,
   format: AdPreviewFormat = 'DESKTOP_FEED_STANDARD',
-): Promise<{ ok: false; error: string } | { ok: true; src?: string; width?: number; height?: number; raw: string }> {
+): Promise<{ ok: false; error: string } | { ok: true; src?: string; width?: number; height?: number }> {
   const token = process.env.META_ADS_TOKEN;
   if (!token) return { ok: false, error: 'META_ADS_TOKEN not configured' };
   // /previews takes ad_format as its own query param — NOT inside ?fields=,
@@ -561,7 +591,7 @@ export async function getAdPreview(
     `?ad_format=${encodeURIComponent(format)}` +
     `&access_token=${encodeURIComponent(token)}`;
   try {
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
     const json = (await res.json()) as {
       data?: Array<{ body?: string }>;
       error?: { message?: string };

@@ -7,7 +7,7 @@ export const metadata = {
   title: 'Proposal Maker — Admin',
 };
 
-export default function NewProposalPage() {
-  requireAdmin();
+export default async function NewProposalPage() {
+  await requireAdmin();
   return <ProposalMaker />;
 }

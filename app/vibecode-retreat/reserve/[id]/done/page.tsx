@@ -12,11 +12,12 @@ export const metadata: Metadata = {
   title: "You're in — VibeCode Retreat",
 };
 
-export default async function ReserveDonePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ReserveDonePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const r = await getRetreatReservation(params.id);
   const firstName = r ? r.name.split(' ')[0] : 'there';
   const email = r?.email;

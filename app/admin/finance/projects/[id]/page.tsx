@@ -17,8 +17,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
-  requireAdmin();
+export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAdmin();
   const [detail, categories, payers] = await Promise.all([
     getProject(params.id),
     listCategories(),

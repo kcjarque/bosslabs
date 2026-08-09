@@ -11,8 +11,8 @@ const peso = (c: number) =>
   `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function ReimbursementPayoutHistoryPage() {
-  requireAdmin();
-  const session = getAdminSession();
+  await requireAdmin();
+  const session = await getAdminSession();
   if (!session || session.role !== 'admin') {
     redirect('/admin/reimbursements');
   }

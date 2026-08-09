@@ -151,7 +151,7 @@ async function graphPost(id: string, params: Record<string, string>): Promise<{ 
   const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${id}?${qs}&access_token=${encodeURIComponent(token)}`;
   try {
-    const res = await fetch(url, { method: 'POST', cache: 'no-store' });
+    const res = await fetch(url, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(12_000) });
     const json = (await res.json()) as { success?: boolean; error?: { message?: string; code?: number } };
     if (json.error) {
       return { ok: false, error: `Meta: ${json.error.message ?? 'unknown error'} (code ${json.error.code ?? '?'})` };
@@ -189,7 +189,7 @@ async function getCurrentBudgetCentavos(campaignId: string): Promise<number> {
   try {
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/${campaignId}` +
       `?fields=daily_budget&access_token=${encodeURIComponent(token)}`;
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
     const json = (await res.json()) as { daily_budget?: string; error?: { message?: string } };
     return json.daily_budget ? Number(json.daily_budget) : 0;
   } catch {

@@ -16,7 +16,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function SequencesPage() {
-  requireAdmin();
+  await requireAdmin();
   const [sequences, lists, events, stepCountsMap] = await Promise.all([
     getSequences(),
     getLists(),

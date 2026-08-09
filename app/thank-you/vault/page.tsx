@@ -35,7 +35,8 @@ type Search = {
  *   - No hubAccount on the signup → webhook is still racing; show "we'll email it"
  *   - hubAccount.password is null (re-fire) → show username + "check the email we sent earlier"
  */
-export default async function VaultThankYouPage({ searchParams }: { searchParams: Search }) {
+export default async function VaultThankYouPage(props: { searchParams: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const order = searchParams.order ?? '';
   const purchase = await resolvePurchaseAmount(order, searchParams.oto);
   const signup = order ? await findSignupByExternalId(order) : null;

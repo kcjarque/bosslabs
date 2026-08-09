@@ -19,7 +19,7 @@ export async function updateFunnelAction(
     config?: EventFunnelConfig & Record<string, unknown>;
   },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await updateFunnel(id, patch);
   revalidatePath('/admin/funnels');
   revalidatePath(`/admin/funnels/${id}`);
@@ -35,7 +35,7 @@ async function saveAbTest(
     history: AbHistoryEntry[],
   ) => { abTest: ReturnType<typeof readAbTest>; abHistory: AbHistoryEntry[] },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const funnel = await getFunnel(id);
   if (!funnel) throw new Error('Funnel not found');
   const config = (funnel.config ?? {}) as Record<string, unknown>;

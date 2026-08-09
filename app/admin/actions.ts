@@ -13,7 +13,7 @@ import { requireAdmin } from '@/lib/admin-auth';
  * not cached and don't need busting — they always re-read.
  */
 export async function refreshDashboard(): Promise<{ ok: true; at: number }> {
-  requireAdmin();
+  await requireAdmin();
   revalidateTag('dashboard');
   revalidatePath('/admin');
   return { ok: true, at: Date.now() };

@@ -35,7 +35,7 @@ function AdsTabs() {
 }
 
 export default async function AdsSettingsPage() {
-  requireAdmin();
+  await requireAdmin();
 
   const [accountCampaigns, savedCampaigns] = await Promise.all([
     getAccountCampaigns(),

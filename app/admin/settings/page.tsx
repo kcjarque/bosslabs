@@ -5,7 +5,7 @@ import { SettingsForm } from '@/components/SettingsForm';
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
-  requireAdmin();
+  await requireAdmin();
   // Secrets are blanked here before the page is rendered — they never
   // touch the browser's DOM/view-source. Leave a secret field blank in
   // the form to keep the stored value; type a new value to replace it.

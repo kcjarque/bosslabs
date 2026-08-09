@@ -15,7 +15,7 @@ import {
 /* Sequences */
 
 export async function createSequenceAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
   const listId = String(formData.get('listId') ?? '').trim();
   const eventId = String(formData.get('eventId') ?? '').trim() || null;
@@ -35,14 +35,14 @@ export async function updateSequenceAction(
     active?: boolean;
   },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await updateSequence(id, patch);
   revalidatePath('/admin/sequences');
   revalidatePath(`/admin/sequences/${id}`);
 }
 
 export async function deleteSequenceAction(id: string): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await deleteSequence(id);
   revalidatePath('/admin/sequences');
 }
@@ -57,7 +57,7 @@ export async function createStepAction(input: {
   scheduleType: SequenceScheduleType;
   hoursOffset: number;
 }): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await addSequenceStep({ ...input, active: true });
   revalidatePath(`/admin/sequences/${input.sequenceId}`);
 }
@@ -74,13 +74,13 @@ export async function updateStepAction(
     active?: boolean;
   },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await updateSequenceStep(id, patch);
   revalidatePath(`/admin/sequences/${sequenceId}`);
 }
 
 export async function deleteStepAction(id: string, sequenceId: string): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await deleteSequenceStep(id);
   revalidatePath(`/admin/sequences/${sequenceId}`);
 }

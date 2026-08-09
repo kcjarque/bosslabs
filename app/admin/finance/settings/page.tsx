@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Finance settings · BOSSLABS AI' };
 
 export default async function FinanceSettingsPage() {
-  requireAdmin();
+  await requireAdmin();
   const [categories, payers, paymentMethods] = await Promise.all([
     listCategories(),
     listPayers(),

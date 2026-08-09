@@ -15,7 +15,7 @@ import { setAffiliateAds } from '@/lib/affiliate-ads';
 import { getAdsReportCached } from '@/lib/meta-ads';
 
 export async function saveAffiliateProgramAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const cur = await getAffiliateProgram();
   await saveAffiliateProgram({
     ...cur,
@@ -27,7 +27,7 @@ export async function saveAffiliateProgramAction(formData: FormData): Promise<vo
 }
 
 export async function saveAffiliateTiersAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const cur = await getAffiliateProgram();
   await saveAffiliateProgram({
     ...cur,
@@ -41,7 +41,7 @@ export async function saveAffiliateTiersAction(formData: FormData): Promise<void
 }
 
 export async function createAffiliateAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
   // Blank code → opaque random code (never derived from the name, so the
   // referral link doesn't reveal who the affiliate is).
@@ -57,7 +57,7 @@ export async function createAffiliateAction(formData: FormData): Promise<void> {
 }
 
 export async function toggleAffiliateAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await updateAffiliate(String(formData.get('id') ?? ''), {
     active: formData.get('active') === '1',
   });
@@ -65,7 +65,7 @@ export async function toggleAffiliateAction(formData: FormData): Promise<void> {
 }
 
 export async function markCommissionPaidAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await markCommissionPaid(String(formData.get('id') ?? ''));
   revalidatePath('/admin/affiliates');
 }
@@ -74,7 +74,7 @@ export async function markCommissionPaidAction(formData: FormData): Promise<void
  *  We resolve ad names from the live (cached) report so each link snapshots a
  *  readable name. */
 export async function saveAffiliateAdsAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const affiliateId = String(formData.get('affiliateId') ?? '');
   if (!affiliateId) throw new Error('affiliateId required');
   const adCommissionPercent = Math.max(0, Number(formData.get('adCommissionPercent') ?? 5));

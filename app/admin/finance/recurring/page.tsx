@@ -22,7 +22,7 @@ function ordinal(n: number): string {
 }
 
 export default async function FinanceRecurringPage() {
-  requireAdmin();
+  await requireAdmin();
   const [items, categories, payers] = await Promise.all([
     listRecurring(),
     listCategories(),

@@ -45,12 +45,13 @@ const TABS = [
   },
 ] as const;
 
-export default async function CrmPage({
-  searchParams,
-}: {
-  searchParams: { board?: string; view?: string };
-}) {
-  requireAdmin();
+export default async function CrmPage(
+  props: {
+    searchParams: Promise<{ board?: string; view?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const active = TABS.find((t) => t.key === searchParams.board) ?? TABS[0];
   // Board vs list lives in the URL (like ?board=) so it survives a refresh and
   // "the DFY list" is a shareable link.

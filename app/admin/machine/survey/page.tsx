@@ -73,7 +73,7 @@ function BreakdownList({
 }
 
 export default async function SurveyAnalyticsPage() {
-  requireAdmin();
+  await requireAdmin();
   const data = await getSurveyData();
   const topIndustry = data.industry[0];
   const topPain = data.pain[0];

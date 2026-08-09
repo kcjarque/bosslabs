@@ -24,7 +24,7 @@ function statusPill(s: Contract['status']) {
 }
 
 export default async function ContractsListPage() {
-  requireAdmin();
+  await requireAdmin();
   const contracts = await listContracts({ limit: 200 });
 
   const totalAnnual = contracts.reduce((s, c) => s + projectedAnnualContractValue(c), 0);

@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My payout settings · BOSSLABS AI' };
 
 export default async function MyReimbursementSettingsPage() {
-  requireAdmin();
-  const session = getAdminSession();
+  await requireAdmin();
+  const session = await getAdminSession();
   if (!session || session.role !== 'staff' || !session.id) {
     redirect('/admin/reimbursements/payable');
   }

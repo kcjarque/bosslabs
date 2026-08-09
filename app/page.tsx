@@ -54,17 +54,18 @@ async function resolveVariant(
   } catch {
     test = readAbTest(null); // config unreadable → safe defaults
   }
-  const resolved = resolveAbVariant(test, cookies().get('bl_ab_roll')?.value);
+  const resolved = resolveAbVariant(test, (await cookies()).get('bl_ab_roll')?.value);
   return { variant: forced ?? resolved.variant, arm: resolved.arm };
 }
 
 /** Variant D reframes the promise, so its meta/OG must message-match the new
  *  H1 (SPEC §6). Every other variant keeps the control metadata. */
-export async function generateMetadata({
-  searchParams,
-}: {
-  searchParams?: { preview?: string };
-}): Promise<Metadata> {
+export async function generateMetadata(
+  props: {
+    searchParams?: Promise<{ preview?: string }>;
+  }
+): Promise<Metadata> {
+  const searchParams = await props.searchParams;
   const { variant } = await resolveVariant(searchParams?.preview);
   if (variant === 'd') {
     const title = 'Build Your ₱500K System Yourself — BOSSLABS AI';
@@ -89,11 +90,12 @@ export async function generateMetadata({
   };
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: { preview?: string };
-}) {
+export default async function Page(
+  props: {
+    searchParams?: Promise<{ preview?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const webinar = await getWebinarInfo();
 
   // Same source + visible-count clamp as the checkout session picker, so the

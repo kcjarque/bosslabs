@@ -10,7 +10,7 @@ const peso = (c: number) =>
   `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function CloserCommissionsPage() {
-  requireAdmin();
+  await requireAdmin();
   const groups = await listPendingCommissionsByCloser();
 
   const grandTotalCentavos = groups.reduce((s, g) => s + g.totalCentavos, 0);

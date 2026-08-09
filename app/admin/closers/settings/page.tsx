@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Closer settings · BOSSLABS AI' };
 
 export default async function CloserSettingsPage() {
-  requireAdmin();
+  await requireAdmin();
   const [closers, settings] = await Promise.all([listClosers(), getSettings()]);
 
   return (

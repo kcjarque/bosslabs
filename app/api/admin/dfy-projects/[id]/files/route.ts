@@ -13,8 +13,8 @@ export const runtime = 'nodejs';
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB — design refs + PDFs run bigger than receipts
 
-function unauth(req: Request): NextResponse | null {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function unauth(req: Request): Promise<NextResponse | null> {
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return null;
 }
@@ -23,22 +23,22 @@ function asKind(k: unknown): DfyFile['kind'] {
   return k === 'contract' || k === 'vision' || k === 'design' ? k : 'other';
 }
 
-export async function GET(req: Request, ctx: { params: { id: string } }) {
-  const fail = unauth(req);
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const fail = await unauth(req);
   if (fail) return fail;
-  const files = await listFiles(ctx.params.id);
+  const files = await listFiles((await ctx.params).id);
   return NextResponse.json({ files });
 }
 
-export async function POST(req: Request, ctx: { params: { id: string } }) {
-  const fail = unauth(req);
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const fail = await unauth(req);
   if (fail) return fail;
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Storage is not configured.' }, { status: 500 });
   }
-  const session = getAdminSession();
+  const session = await getAdminSession();
   const uploadedBy = session?.name || 'admin';
-  const projectId = ctx.params.id;
+  const projectId = (await ctx.params).id;
 
   const ct = req.headers.get('content-type') || '';
 

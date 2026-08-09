@@ -24,7 +24,7 @@ function statusPill(s: Proposal['status']) {
 }
 
 export default async function ProposalsListPage() {
-  requireAdmin();
+  await requireAdmin();
   const proposals = await listProposals({ limit: 200 });
 
   const totalAnnual = proposals.reduce((s, p) => s + projectedAnnualProposalValue(p), 0);

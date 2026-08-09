@@ -29,7 +29,7 @@ function rate(a: Affiliate): string {
 }
 
 export default async function AffiliatesPage() {
-  requireAdmin();
+  await requireAdmin();
   const base = PUBLIC_SITE_URL;
   const affiliates = await listAffiliates();
   // Fetch commissions + program once, in parallel — then compute every

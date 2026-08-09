@@ -127,7 +127,7 @@ async function probeOne(endpoint: string): Promise<ProbeResult> {
 }
 
 export default async function DebugSmsPage() {
-  requireAdmin();
+  await requireAdmin();
   const results = await Promise.all(CANDIDATES.map(probeOne));
   const winners = results.filter((r) => r.ok);
   const sorted = [...results].sort((a, b) => Number(b.ok) - Number(a.ok) || a.latencyMs - b.latencyMs);

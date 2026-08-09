@@ -64,7 +64,7 @@ function timeSince(iso: string): string {
 }
 
 export default async function PendingPaymentsPage() {
-  requireAdmin();
+  await requireAdmin();
   const all = await getSignups();
   const groups = groupByEmail(all);
 

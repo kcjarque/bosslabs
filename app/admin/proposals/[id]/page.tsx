@@ -8,15 +8,17 @@ import type { LinkedCustomer } from '@/components/admin/CustomerLinkPicker';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const p = await getProposal(params.id);
   return {
     title: p?.clientCompanyName ? `${p.clientCompanyName} — Proposal` : 'Proposal — Admin',
   };
 }
 
-export default async function ProposalEditPage({ params }: { params: { id: string } }) {
-  requireAdmin();
+export default async function ProposalEditPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAdmin();
   const proposal = await getProposal(params.id);
   if (!proposal) return notFound();
 

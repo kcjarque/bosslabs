@@ -21,12 +21,13 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function SequenceDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  requireAdmin();
+export default async function SequenceDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  await requireAdmin();
   const sequence = await getSequence(params.id);
   if (!sequence) notFound();
 

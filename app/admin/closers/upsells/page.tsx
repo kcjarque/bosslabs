@@ -30,7 +30,7 @@ function ChannelPill({ label, status }: { label: string; status: string }) {
 }
 
 export default async function CloserUpsellsPage() {
-  requireAdmin();
+  await requireAdmin();
   const rows = await listAllUpsellActivity();
 
   const allLeads = rows.flatMap((r) => r.leads);

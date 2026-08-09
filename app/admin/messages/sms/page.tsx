@@ -6,12 +6,13 @@ import { listSentMessages } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'SMS Logs · BOSSLABS AI' };
 
-export default async function SmsLogsPage({
-  searchParams,
-}: {
-  searchParams: { range?: string };
-}) {
-  requireAdmin();
+export default async function SmsLogsPage(
+  props: {
+    searchParams: Promise<{ range?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const range = parseRange(searchParams.range);
   const { from, to } = rangeWindow(range);
   const rows = await listSentMessages('sms', from, to);

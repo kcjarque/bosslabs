@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 const VALID_FORMATS = new Set<string>(AD_PREVIEW_FORMATS.map((f) => f.key));
 
 export async function GET(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const id = url.searchParams.get('id');
@@ -23,13 +23,10 @@ export async function GET(req: Request) {
   const format = (VALID_FORMATS.has(formatRaw) ? formatRaw : 'DESKTOP_FEED_STANDARD') as AdPreviewFormat;
   const result = await getAdPreview(id, format);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
-  // Return the raw iframe HTML too — some previews render blank when the src
-  // is dropped into a *different* iframe (sandbox conflicts, referer checks),
-  // but Meta's own <iframe> tag renders reliably when injected verbatim.
+  if (!result.src) return NextResponse.json({ error: 'Meta returned an invalid preview' }, { status: 502 });
   return NextResponse.json({
     src: result.src,
     width: result.width,
     height: result.height,
-    html: result.raw,
   });
 }

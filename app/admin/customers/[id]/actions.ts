@@ -8,7 +8,7 @@ export async function subscribeCustomerAction(
   signupId: string,
   sequenceId: string,
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   if (!signupId || !sequenceId) throw new Error('signupId + sequenceId required');
   await subscribeToSequence(sequenceId, signupId);
   revalidatePath(`/admin/customers/${signupId}`);
@@ -18,7 +18,7 @@ export async function unsubscribeCustomerAction(
   signupId: string,
   sequenceId: string,
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   if (!signupId || !sequenceId) throw new Error('signupId + sequenceId required');
   await unsubscribeFromSequence(sequenceId, signupId);
   revalidatePath(`/admin/customers/${signupId}`);

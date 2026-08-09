@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/admin-auth';
+import { getAdminSession, isSameOrigin } from '@/lib/admin-auth';
 import {
   addBootcampCard,
   deleteBootcampCard,
@@ -12,15 +12,16 @@ import {
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const session = getAdminSession();
+  const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const [cards, candidates] = await Promise.all([listBootcampCards(), listBootcampCandidates()]);
   return NextResponse.json({ cards, candidates });
 }
 
 export async function POST(req: Request) {
-  const session = getAdminSession();
+  const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const action = String(body.action ?? '');

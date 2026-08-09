@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Projects · BOSSLABS AI' };
 
 export default async function FinanceProjectsPage() {
-  requireAdmin();
+  await requireAdmin();
   const projects = await listProjects();
 
   return (

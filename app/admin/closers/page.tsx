@@ -19,7 +19,7 @@ function ago(iso: string): string {
 }
 
 export default async function CloserAssignmentsPage() {
-  requireAdmin();
+  await requireAdmin();
   const { rows, unassignedCount } = await getCloserAssignments();
 
   const totalActive = rows.reduce((s, r) => s + r.active.length, 0);

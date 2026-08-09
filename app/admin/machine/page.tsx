@@ -22,7 +22,7 @@ const OFFER_LABEL: Record<string, string> = {
 };
 
 export default async function MachinePage() {
-  requireAdmin();
+  await requireAdmin();
   const s = await getMachineStats();
   const stateOrder = ['active_broadcast', 'in_sequence', 'in_sos', 'in_winback', 'sunset'];
   const offerOrder = ['retreat', 'dfy', 'oto_1on1', 'vault'];

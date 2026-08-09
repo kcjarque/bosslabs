@@ -13,7 +13,8 @@ import { signContactToken } from '@/lib/admin-auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { tag: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ tag: string }> }) {
+  const params = await props.params;
   const tag = params.tag;
   const sp = new URL(req.url).searchParams;
   const contactId = sp.get('c');

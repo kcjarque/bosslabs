@@ -10,7 +10,7 @@ export async function scheduleBroadcastAction(
   _prev: BroadcastFormResult,
   fd: FormData,
 ): Promise<BroadcastFormResult> {
-  requireAdmin();
+  await requireAdmin();
   const subject = String(fd.get('subject') ?? '').trim();
   const body = String(fd.get('body') ?? '').trim();
   const listId = String(fd.get('listId') ?? '').trim();
@@ -38,7 +38,7 @@ export async function scheduleBroadcastAction(
 }
 
 export async function cancelBroadcastAction(fd: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const id = String(fd.get('id') ?? '');
   if (id) await cancelScheduledBroadcast(id);
   revalidatePath('/admin/broadcasts');

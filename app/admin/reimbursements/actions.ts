@@ -22,8 +22,8 @@ function nullable(fd: FormData, k: string): string | null {
 
 /** Only a named staff account has its own claims/settings — the shared Admin
  *  login has no staff_accounts row to attach anything to. */
-function requireStaffSession(): AdminSession & { id: string } {
-  const session = getAdminSession();
+async function requireStaffSession(): Promise<AdminSession & { id: string }> {
+  const session = await getAdminSession();
   if (!session || session.role !== 'staff' || !session.id) redirect('/admin/reimbursements');
   return session as AdminSession & { id: string };
 }
@@ -35,7 +35,7 @@ function refresh() {
 const CATEGORIES: ReimbursementCategory[] = ['transport', 'meals', 'supplies', 'other'];
 
 export async function submitReimbursementAction(fd: FormData) {
-  const session = requireStaffSession();
+  const session = await requireStaffSession();
   const category = str(fd, 'category');
   await submitReimbursementRequest({
     staffId: session.id,
@@ -51,14 +51,14 @@ export async function submitReimbursementAction(fd: FormData) {
 }
 
 export async function deleteMyReimbursementAction(fd: FormData) {
-  const session = requireStaffSession();
+  const session = await requireStaffSession();
   const requestId = str(fd, 'requestId');
   if (requestId) await deleteMyReimbursementRequest(session.id, requestId);
   refresh();
 }
 
 export async function updatePayoutSettingsAction(fd: FormData) {
-  const session = requireStaffSession();
+  const session = await requireStaffSession();
   const method = str(fd, 'payoutMethod');
   if (method !== 'bank' && method !== 'gcash') redirect('/admin/reimbursements/settings');
   await updatePayoutSettings(session.id, {

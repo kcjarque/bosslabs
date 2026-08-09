@@ -18,7 +18,7 @@ import { OFFER } from '@/lib/config';
 
 /** Re-fire a Purchase CAPI event for a paid signup. */
 export async function refireCapiForAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const id = String(formData.get('id') || '');
   if (!id) redirect('/admin/capi-status?refire=missing-id');
 

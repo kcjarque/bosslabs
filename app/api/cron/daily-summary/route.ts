@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import {
   getSignups,
   countPageViews,
@@ -33,14 +34,8 @@ function manilaDate(d: Date): string {
 }
 
 export async function GET(req: Request) {
-  // Vercel cron auth.
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   // "Yesterday" in Manila time.
   const now = new Date();

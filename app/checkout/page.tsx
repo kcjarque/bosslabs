@@ -13,11 +13,12 @@ export const dynamic = 'force-dynamic';
 
 const FB_PAGE = 'https://www.facebook.com/profile.php?id=61589686430234';
 
-export default async function CheckoutPage({
-  searchParams,
-}: {
-  searchParams: { status?: string };
-}) {
+export default async function CheckoutPage(
+  props: {
+    searchParams: Promise<{ status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const failed = searchParams.status === 'failed';
   const [webinar, settings, upcoming] = await Promise.all([
     getWebinarInfo(),

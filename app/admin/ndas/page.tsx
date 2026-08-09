@@ -16,7 +16,7 @@ function statusPill(s: Nda['status']) {
 }
 
 export default async function NdasListPage() {
-  requireAdmin();
+  await requireAdmin();
   const ndas = await listNdas({ limit: 200 });
 
   return (

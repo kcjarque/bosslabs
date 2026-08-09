@@ -52,7 +52,7 @@ function tooMany(): boolean {
 }
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (tooMany()) return NextResponse.json({ error: 'Slow down — 30/min cap' }, { status: 429 });
 

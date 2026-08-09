@@ -9,21 +9,21 @@ import { createCloserPayout, listPayouts } from '@/lib/closers';
 
 export const runtime = 'nodejs';
 
-function unauth(req: Request): NextResponse | null {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function unauth(req: Request): Promise<NextResponse | null> {
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return null;
 }
 
 export async function GET(req: Request) {
-  const fail = unauth(req);
+  const fail = await unauth(req);
   if (fail) return fail;
   const payouts = await listPayouts();
   return NextResponse.json({ payouts });
 }
 
 export async function POST(req: Request) {
-  const fail = unauth(req);
+  const fail = await unauth(req);
   if (fail) return fail;
   const body = (await req.json().catch(() => null)) as
     | { closerId?: string; slipUrl?: string; slipFilename?: string; note?: string }
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!body?.closerId) {
     return NextResponse.json({ error: 'closerId is required' }, { status: 400 });
   }
-  const session = getAdminSession();
+  const session = await getAdminSession();
   try {
     const payout = await createCloserPayout({
       closerId: body.closerId,

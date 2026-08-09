@@ -7,7 +7,7 @@ export const metadata = {
   title: 'Contract Maker — Admin',
 };
 
-export default function NewContractPage() {
-  requireAdmin();
+export default async function NewContractPage() {
+  await requireAdmin();
   return <ContractMaker />;
 }

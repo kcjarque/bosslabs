@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
  * Affiliate share link: /r/<code>. Sets the first-touch attribution cookie,
  * logs a click, and redirects to the homepage — preserving any ad/UTM params.
  */
-export async function GET(req: NextRequest, { params }: { params: { code: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ code: string }> }) {
+  const params = await props.params;
   const code = (params.code || '').toLowerCase();
   const url = new URL(req.url);
   const dest = new URL('/', url.origin);

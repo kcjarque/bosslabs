@@ -121,12 +121,13 @@ function AdsTabs({ view }: { view: 'live' | 'results' | 'council' }) {
   );
 }
 
-export default async function AdsPage({
-  searchParams,
-}: {
-  searchParams: { range?: string; active?: string; view?: string; gran?: string; from?: string; to?: string; sort?: string; dir?: string };
-}) {
-  requireAdmin();
+export default async function AdsPage(
+  props: {
+    searchParams: Promise<{ range?: string; active?: string; view?: string; gran?: string; from?: string; to?: string; sort?: string; dir?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
 
   // Tabbed: "Live (Meta)" (default) and "Results over time" (stored daily/weekly
   // spend + revenue + ROAS). Branch before the Meta fetch so the results tab

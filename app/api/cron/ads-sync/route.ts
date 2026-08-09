@@ -12,6 +12,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import { syncAdSpendDaily } from '@/lib/meta-ads';
 import { getTrackedCampaigns } from '@/lib/db';
 
@@ -19,11 +20,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  // Vercel cron auth.
-  const authHeader = req.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const tracked = await getTrackedCampaigns();
   const campaignIds = tracked.filter((c) => c.tracked).map((c) => c.campaignId);

@@ -67,7 +67,7 @@ export default async function RecordingsPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  requireAdmin();
+  await requireAdmin();
   const sp = await searchParams;
   const tab: ListTab = isListTab(sp.tab) ? sp.tab : 'all';
 

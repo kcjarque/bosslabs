@@ -93,8 +93,8 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
 // admin to remember to grant. Bypasses the perms allowlist below.
 const STAFF_ALWAYS_ALLOWED = ['/admin/reimbursements'];
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
-  const session = getAdminSession();
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const session = await getAdminSession();
 
   if (!session) {
     return (
@@ -105,7 +105,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const isStaff = session.role === 'staff';
-  const pathname = headers().get('x-pathname') || '';
+  const pathname = (await headers()).get('x-pathname') || '';
 
   // Staff are limited to their allowed sections. Block direct navigation to
   // anything else (not just hide the nav link). Admin is never gated.

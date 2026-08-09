@@ -18,11 +18,12 @@ import { findSignupByEmail } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Unsubscribe — BOSSLABS AI' };
 
-export default async function UnsubscribePage({
-  searchParams,
-}: {
-  searchParams: { t?: string; done?: string };
-}) {
+export default async function UnsubscribePage(
+  props: {
+    searchParams: Promise<{ t?: string; done?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const email = verifyUnsubscribeToken(searchParams.t ?? null);
 
   if (searchParams.done === '1') {

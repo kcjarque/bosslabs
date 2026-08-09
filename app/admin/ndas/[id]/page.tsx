@@ -8,15 +8,17 @@ import type { LinkedCustomer } from '@/components/admin/CustomerLinkPicker';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const n = await getNda(params.id);
   return {
     title: n?.counterpartyCompanyName ? `${n.counterpartyCompanyName} — NDA` : 'NDA — Admin',
   };
 }
 
-export default async function NdaEditPage({ params }: { params: { id: string } }) {
-  requireAdmin();
+export default async function NdaEditPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAdmin();
   const nda = await getNda(params.id);
   if (!nda) return notFound();
 

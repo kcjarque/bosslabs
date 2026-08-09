@@ -11,14 +11,14 @@ import { createNda, listNdas } from '@/lib/ndas';
 
 export const runtime = 'nodejs';
 
-function unauth(req: Request): NextResponse | null {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function unauth(req: Request): Promise<NextResponse | null> {
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return null;
 }
 
 export async function GET(req: Request) {
-  const fail = unauth(req);
+  const fail = await unauth(req);
   if (fail) return fail;
   const url = new URL(req.url);
   const q = url.searchParams.get('q') || undefined;
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const fail = unauth(req);
+  const fail = await unauth(req);
   if (fail) return fail;
   const body = (await req.json().catch(() => null)) as
     | (Record<string, unknown> & { signupId?: string | null; status?: string; notes?: string })

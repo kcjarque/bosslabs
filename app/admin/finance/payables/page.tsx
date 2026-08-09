@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Accounts Payable · BOSSLABS AI' };
 
 export default async function PayablesPage() {
-  requireAdmin();
+  await requireAdmin();
   const ap = await listAccountsPayable();
 
   return (

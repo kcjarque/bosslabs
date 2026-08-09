@@ -14,13 +14,13 @@ import { setSignupRemarks } from '@/lib/db';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const [cards, template] = await Promise.all([listCrmCards(), getCrmTemplate()]);
   return NextResponse.json({ cards, template });
 }
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   try {

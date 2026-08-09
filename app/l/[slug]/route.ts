@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
 
 const FALLBACK = 'https://www.bosslabs.live/';
 
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const link = await resolveShortLink(params.slug);
   if (!link) return NextResponse.redirect(FALLBACK, 302);
   await logEngagementEvent({

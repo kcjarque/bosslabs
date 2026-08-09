@@ -64,7 +64,7 @@ export function closerIdFromCookie(raw: string | undefined | null): string | nul
 /** Current closer (verifying against the DB so deactivated accounts lose
  *  access immediately), or null. */
 export async function getCloserSession(): Promise<Closer | null> {
-  const raw = cookies().get(CLOSER_COOKIE)?.value;
+  const raw = (await cookies()).get(CLOSER_COOKIE)?.value;
   const id = closerIdFromCookie(raw);
   if (!id) return null;
   const closer = await getCloserById(id);

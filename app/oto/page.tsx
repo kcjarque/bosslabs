@@ -12,11 +12,12 @@ import { resolvePurchaseAmount } from '@/lib/purchase-amount';
 // lookup (used for the Pixel Purchase value) hits the live DB.
 export const dynamic = 'force-dynamic';
 
-export default async function OtoPage({
-  searchParams,
-}: {
-  searchParams: { order?: string; bumped?: string; product?: string; promo?: string };
-}) {
+export default async function OtoPage(
+  props: {
+    searchParams: Promise<{ order?: string; bumped?: string; product?: string; promo?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const orderId = searchParams.order ?? '';
   const bumped = searchParams.bumped === '1';
   // A closer's promo link lands here with ?product=oto|oto2&promo=CODE — the

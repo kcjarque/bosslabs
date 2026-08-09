@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
 
 async function createTestOrderAction(formData: FormData) {
   'use server';
-  requireAdmin();
+  await requireAdmin();
   const bumped = formData.get('bumped') === '1';
   const externalId = `BL-MAIN-DEMO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const amountCentavos =
@@ -61,7 +61,7 @@ async function createTestOrderAction(formData: FormData) {
 
 async function flipBumpAction(formData: FormData) {
   'use server';
-  requireAdmin();
+  await requireAdmin();
   const id = String(formData.get('id') || '');
   const nextBump = formData.get('bumped') === '1';
   if (!id) return;
@@ -78,7 +78,7 @@ async function flipBumpAction(formData: FormData) {
 
 async function cleanupAction() {
   'use server';
-  requireAdmin();
+  await requireAdmin();
   await deleteDemoSignups();
   revalidatePath('/admin/test-thank-you');
 }
@@ -92,7 +92,7 @@ function isDemo(s: Signup): boolean {
 }
 
 export default async function TestThankYouPage() {
-  requireAdmin();
+  await requireAdmin();
   const all = await getSignups();
   const demos = all
     .filter(isDemo)

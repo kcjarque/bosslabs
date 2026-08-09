@@ -20,12 +20,13 @@ import { refireCapiForAction } from './actions';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-export default async function CapiStatusPage({
-  searchParams,
-}: {
-  searchParams: { refireId?: string; refireStatus?: string; check?: string };
-}) {
-  requireAdmin();
+export default async function CapiStatusPage(
+  props: {
+    searchParams: Promise<{ refireId?: string; refireStatus?: string; check?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
 
   // Same isCapiConfigured() check sendCapiEvent uses internally
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;

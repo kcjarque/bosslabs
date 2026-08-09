@@ -19,14 +19,14 @@ import {
 
 export const runtime = 'nodejs';
 
-function guard(req: Request): Response | null {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function guard(req: Request): Promise<Response | null> {
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return null;
 }
 
 export async function POST(req: Request) {
-  const blocked = guard(req);
+  const blocked = await guard(req);
   if (blocked) return blocked;
 
   const body = (await req.json().catch(() => ({}))) as {
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const blocked = guard(req);
+  const blocked = await guard(req);
   if (blocked) return blocked;
 
   const { searchParams } = new URL(req.url);

@@ -17,7 +17,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default async function BroadcastsPage() {
-  requireAdmin();
+  await requireAdmin();
   const [lists, broadcasts] = await Promise.all([getLists(), listScheduledBroadcasts()]);
   const listName = new Map(lists.map((l) => [l.id, l.name]));
   const fmt = (iso: string) =>

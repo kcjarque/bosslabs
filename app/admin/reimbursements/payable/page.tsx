@@ -24,8 +24,8 @@ function payoutMethodLine(settings: { payoutMethod: 'bank' | 'gcash' | null; ban
 }
 
 export default async function ReimbursementsPayablePage() {
-  requireAdmin();
-  const session = getAdminSession();
+  await requireAdmin();
+  const session = await getAdminSession();
   // Staff (even ones granted no special perms) always land back on their own
   // requests — paying people out is an admin-only action.
   if (!session || session.role !== 'admin') {

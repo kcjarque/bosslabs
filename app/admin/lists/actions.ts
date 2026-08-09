@@ -21,7 +21,7 @@ function parseFilterTypes(raw: FormDataEntryValue[]): ListFilterType[] {
 }
 
 export async function createListAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
   const description = String(formData.get('description') ?? '').trim() || null;
   const filterTypes = parseFilterTypes(formData.getAll('filterTypes'));
@@ -43,7 +43,7 @@ export async function updateListAction(
     eventId?: string | null;
   },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   if (patch.filterTypes !== undefined && patch.filterTypes.length === 0) {
     throw new Error('Pick at least one filter');
   }
@@ -52,7 +52,7 @@ export async function updateListAction(
 }
 
 export async function deleteListAction(id: string): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await deleteList(id);
   revalidatePath('/admin/lists');
 }

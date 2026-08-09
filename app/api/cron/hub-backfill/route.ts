@@ -11,6 +11,7 @@
  * click and no operator token needed.
  */
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import { getSignups } from '@/lib/db';
 import { findStuckVaultBuyers, provisionAndEmailBuyer } from '@/lib/hub-backfill';
 import { siteUrl } from '@/lib/site';
@@ -20,10 +21,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const signups = await getSignups();
   const stuck = findStuckVaultBuyers(signups);

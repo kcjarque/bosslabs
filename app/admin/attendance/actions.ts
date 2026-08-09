@@ -8,7 +8,7 @@ export type ImportResult =
   | null;
 
 export async function importAttendanceAction(_prev: ImportResult, formData: FormData): Promise<ImportResult> {
-  requireAdmin();
+  await requireAdmin();
   const eventId = String(formData.get('eventId') ?? '').trim();
   const csv = String(formData.get('csv') ?? '');
   if (!eventId) return { ok: false, matched: 0, total: 0, unmatched: [], error: 'Pick an event first.' };

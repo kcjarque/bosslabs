@@ -4,8 +4,8 @@ import { HubBackfillRunner } from '@/components/admin/HubBackfillRunner';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Hub backfill — Admin' };
 
-export default function HubBackfillPage() {
-  requireAdmin();
+export default async function HubBackfillPage() {
+  await requireAdmin();
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <header>

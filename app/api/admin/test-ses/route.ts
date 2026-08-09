@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 /** Fire a one-off email via Amazon SES (regardless of the provider toggle) so
  *  the admin can confirm SES works in this environment + check inbox vs spam. */
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!isSesConfigured()) {
     return NextResponse.json(

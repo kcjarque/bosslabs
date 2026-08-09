@@ -9,7 +9,7 @@ const MAX_BYTES = 8 * 1024 * 1024;
 
 /** Admin-only image upload → public Supabase Storage URL (for email templates). */
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) {
+  if (!(await isAdminLoggedIn())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isSameOrigin(req)) {

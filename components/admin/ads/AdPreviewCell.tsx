@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AD_PREVIEW_FORMATS, type AdPreviewFormat } from '@/lib/meta-ads-formats';
 
-type PreviewResp = { src?: string; width?: number; height?: number; html?: string; error?: string };
+type PreviewResp = { src?: string; width?: number; height?: number; error?: string };
 
 /** Small clickable thumbnail (32×32) next to an ad name. Click opens a modal
  *  with the Meta-rendered ad preview iframe. Format switcher lets the admin
@@ -134,10 +134,15 @@ export function AdPreviewCell({ adId, thumbnailUrl, adName }: {
                   <p className="mt-1 text-[12px] text-slate-500">{preview.error}</p>
                 </div>
               )}
-              {!loading && preview?.html && (
-                <div
-                  className="ad-preview-frame"
-                  dangerouslySetInnerHTML={{ __html: preview.html }}
+              {!loading && preview?.src && (
+                <iframe
+                  className="ad-preview-frame border-0"
+                  src={preview.src}
+                  title={`Meta ad preview: ${adName}`}
+                  width={preview.width ?? 500}
+                  height={preview.height ?? 640}
+                  sandbox="allow-scripts allow-same-origin allow-popups"
+                  referrerPolicy="no-referrer"
                 />
               )}
             </div>

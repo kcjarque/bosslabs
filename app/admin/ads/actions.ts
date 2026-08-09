@@ -13,7 +13,7 @@ export async function refreshAdsData(): Promise<{
   at: string;
   error?: string;
 }> {
-  requireAdmin();
+  await requireAdmin();
   const tracked = await getTrackedCampaigns();
   const campaignIds = tracked.filter((c) => c.tracked).map((c) => c.campaignId);
   const result = await syncAdSpendDaily(7, campaignIds);
@@ -31,7 +31,7 @@ export async function refreshAdsData(): Promise<{
 export async function saveTrackedCampaignsAction(
   campaigns: { campaignId: string; campaignName: string; tracked: boolean }[],
 ): Promise<{ ok: boolean }> {
-  requireAdmin();
+  await requireAdmin();
   await saveTrackedCampaigns(campaigns);
   revalidateTag('ads-report');
   revalidatePath('/admin/ads');

@@ -289,15 +289,16 @@ function buildCommsTimeline(
   return events.sort((a, b) => b.ts.localeCompare(a.ts));
 }
 
-export default async function CustomerProfilePage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  requireAdmin();
+export default async function CustomerProfilePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  await requireAdmin();
   // Delete button is admin-only (not staff) — staff can VIEW customers but
   // not nuke them; deletion cascades into commissions + comms history.
-  const session = getAdminSession();
+  const session = await getAdminSession();
   const canDelete = session?.role === 'admin';
 
   const [

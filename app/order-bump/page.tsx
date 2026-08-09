@@ -8,11 +8,12 @@ export const metadata = {
   description: 'Action Taker Bonus: add your 1on1 MVP Session with the founders.',
 };
 
-export default function OrderBumpPage({
-  searchParams,
-}: {
-  searchParams: { status?: string };
-}) {
+export default async function OrderBumpPage(
+  props: {
+    searchParams: Promise<{ status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const failed = searchParams.status === 'failed';
 
   return (

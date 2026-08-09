@@ -14,11 +14,12 @@ export const metadata: Metadata = {
   title: "Complete your AI Founder's Bootcamp reservation",
 };
 
-export default async function BootcampPaymentPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function BootcampPaymentPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const r = await getBootcampReservation(params.id);
   if (!r) notFound();
   if (r.status === 'paid') redirect(`/founders-bootcamp/reserve/${r.id}/done?paid=card`);

@@ -15,12 +15,13 @@ import { getAbResults } from '@/lib/ab-stats';
 
 export const dynamic = 'force-dynamic';
 
-export default async function FunnelDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  requireAdmin();
+export default async function FunnelDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  await requireAdmin();
   const funnel = await getFunnel(params.id);
   if (!funnel) notFound();
 

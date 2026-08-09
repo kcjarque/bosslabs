@@ -3,10 +3,9 @@ import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { requireAdmin } from '@/lib/admin-auth';
 import {
-  countPageViews,
   getSettings,
-  getSignups,
-  getVisitBuckets,
+  getDashboardSignupsPage,
+  getDashboardPageViewMetrics,
   getEmailStats,
   getAdSpendByDay,
   getLatestSequenceSendAt,
@@ -64,8 +63,22 @@ function timed<TArgs extends unknown[], TR>(
   };
 }
 
-// Heavy: pulls all ~2k signup rows. Cache 5 min — the biggest miss on the page.
-const cachedGetSignups = timed('signups', unstable_cache(getSignups, ['dashboard:signups'], heavyCacheOpts));
+// Cache bounded pages separately: Next's Data Cache rejects any single value
+// over 2 MB. The old all-in-one signup item reached ~4.2 MB and threw.
+const cachedGetSignupPage = unstable_cache(
+  getDashboardSignupsPage,
+  ['dashboard:signup-page'],
+  heavyCacheOpts,
+);
+const cachedGetSignups = timed('signups', async () => {
+  const pageSize = 500;
+  const rows: Signup[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await cachedGetSignupPage(offset, pageSize);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+});
 const cachedGetEmailStats = timed('email-stats', unstable_cache(getEmailStats, ['dashboard:email-stats'], cacheOpts));
 const cachedGetAdSpend = timed('ad-spend', unstable_cache(getAdSpendByDay, ['dashboard:ad-spend'], cacheOpts));
 /* IMPORTANT: unstable_cache JSON-serializes results, which turns a Set into
@@ -76,10 +89,10 @@ const cachedGetCloserRecoveredArr = timed('closer-recovered', unstable_cache(
   ['dashboard:closer-recovered'],
   heavyCacheOpts,
 ));
-// Heavy: scans page_views. 6 calls per dashboard render (funnel + A/B), each ~500-700 ms.
-const cachedCountPageViews = timed('page-views', unstable_cache(countPageViews, ['dashboard:page-views'], heavyCacheOpts));
-// Heavy: buckets page_views by hour/day, runs twice (current + previous period).
-const cachedGetVisitBuckets = timed('visit-buckets', unstable_cache(getVisitBuckets, ['dashboard:visit-buckets'], heavyCacheOpts));
+// One SQL scan returns funnel counts, A/B counts, and current/previous buckets.
+const cachedGetPageViewMetrics = timed('page-view-metrics', unstable_cache(
+  getDashboardPageViewMetrics, ['dashboard:page-view-metrics'], heavyCacheOpts,
+));
 const cachedSumWebinarIncome = timed('webinar-income', unstable_cache(
   sumWebinarIncomeCentavos, ['dashboard:webinar-income'], cacheOpts,
 ));
@@ -244,12 +257,13 @@ function formatDuration(sec: number | null): string {
 /* Heavy fetching + render happens in <DashboardBody> inside Suspense so */
 /* the chrome paints immediately on cold loads.                          */
 /* --------------------------------------------------------------------- */
-export default function AdminDashboard({
-  searchParams,
-}: {
-  searchParams: { dr?: string; from?: string; to?: string };
-}) {
-  requireAdmin();
+export default async function AdminDashboard(
+  props: {
+    searchParams: Promise<{ dr?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const activeRange = resolveDashRange(searchParams?.dr, searchParams?.from, searchParams?.to);
   return (
     <div className="space-y-8">
@@ -318,10 +332,7 @@ async function DashboardBody({
   const [
     signups,
     settings,
-    viewsAll,
-    viewsCheckout,
-    visitsBuckets,
-    visitsBucketsPrev,
+    pageViewMetrics,
     closerRecoveredIds,
     emailStats,
     adSpendByDay,
@@ -339,10 +350,12 @@ async function DashboardBody({
       // Cached versions — bust on Refresh-button click (revalidateTag('dashboard'))
       cachedGetSignups(),
       getSettings(), // light, not cached
-      cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso }),
-      cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/checkout' }),
-      cachedGetVisitBuckets({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, bucketMs }),
-      cachedGetVisitBuckets({ sinceIso: prevSinceIso, untilIso: funnelSinceIso, bucketMs }),
+      cachedGetPageViewMetrics({
+        sinceIso: funnelSinceIso,
+        untilIso: funnelUntilIso,
+        previousSinceIso: prevSinceIso,
+        bucketMs,
+      }),
       // Array-form of the closer-recovered set (see unstable_cache Set gotcha above)
       cachedGetCloserRecoveredArr().then((arr) => new Set(arr)),
       cachedGetEmailStats(),
@@ -358,6 +371,13 @@ async function DashboardBody({
     console.log(`[dash] body fetch done in ${(performance.now() - _allStart).toFixed(0)}ms`);
     return result;
   })();
+
+  const {
+    all: viewsAll,
+    checkout: viewsCheckout,
+    currentBuckets: visitsBuckets,
+    previousBuckets: visitsBucketsPrev,
+  } = pageViewMetrics;
 
   // Average unique sessions per bucket across the previous period — used as
   // the flat "previous day's avg" baseline shown next to the chart.
@@ -439,10 +459,6 @@ async function DashboardBody({
   // Attribution: signups carry metadata.homeVariant ('a'|'b') set at checkout
   // from the same sticky cookie the homepage split uses. Visits = unique
   // sessions on each arm's view beacon. All scoped to the selected period.
-  const [abVisitsA, abVisitsB] = await Promise.all([
-    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/__ab/home-a' }),
-    cachedCountPageViews({ sinceIso: funnelSinceIso, untilIso: funnelUntilIso, pathPrefix: '/__ab/home-b' }),
-  ]);
   const abArm = (s: Signup) => (s.metadata as { homeVariant?: string } | undefined)?.homeVariant;
   const abStat = (arm: 'a' | 'b', visitSessions: number) => {
     const rows = scoped.filter((s) => abArm(s) === arm);
@@ -463,8 +479,8 @@ async function DashboardBody({
       convPct: visitSessions > 0 ? (paidRows.length / visitSessions) * 100 : starts > 0 ? (paidRows.length / starts) * 100 : 0,
     };
   };
-  const abA = abStat('a', abVisitsA.uniqueSessions);
-  const abB = abStat('b', abVisitsB.uniqueSessions);
+  const abA = abStat('a', pageViewMetrics.abAUnique);
+  const abB = abStat('b', pageViewMetrics.abBUnique);
 
   // All cash RECEIVED in the period, scoped by PAYMENT day, then PARTITIONED
   // into direct vs recovered so the two never overlap:
@@ -1688,4 +1704,3 @@ function formatRelative(iso: string) {
   if (d < 30) return `${d}d ago`;
   return new Date(iso).toLocaleDateString();
 }
-

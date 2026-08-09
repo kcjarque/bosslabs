@@ -12,22 +12,22 @@ import { createReimbursementPayout, listReimbursementPayouts } from '@/lib/reimb
 
 export const runtime = 'nodejs';
 
-function requireRealAdmin(req: Request): NextResponse | null {
+async function requireRealAdmin(req: Request): Promise<NextResponse | null> {
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const session = getAdminSession();
+  const session = await getAdminSession();
   if (!session || session.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return null;
 }
 
 export async function GET(req: Request) {
-  const fail = requireRealAdmin(req);
+  const fail = await requireRealAdmin(req);
   if (fail) return fail;
   const payouts = await listReimbursementPayouts();
   return NextResponse.json({ payouts });
 }
 
 export async function POST(req: Request) {
-  const fail = requireRealAdmin(req);
+  const fail = await requireRealAdmin(req);
   if (fail) return fail;
   const body = (await req.json().catch(() => null)) as
     | { staffId?: string; slipUrl?: string; slipFilename?: string; note?: string }
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!body?.staffId) {
     return NextResponse.json({ error: 'staffId is required' }, { status: 400 });
   }
-  const session = getAdminSession();
+  const session = await getAdminSession();
   try {
     const payout = await createReimbursementPayout({
       staffId: body.staffId,

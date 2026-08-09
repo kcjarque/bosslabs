@@ -14,7 +14,7 @@ export async function saveCouncilSettingsAction(
   mode: string,
   targetCppCentavos: number,
 ): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   if (!MODES.includes(mode as Mode)) return { ok: false, error: 'bad mode' };
   const target = Math.round(targetCppCentavos);
   if (!Number.isFinite(target) || target < 10000 || target > 10_000_000) {
@@ -30,7 +30,7 @@ export async function resolvePredictionAction(
   id: string,
   outcome: 'hit' | 'miss' | 'push',
 ): Promise<{ ok: boolean; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   if (!['hit', 'miss', 'push'].includes(outcome)) return { ok: false, error: 'bad outcome' };
   const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
   const { error } = await getSupabase()
@@ -44,7 +44,7 @@ export async function resolvePredictionAction(
 }
 
 export async function runCouncilNowAction(): Promise<{ ok: boolean; sessionId?: string; error?: string }> {
-  requireAdmin();
+  await requireAdmin();
   try {
     const { sessionId } = await runCouncilSession('BOSS', ['manual run']);
     revalidatePath('/admin/ads');
@@ -61,7 +61,7 @@ export async function executeVerdictAction(input: {
   targetId: string;
   budgetPesos?: number;
 }): Promise<{ ok: boolean; result: string }> {
-  requireAdmin();
+  await requireAdmin();
   const settings = await getCouncilSettings('BOSS');
   if (settings.mode === 'recommend') {
     return { ok: false, result: 'recommend mode — execution disabled' };

@@ -5,7 +5,7 @@ import { getSettingsForAdmin, saveSettings, type Settings } from '@/lib/db';
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   let body: Partial<Settings>;
   try {

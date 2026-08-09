@@ -142,7 +142,7 @@ export async function POST(req: Request) {
   const auth = req.headers.get('authorization') ?? '';
   const presented = auth.replace(/^Bearer\s+/i, '');
   const viaToken = presented === expected;
-  const viaAdmin = isAdminLoggedIn() && isSameOrigin(req);
+  const viaAdmin = (await isAdminLoggedIn()) && isSameOrigin(req);
   if (!viaToken && !viaAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

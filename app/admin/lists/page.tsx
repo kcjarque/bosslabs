@@ -6,7 +6,7 @@ import { createListAction, updateListAction, deleteListAction } from './actions'
 export const dynamic = 'force-dynamic';
 
 export default async function ListsPage() {
-  requireAdmin();
+  await requireAdmin();
   const [lists, events] = await Promise.all([getLists(), getEvents()]);
 
   // Compute member counts (live) once per list. For 5-ish lists this is fine;

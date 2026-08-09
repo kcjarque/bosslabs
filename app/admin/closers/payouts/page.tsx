@@ -10,7 +10,7 @@ const peso = (c: number) =>
   `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function CloserPayoutHistoryPage() {
-  requireAdmin();
+  await requireAdmin();
   const payouts = await listPayouts();
 
   const paid = payouts.filter((p) => p.status === 'paid');

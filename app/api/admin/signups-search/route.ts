@@ -19,7 +19,7 @@ type SignupHit = {
 };
 
 export async function GET(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!isSupabaseConfigured()) return NextResponse.json({ hits: [] });
 

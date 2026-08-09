@@ -29,18 +29,19 @@ const STATUSES = new Set<SignupsPageStatus>([
   'unsubscribed',
 ]);
 
-export default async function CustomersPage({
-  searchParams,
-}: {
-  searchParams?: {
-    q?: string;
-    status?: string;
-    event?: string;
-    page?: string;
-    size?: string;
-  };
-}) {
-  requireAdmin();
+export default async function CustomersPage(
+  props: {
+    searchParams?: Promise<{
+      q?: string;
+      status?: string;
+      event?: string;
+      page?: string;
+      size?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const q = (searchParams?.q ?? '').trim();
   const status: SignupsPageStatus = STATUSES.has(
     (searchParams?.status ?? 'all') as SignupsPageStatus,

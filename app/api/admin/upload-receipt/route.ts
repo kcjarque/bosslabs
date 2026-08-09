@@ -18,7 +18,7 @@ const MAX_BYTES = 12 * 1024 * 1024; // 12MB — PDFs from bank apps run bigger t
 const ALLOWED_TYPES = /^(image\/|application\/pdf$)/;
 
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) {
+  if (!(await isAdminLoggedIn())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isSameOrigin(req)) {

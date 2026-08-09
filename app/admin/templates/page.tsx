@@ -11,12 +11,13 @@ import { TemplatesTabs } from '@/components/TemplatesTabs';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TemplatesPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string };
-}) {
-  requireAdmin();
+export default async function TemplatesPage(
+  props: {
+    searchParams: Promise<{ tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAdmin();
   const [emailTemplates, smsTemplates] = await Promise.all([
     getEmailTemplates(),
     getSmsTemplates(),

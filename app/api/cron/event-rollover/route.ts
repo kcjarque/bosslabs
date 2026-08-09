@@ -10,6 +10,7 @@
  * Telegram once so a human knows to create the next event.
  */
 import { NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron';
 import { autoAdvanceActiveEvent } from '@/lib/auto-rollover';
 import { sendTelegram, esc } from '@/lib/telegram';
 
@@ -20,10 +21,8 @@ export const runtime = 'nodejs';
 let lastNeedsAlertForIso: string | null = null;
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = verifyCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const result = await autoAdvanceActiveEvent();
 

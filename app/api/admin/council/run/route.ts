@@ -9,7 +9,7 @@ export const maxDuration = 300;
 
 /** POST { brand?: 'BOSS' } — on-demand council session run (§5 full debate). */
 export async function POST(req: Request) {
-  if (!isAdminLoggedIn()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAdminLoggedIn())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) as { brand?: Brand };
   const brand = body.brand ?? 'BOSS';

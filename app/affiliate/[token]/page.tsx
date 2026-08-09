@@ -39,11 +39,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AffiliateDashboard({
-  params,
-}: {
-  params: { token: string };
-}) {
+export default async function AffiliateDashboard(
+  props: {
+    params: Promise<{ token: string }>;
+  }
+) {
+  const params = await props.params;
   const aff = await getAffiliateByToken(params.token);
   if (!aff) notFound();
   const stats = await getAffiliateStats(aff);

@@ -49,7 +49,7 @@ function refresh() {
 // ─── Expenses ───────────────────────────────────────────────────────────────
 
 export async function addExpenseAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   // Picking a "Paid by" person means someone fronted it → it's a payable.
   const paidBy = nullable(fd, 'paidBy');
   await addExpense({
@@ -68,7 +68,7 @@ export async function addExpenseAction(fd: FormData) {
 }
 
 export async function settleAbonoAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   if (str(fd, 'kind') === 'recurring') {
     const recurringId = nullable(fd, 'recurringId');
     const date = str(fd, 'date');
@@ -81,7 +81,7 @@ export async function settleAbonoAction(fd: FormData) {
 }
 
 export async function unsettleAbonoAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   if (str(fd, 'kind') === 'recurring') {
     const recurringId = nullable(fd, 'recurringId');
     const date = str(fd, 'date');
@@ -94,7 +94,7 @@ export async function unsettleAbonoAction(fd: FormData) {
 }
 
 export async function deleteExpenseAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteExpense(id);
   refresh();
@@ -105,7 +105,7 @@ export async function deleteExpenseAction(fd: FormData) {
  * updated directly; recurring occurrences get a per-month override.
  */
 export async function editRowAmountAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const centavos = parsePesoToCentavos(str(fd, 'amount'));
   const expenseId = nullable(fd, 'expenseId');
   if (expenseId) {
@@ -124,7 +124,7 @@ export async function editRowAmountAction(fd: FormData) {
  * everywhere (the name is shared across months).
  */
 export async function editRowDescriptionAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const description = str(fd, 'description');
   const expenseId = nullable(fd, 'expenseId');
   if (expenseId) {
@@ -138,7 +138,7 @@ export async function editRowDescriptionAction(fd: FormData) {
 
 /** Delete a row: stored expense → removed; recurring occurrence → skipped for the month. */
 export async function deleteRowAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const expenseId = nullable(fd, 'expenseId');
   if (expenseId) {
     await deleteExpense(expenseId);
@@ -152,7 +152,7 @@ export async function deleteRowAction(fd: FormData) {
 
 /** Revert a recurring occurrence to its default amount (clear the override). */
 export async function resetRecurringOverrideAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const recurringId = nullable(fd, 'recurringId');
   const date = str(fd, 'date');
   if (recurringId && date) await clearRecurringOverride(recurringId, date);
@@ -162,13 +162,13 @@ export async function resetRecurringOverrideAction(fd: FormData) {
 // ─── Categories ─────────────────────────────────────────────────────────────
 
 export async function addCategoryAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   await addCategory(str(fd, 'name'));
   refresh();
 }
 
 export async function deleteCategoryAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteCategory(id);
   refresh();
@@ -179,13 +179,13 @@ export async function deleteCategoryAction(fd: FormData) {
 // inline "+ Add person" in PaidBySelect (which posts a one-field FormData).
 
 export async function addPayerAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   await addPayer(str(fd, 'name'));
   refresh();
 }
 
 export async function deletePayerAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deletePayer(id);
   refresh();
@@ -196,13 +196,13 @@ export async function deletePayerAction(fd: FormData) {
 // and the inline "+ Add payment method" in PaymentMethodSelect.
 
 export async function addPaymentMethodAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   await addPaymentMethod(str(fd, 'name'));
   refresh();
 }
 
 export async function deletePaymentMethodAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deletePaymentMethod(id);
   refresh();
@@ -211,14 +211,14 @@ export async function deletePaymentMethodAction(fd: FormData) {
 // ─── Projects + line items ──────────────────────────────────────────────────
 
 export async function addProjectAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = await addProject(str(fd, 'name'), str(fd, 'note'));
   refresh();
   if (id) redirect(`/admin/finance/projects/${id}`);
 }
 
 export async function deleteProjectAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteProject(id);
   refresh();
@@ -226,7 +226,7 @@ export async function deleteProjectAction(fd: FormData) {
 }
 
 export async function addProjectItemAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const projectId = str(fd, 'projectId');
   if (projectId) {
     await addProjectItem(projectId, str(fd, 'name'), parsePesoToCentavos(str(fd, 'budget')));
@@ -235,7 +235,7 @@ export async function addProjectItemAction(fd: FormData) {
 }
 
 export async function updateProjectItemAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) {
     const name = str(fd, 'name').trim();
@@ -248,7 +248,7 @@ export async function updateProjectItemAction(fd: FormData) {
 }
 
 export async function deleteProjectItemAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteProjectItem(id);
   refresh();
@@ -256,7 +256,7 @@ export async function deleteProjectItemAction(fd: FormData) {
 
 /** Add an expense already tagged to a project (and optionally a BOM line item). */
 export async function addProjectExpenseAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const projectId = str(fd, 'projectId');
   if (projectId) {
     const paidBy = nullable(fd, 'paidBy');
@@ -277,7 +277,7 @@ export async function addProjectExpenseAction(fd: FormData) {
 // ─── Recurring ──────────────────────────────────────────────────────────────
 
 export async function addRecurringAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const cadence: Cadence = str(fd, 'cadence') === 'weekly' ? 'weekly' : 'monthly';
   const paidBy = nullable(fd, 'paidBy');
   await addRecurring({
@@ -293,14 +293,14 @@ export async function addRecurringAction(fd: FormData) {
 }
 
 export async function setRecurringActiveAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await setRecurringActive(id, str(fd, 'active') === '1');
   refresh();
 }
 
 export async function deleteRecurringAction(fd: FormData) {
-  requireAdmin();
+  await requireAdmin();
   const id = str(fd, 'id');
   if (id) await deleteRecurring(id);
   refresh();

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'DFY Ops — Admin' };
 
 export default async function DfyKanbanPage() {
-  requireAdmin();
+  await requireAdmin();
   const projects = await listProjects();
 
   return (

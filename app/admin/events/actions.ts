@@ -6,7 +6,7 @@ import { addEvent, updateEvent, deleteEvent } from '@/lib/db';
 import { combineLocalAndTimezone } from '@/lib/datetime';
 
 export async function createEventAction(formData: FormData): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const name = String(formData.get('name') ?? '').trim();
   // Form sends a wall-clock value from <input type="datetime-local">.
   // We combine it server-side with the chosen timezone to build the
@@ -38,7 +38,7 @@ export async function updateEventAction(
     zoomJoinUrl?: string;
   },
 ): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   const finalPatch: {
     name?: string;
     startsAtIso?: string;
@@ -64,7 +64,7 @@ export async function updateEventAction(
 }
 
 export async function deleteEventAction(id: string): Promise<void> {
-  requireAdmin();
+  await requireAdmin();
   await deleteEvent(id);
   revalidatePath('/admin/events');
 }

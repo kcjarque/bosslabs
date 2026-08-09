@@ -43,7 +43,7 @@ export default async function SessionReplayPage({
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
-  requireAdmin();
+  await requireAdmin();
   const { sessionId: raw } = await params;
   const sessionId = decodeURIComponent(raw);
 

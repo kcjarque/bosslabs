@@ -1,12 +1,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
+import { getAdminSession, isSameOrigin } from '@/lib/admin-auth';
 
 const OPS_URL = process.env.BOSSLABS_OPS_URL ?? 'https://bosslabs-ops.vercel.app';
 const OPS_TOKEN = process.env.BOSSLABS_OPS_TOKEN ?? '';
 
 export async function POST(req: NextRequest) {
+  const session = await getAdminSession();
+  if (!session || session.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!isSameOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { cardId } = (await req.json()) as { cardId?: string };
-  if (!cardId) return NextResponse.json({ error: 'cardId required' }, { status: 400 });
+  if (!cardId || !/^[a-zA-Z0-9_-]{1,128}$/.test(cardId)) {
+    return NextResponse.json({ error: 'valid cardId required' }, { status: 400 });
+  }
   if (!OPS_TOKEN) return NextResponse.json({ error: 'BOSSLABS_OPS_TOKEN not configured' }, { status: 500 });
 
   const sb = getSupabase();
@@ -46,11 +54,11 @@ export async function POST(req: NextRequest) {
           }
         : undefined,
     }),
+    signal: AbortSignal.timeout(12_000),
   });
 
   if (!res.ok && res.status !== 409) {
-    const body = await res.text();
-    return NextResponse.json({ error: `Ops API error: ${body}` }, { status: 502 });
+    return NextResponse.json({ error: `Ops API returned HTTP ${res.status}` }, { status: 502 });
   }
 
   const data = await res.json();
