@@ -240,6 +240,11 @@ export async function getDripPerformance(): Promise<DripRow[]> {
 export const SURVEY_INDUSTRY_LABEL: Record<string, string> = {
   food_retail: 'Food / Retail',
   services: 'Services',
+  construction: 'Construction / Engineering',
+  healthcare: 'Clinic / Healthcare',
+  education: 'Education / Training',
+  professional_services: 'Accounting / Professional Services',
+  real_estate: 'Real Estate / Rental',
   logistics_ops: 'Logistics / Operations',
   agency_freelance: 'Agency / Freelance',
   manufacturing: 'Manufacturing',
@@ -248,12 +253,27 @@ export const SURVEY_INDUSTRY_LABEL: Record<string, string> = {
 export const SURVEY_PAIN_LABEL: Record<string, string> = {
   orders_tracking: 'Orders / tracking',
   manual_reports: 'Manual reports',
+  inventory: 'Inventory / stocks',
+  payments_collections: 'Payments / collections',
   followups: 'Follow-ups',
   team_visibility: 'Team visibility',
   other: 'Other',
 };
+export const SURVEY_TEAM_SIZE_LABEL: Record<string, string> = {
+  solo: 'Just me',
+  micro: '2–5',
+  small: '6–20',
+  mid: '21+',
+};
+export const SURVEY_TRIED_LABEL: Record<string, string> = {
+  never: 'First time looking into it',
+  abandoned: 'Started, never finished',
+  manual_system: 'Manual / Excel system',
+  has_software: 'Has software, wants upgrade',
+};
 export const SURVEY_INTENT_LABEL: Record<string, string> = {
   diy: 'DIY — wants to learn',
+  diy_open: 'DIY, open to DFY',
   dfy: 'DFY — wants it done for them',
 };
 
@@ -266,10 +286,14 @@ export type SurveyResponseRow = {
   email: string | null;
   eventName: string;
   industryLabel: string;
+  /** Elaboration when q1_industry = 'other'. */
+  industryFreetext: string | null;
   painLabel: string;
   /** Elaboration when q2_pain = 'other'. */
   painFreetext: string | null;
-  /** "If you had a custom system tomorrow, what's the first thing you'd build?" */
+  teamSizeLabel: string;
+  triedLabel: string;
+  /** Q5 — "first process you'd want to automate" (free text). */
   ideaFreetext: string | null;
   intent: string | null;
   intentLabel: string;
@@ -280,12 +304,14 @@ export type SurveyData = {
   total: number;
   industry: SurveyBreakdown[];
   pain: SurveyBreakdown[];
+  teamSize: SurveyBreakdown[];
+  tried: SurveyBreakdown[];
   intent: SurveyBreakdown[];
   byEvent: Array<{ eventName: string; count: number }>;
   responses: SurveyResponseRow[];
 };
 
-const EMPTY_SURVEY: SurveyData = { total: 0, industry: [], pain: [], intent: [], byEvent: [], responses: [] };
+const EMPTY_SURVEY: SurveyData = { total: 0, industry: [], pain: [], teamSize: [], tried: [], intent: [], byEvent: [], responses: [] };
 
 function tally(values: Array<string | null>, labels: Record<string, string>): SurveyBreakdown[] {
   const counts: Record<string, number> = {};
@@ -304,12 +330,20 @@ type RawSurveyRow = {
   contact_id: string | null;
   event_id: string | null;
   q1_industry: string | null;
+  q1_freetext: string | null;
   q2_pain: string | null;
   q2_freetext: string | null;
+  team_size: string | null;
+  tried_before: string | null;
   q3_freetext: string | null;
   q4_intent: string | null;
   created_at: string;
 };
+
+/** Columns selected for both the dashboard + CSV — kept in one place so the two
+ *  readers never drift. */
+const SURVEY_SELECT =
+  'id, contact_id, event_id, q1_industry, q1_freetext, q2_pain, q2_freetext, team_size, tried_before, q3_freetext, q4_intent, created_at';
 
 /** Resolve raw survey_responses rows into displayable rows — respondent +
  *  event name in two batched queries (no N+1). Shared by the dashboard's
@@ -342,8 +376,11 @@ async function resolveSurveyResponses(rows: RawSurveyRow[]): Promise<SurveyRespo
       email: person?.email ?? null,
       eventName: r.event_id ? eventNames[r.event_id] ?? 'Unknown event' : '—',
       industryLabel: SURVEY_INDUSTRY_LABEL[r.q1_industry ?? 'other'] ?? 'Other',
+      industryFreetext: r.q1_freetext,
       painLabel: SURVEY_PAIN_LABEL[r.q2_pain ?? 'other'] ?? 'Other',
       painFreetext: r.q2_freetext,
+      teamSizeLabel: r.team_size ? SURVEY_TEAM_SIZE_LABEL[r.team_size] ?? r.team_size : '—',
+      triedLabel: r.tried_before ? SURVEY_TRIED_LABEL[r.tried_before] ?? r.tried_before : '—',
       ideaFreetext: r.q3_freetext,
       intent: r.q4_intent,
       intentLabel: r.q4_intent ? SURVEY_INTENT_LABEL[r.q4_intent] ?? r.q4_intent : '—',
@@ -363,7 +400,7 @@ export async function getSurveyData(limit = 1000): Promise<SurveyData> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('survey_responses')
-    .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
+    .select(SURVEY_SELECT)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error || !data || data.length === 0) return EMPTY_SURVEY;
@@ -381,6 +418,8 @@ export async function getSurveyData(limit = 1000): Promise<SurveyData> {
     total: responses.length,
     industry: tally(rows.map((r) => r.q1_industry), SURVEY_INDUSTRY_LABEL),
     pain: tally(rows.map((r) => r.q2_pain), SURVEY_PAIN_LABEL),
+    teamSize: tally(rows.map((r) => r.team_size), SURVEY_TEAM_SIZE_LABEL),
+    tried: tally(rows.map((r) => r.tried_before), SURVEY_TRIED_LABEL),
     intent: tally(rows.map((r) => r.q4_intent), SURVEY_INTENT_LABEL),
     byEvent,
     responses,
@@ -400,7 +439,7 @@ export async function getAllSurveyResponsesForExport(): Promise<SurveyResponseRo
   for (let from = 0; from <= 100_000; from += 1000) {
     const { data, error } = await sb
       .from('survey_responses')
-      .select('id, contact_id, event_id, q1_industry, q2_pain, q2_freetext, q3_freetext, q4_intent, created_at')
+      .select(SURVEY_SELECT)
       .order('created_at', { ascending: false })
       .range(from, from + 999);
     if (error || !data || data.length === 0) break;

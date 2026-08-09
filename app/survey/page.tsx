@@ -4,7 +4,7 @@ import { SurveyForm } from '@/components/SurveyForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: 'One quick question — BossLabs AI',
+  title: 'Tailor your webinar — BossLabs AI',
   robots: { index: false, follow: false },
 };
 

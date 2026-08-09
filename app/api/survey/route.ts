@@ -17,25 +17,31 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     c?: string;
     q1_industry?: string;
+    q1_freetext?: string;
     q2_pain?: string;
     q2_freetext?: string;
-    q3_freetext?: string;
-    q4_intent?: string;
+    q3_team?: string;
+    q4_tried?: string;
+    q5_freetext?: string;
+    q6_intent?: string;
   };
   const contactId = verifyContactToken(body.c);
   if (!contactId) {
     return NextResponse.json({ ok: false, error: 'Invalid or expired link.' });
   }
-  if (!body.q1_industry || !body.q2_pain || !body.q4_intent) {
+  if (!body.q1_industry || !body.q2_pain || !body.q3_team || !body.q4_tried || !body.q6_intent) {
     return NextResponse.json({ ok: false, error: 'Please answer all the required questions.' });
   }
   const res = await saveSurveyResponse({
     contactId,
     q1Industry: body.q1_industry,
+    q1Freetext: body.q1_freetext,
     q2Pain: body.q2_pain,
     q2Freetext: body.q2_freetext,
-    q3Freetext: body.q3_freetext,
-    q4Intent: body.q4_intent,
+    teamSize: body.q3_team,
+    triedBefore: body.q4_tried,
+    firstProcess: body.q5_freetext,
+    intent: body.q6_intent,
   });
   return NextResponse.json(res.ok ? { ok: true } : { ok: false, error: 'Could not save — please try again.' });
 }

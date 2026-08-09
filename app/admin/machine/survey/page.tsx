@@ -108,14 +108,16 @@ export default async function SurveyAnalyticsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <BreakdownList title="Industry" hint="What business q1 respondents are in." items={data.industry} />
+        <BreakdownList title="Industry" hint="What business they're in." items={data.industry} />
         <BreakdownList title="#1 headache" hint="Their biggest operational pain point right now." items={data.pain} />
         <BreakdownList
           title="Intent"
-          hint="Learn it themselves, or want it done for them."
+          hint="Build it themselves, open to help, or fully done-for-them."
           items={data.intent}
-          barColor={(key) => (key === 'dfy' ? 'bg-amber-500' : 'bg-cyan-500')}
+          barColor={(key) => (key === 'dfy' ? 'bg-amber-500' : key === 'diy_open' ? 'bg-teal-500' : 'bg-cyan-500')}
         />
+        <BreakdownList title="Team size" hint="How big their team is." items={data.teamSize} />
+        <BreakdownList title="Tried fixing it before?" hint="Where they are with this problem today." items={data.tried} />
       </div>
 
       {data.byEvent.length > 0 && (
@@ -160,8 +162,10 @@ export default async function SurveyAnalyticsPage() {
                   <th className="px-4 py-2.5 font-semibold">Person</th>
                   <th className="px-4 py-2.5 font-semibold">Event</th>
                   <th className="px-4 py-2.5 font-semibold">Industry</th>
+                  <th className="px-4 py-2.5 font-semibold">Team</th>
+                  <th className="px-4 py-2.5 font-semibold">Tried before</th>
                   <th className="px-4 py-2.5 font-semibold">#1 headache</th>
-                  <th className="px-4 py-2.5 font-semibold">What they&rsquo;d build first</th>
+                  <th className="px-4 py-2.5 font-semibold">First process to automate</th>
                   <th className="px-4 py-2.5 font-semibold">Intent</th>
                   <th className="px-4 py-2.5 font-semibold">Date</th>
                 </tr>
@@ -180,7 +184,16 @@ export default async function SurveyAnalyticsPage() {
                       {r.email && <div className="text-[11.5px] text-slate-400">{r.email}</div>}
                     </td>
                     <td className="px-4 py-2.5 text-slate-500">{r.eventName}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{r.industryLabel}</td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {r.industryLabel}
+                      {r.industryFreetext && (
+                        <div className="mt-1 max-w-[160px] truncate text-[11.5px] text-slate-400" title={r.industryFreetext}>
+                          &ldquo;{r.industryFreetext}&rdquo;
+                        </div>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{r.teamSizeLabel}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{r.triedLabel}</td>
                     <td className="px-4 py-2.5">
                       <span className="inline-block rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10.5px] font-medium text-slate-600">
                         {r.painLabel}
@@ -205,13 +218,15 @@ export default async function SurveyAnalyticsPage() {
                         className={`inline-block rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
                           r.intent === 'dfy'
                             ? 'border-amber-200 bg-amber-50 text-amber-700'
-                            : r.intent === 'diy'
-                              ? 'border-slate-200 bg-slate-50 text-slate-600'
-                              : 'border-slate-100 bg-slate-50 text-slate-300'
+                            : r.intent === 'diy_open'
+                              ? 'border-teal-200 bg-teal-50 text-teal-700'
+                              : r.intent === 'diy'
+                                ? 'border-slate-200 bg-slate-50 text-slate-600'
+                                : 'border-slate-100 bg-slate-50 text-slate-300'
                         }`}
                         title={r.intentLabel}
                       >
-                        {r.intent === 'dfy' ? 'DFY' : r.intent === 'diy' ? 'DIY' : '—'}
+                        {r.intent === 'dfy' ? 'DFY' : r.intent === 'diy_open' ? 'DIY+' : r.intent === 'diy' ? 'DIY' : '—'}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{fmtManila(r.createdAt)}</td>
