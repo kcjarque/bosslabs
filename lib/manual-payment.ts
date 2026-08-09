@@ -153,6 +153,12 @@ export async function markAbandonedCartPaid(
   } catch {
     /* re-tag is best-effort — never block the payment confirmation */
   }
+  // Keep the in-memory signup in sync with the DB re-tag below, so the
+  // confirmation email/SMS (templateVarsForSignup) render the NEW event's
+  // date/time/Zoom — not the stale one. Without this, the row moves to the
+  // active event but the email still says the dead event's date (the "seat for
+  // Thursday, August 6" bug after rollover to Aug 13).
+  if (reTagEventId) signup.eventId = reTagEventId;
 
   // 1) Mark paid + stamp the manual-payment record (idempotency marker).
   // When products were picked, record them as the order's line items so
