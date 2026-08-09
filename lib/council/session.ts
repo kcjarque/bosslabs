@@ -142,7 +142,8 @@ const OUTPUT_DISCIPLINE_RULE =
  *  emit `629` as the threshold instead of `62900`, silently breaking every
  *  machine-graded prediction by 100x. Appended verbatim to RUNTIME RULES. */
 const UNIT_CONVENTIONS =
-  'Prediction thresholds MUST be numeric in these units: cpp_7d and campaign_cpp_7d in CENTAVOS (₱600 = 60000); spend_share_7d as a FRACTION 0..1 (15% = 0.15). metric must be one of: cpp_7d, campaign_cpp_7d, spend_share_7d, or empty string for non-machine-checkable predictions. target_id = the ad_id for cpp_7d/spend_share_7d, null for campaign metrics.';
+  'Prediction thresholds MUST be numeric in these units: cpp_7d and campaign_cpp_7d in CENTAVOS (₱600 = 60000); spend_share_7d as a FRACTION 0..1 (15% = 0.15). metric must be one of: cpp_7d, campaign_cpp_7d, spend_share_7d, or empty string for non-machine-checkable predictions. target_id = the ad_id for cpp_7d/spend_share_7d, null for campaign metrics. ' +
+  'PACK UNITS (divide centavos by 100 for pesos — NEVER surface a raw centavos number): every *Centavos field is centavos, INCLUDING thisWeek.northStar.currentDailyNetCentavos / netGapCentavos / targetNetSpendCentavos, thisWeek.breakdowns[].spendCentavos / revenueCentavos, context.dayOfWeek[].cppCentavos — AND thisWeek.breakdowns[].cpp (centavos despite the bare name). roas fields (thisWeek.campaign.roas, breakdowns[].roas, dayOfWeek[].roas, weeklyTrend[].roas) are RATIOS (2.4 = 2.4×); cpm/blendedCpm are pesos; linkCtr/cvr/utilizationPct are percentages.';
 
 /** The diagnostic spine — the council must first agree on WHY CPP is what it
  *  is (the CPP decomposition) before prescribing anything, then converge on

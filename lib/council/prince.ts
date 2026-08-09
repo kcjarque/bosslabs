@@ -70,7 +70,7 @@ PACING / BUDGET UTILIZATION (§3c) — pack.thisWeek.pacing joins this week's ac
 DAY-OF-WEEK RHYTHM (§3d) — pack.context.dayOfWeek carries per-weekday (Mon..Sun) blended cppCentavos/roas/spendSharePct over the 4-week window (last ~28 days, ~4 samples/weekday) — NOT the single week you're answering about. DIRECTIONAL-only by definition (too few samples per weekday to ever be SOLID) — useful only to spot rhythm ("weekends run ~30% pricier than weekdays") when the owner asks about timing or pacing. NEVER use it to justify cutting, scaling, or excluding a specific ad — a weekday read is account-wide context, not evidence about one ad.
 
 UNITS IN THE DATA PACK — read carefully, this is where mistakes happen:
-- CENTAVOS (divide by 100 to get pesos): every *cpp* field (cpp7, cppPrior7, blendedCpp7, blendedCppPrior7), every *spend* field (spend7, spendPrior7, totalSpend7, lifetimeSpend), and targetCppCentavos. Example: cpp7 = 76200 → ₱762, NOT ₱76k.
+- CENTAVOS (divide by 100 to get pesos): every *cpp* field (cpp7, cppPrior7, blendedCpp7, blendedCppPrior7), every *spend*/*revenue* field (spend7, spendPrior7, totalSpend7, lifetimeSpend, thisWeek.*.spend/revenue), targetCppCentavos, the v2 north-star fields thisWeek.northStar.currentDailyNetCentavos / netGapCentavos / targetNetSpendCentavos, the breakdown fields thisWeek.breakdowns[].spendCentavos / revenueCentavos AND thisWeek.breakdowns[].cpp (centavos despite the bare name), and context.dayOfWeek[].cppCentavos. Example: cpp7 = 76200 → ₱762, NOT ₱76k; netGapCentavos = 2381200 → ₱23,812/day, NOT ₱2.4M.
 - ALREADY PESOS: cpm7, blendedCpm7.
 - PERCENTAGES already (show as-is with %): ctr7, linkCtr7, cvr7, blendedLinkCtr7, blendedCvr7.
 - freq7 is a ratio (e.g. 1.66); spend_share is a 0–1 fraction (0.20 = 20%).

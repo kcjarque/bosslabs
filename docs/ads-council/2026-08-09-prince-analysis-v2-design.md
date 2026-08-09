@@ -464,9 +464,14 @@ The whole point of §0's persona. Added to BOTH prompts:
   - **(a) Null-result:** a healthy-week fixture (nothing above the severity floor)
     produces a *"nothing needs fixing this week"* briefing with ONE watch item —
     no manufactured problems; below-floor items land in `watchlist`, not the briefing.
-  - **(b) Minimum-signal:** a NOISE-tier "winner" (e.g. ₱186 CPP on ₱929 spend) is
-    NOT recommended for scaling — it appears only as a watch item; DIRECTIONAL
-    reads are labeled as such.
+  - **(b) Minimum-signal:** a genuinely NOISE-tier ad (0–2 buyers on sub-₱650
+    spend, e.g. ₱250 spend / 0 buyers) is NEVER recommended for scaling — it may
+    appear ONLY as a watch item. A DIRECTIONAL read may support a scale but MUST
+    be labeled "DIRECTIONAL" and scaled in steps. **Correction (final review):**
+    the ₱186-CPP-on-₱929-spend ad (5 buyers) is **DIRECTIONAL**, not NOISE — 5
+    clears the ≥3-purchase floor — so it is a valid *cautious* scale, not the NOISE
+    case. The hard guardrail is: NOISE (below ≥3 purchases AND below 1× CPA) can
+    never justify a cut/scale. `confidence.test.ts` asserts this classification.
   - **(c) Profit anchor:** a scale/cut/hold call (e.g. on the 2.49× blended) is
     framed relative to `breakevenRoas` (above/below breakeven), never as a bare
     ROAS; with `economics` unset, Prince states it is judging without a profit anchor.
@@ -495,3 +500,44 @@ Tracked so they're not lost; out of scope for v2 unless marked **pulled-forward*
    learning; significant edits reset learning; scale winners in steps. **DECISION:
    PULLED INTO v2** — one §5a line, cheap, and it prevents nuking a winner's
    learning by scaling too fast. Now in §5a; left listed here for the record.
+
+### Final whole-branch review — deferred items (2026-08-09)
+
+The final review returned **READY TO MERGE**; these non-blocking items were
+consciously deferred (fixes 1/3/§8b-correction + the `npm test` script were done
+at the flip; everything below is v2.1):
+
+- **North-star net uses the rough full-week ROAS, not the settled sub-total**
+  (`pack.ts` `currentDailyNet`). Pessimistic bias — overstates the ₱50k gap on the
+  Sunday run's unsettled tail. `thisWeek.campaign.settled` is already computed;
+  switch the north-star to it (or present both). Bounded today by the scaling
+  guardrail + recommend-mode.
+- **Pass-1 transport failure can read as a "healthy week."** In `runStagedCouncil`,
+  an errored Pass 1 returns `problems:[]` → cost guard may short-circuit to
+  null-result. The deterministic malfunction pre-check still forces a full run for
+  real outages, and the failure is surfaced in the watchlist, but consider not
+  treating an *errored* Pass 1 as a genuine null result (+ allow a same-day retry).
+- **Pacing/pack join by NAME not ID** — collision risk if two tracked campaigns/
+  ad sets share a name or are renamed mid-day. Switch to campaign.id/adset.id when
+  a second brand/looser-named account is onboarded.
+- **Lifetime-budget campaigns store a lifetime figure under `dailyBudgetCentavos`**
+  → pacing `utilization` is wrong for them. Guard when a lifetime-budget campaign
+  is tracked (the live account is all-daily today).
+- **age/gender breakdown still hits Meta's 500-row cap** even BOSS-scoped → needs
+  `paging.next` pagination (Meta returns highest-spend rows first, so the aggregate
+  is dominated by what matters; degrades, never crashes).
+- **Prompt caching on `runStagedCouncil`** (pack as a cached prefix) — ~₱160/run →
+  ~₱85/run; needs the message-block refactor.
+- **`normalizeProblems` casts type/severity/confidence without runtime enum
+  validation** — cosmetic-only (nothing deterministic branches on them).
+- **Extract shared `persistSession`/`callClaude` helpers** between
+  `runCouncilSession` + `runStagedCouncil` (~50-60 duplicated lines).
+- **No unit test for `buildPulse`/`buildBrief`**; two stale code comments
+  (`breakdowns.ts` "account-wide fallback"; `session.ts` stage1System exception
+  list omits BREAKDOWNS_RULE).
+- **Staged 5-stage output (`problems`/`solutions`/`synthesis`) is persisted to
+  `council_sessions.verdict` but not yet rendered** in the weekly Telegram brief
+  (which still renders `verdict.action` + `action_plan` + `creative_ideas`). Add a
+  brief/admin surface for the richer analysis.
+- **Creative pipeline output** + **pixel-vs-bank blended MER** (from the original
+  §9 list above) remain deferred.
