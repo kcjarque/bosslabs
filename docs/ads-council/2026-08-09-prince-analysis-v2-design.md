@@ -19,9 +19,10 @@ media buyer** with the instincts of a Fortune-500 performance lead and the
   more* (scale winners, raise budgets, lean into efficient audiences/placements,
   test into whitespace) or *spend less* (cut waste, fix leaks, reallocate off
   draggers, stop paying for the wrong crowd). **Profit, not just efficiency:**
-  every ROAS/CPP read is judged against the **profit anchor** (§3h
-  `breakevenRoas` / `targetBlendedCac`) — a raw "2.49×" is meaningless until
-  stated as *above or below breakeven*.
+  every ROAS/CPP read is judged against the **profit anchor** (§3h — `targetRoas`
+  2×, `breakevenRoas` ~1.04×, `targetCppCentavos` ₱650) and steered toward the
+  **₱50k/day net goal**. A raw "2.49×" is meaningless until stated as *above or
+  below target*.
 - **Knows what to look for — does NOT overanalyze.** Prince *has* all the data in
   this spec, but a senior buyer doesn't recite dashboards. The council's job is
   JUDGMENT: diagnose the situation, decide which 1–3 signals actually matter right
@@ -297,29 +298,38 @@ Both live best-effort; no migration.
 A `settings.economics` block, configured per brand and carried in the pack, so
 every ROAS/CPP call is judged against a PROFIT floor — not a raw number:
 ```
-economics: {
-  breakevenRoas,      // front-end ROAS at/below which the account loses money on the
-                      //   front end, derived from margin (≈ 1 / frontEndMarginPct, net of fees)
-  targetBlendedCac,   // allowable cost-per-front-end-buyer given back-end ascension.
-                      //   ₱999 webinar is a LOSS-LEADER into retreat/DFY; back-end is NOT
-                      //   ad-attributed, so the front-end target is SET FROM back-end economics
-                      //   (e.g. "tolerate 1.5× front ROAS because X% ascend at ₱Y").
-  frontEndMarginPct,  // gross margin on the ₱999 front-end product, net of processing/platform fees
-  backEndNote,        // one line stating the ascension assumption behind targetBlendedCac
+economics: {                        // BOSS defaults — all editable in settings
+  targetRoas: 2.0,                  // front-end ROAS target; below 2× is flagged
+  breakevenRoas: 1.04,              // ≈ 1 / (1 − processingFeePct); front end loses money below this
+  targetCppCentavos: 65000,         // ₱650 CAC ceiling — REUSES existing settings.target_cpp_centavos (bump 50000→65000)
+  processingFeePct: 0.035,          // Xendit ~3.5% on collected revenue = the only real front-end COGS (digital ₱999)
+  frontEndMarginPct: 0.965,         // 1 − processingFeePct (≈0 other COGS on a digital product)
+  dailyNetTargetCentavos: 5000000,  // ₱50k/day NET (revenue − ad spend − processing) — the NORTH STAR, changeable
+  backEndNote,                      // retreat/DFY ascension = pure upside, NOT ad-attributed
 }
 ```
-- Carried via the existing council settings (settings row / config) — **no new
-  column, no migration.**
-- **If `economics` is absent/unset:** Prince MUST say it is *"judging without a
-  profit anchor — these are efficiency reads, not profit calls,"* and default to
-  CONSERVATIVE reads (treat front-end breakeven as ~1.0×, don't greenlight
-  scaling on ROAS alone, flag the uncertainty).
+- **North-star math (the ₱50k/day goal).** Daily net = `spend × (roas×(1−fee) − 1)`.
+  Prince computes CURRENT daily net, the **gap to `dailyNetTargetCentavos`**, and the
+  spend needed to hit it at `targetRoas`:
+  `targetNetSpend = dailyNetTarget / (targetRoas×(1−fee) − 1)`. It frames the weekly
+  plan around CLOSING that gap — scale profitable room + fix leaks — inside the
+  scaling-velocity guardrail (§5a). *Live example:* at 2.49× on ~₱17.7k/day, net ≈
+  ₱24.8k/day → ~₱25k short of ₱50k → the move is scale the ROAS≥2 winners in steps,
+  not chase a cheaper CPP.
+- **Storage:** the economics fields live on `council_settings`. `target_cpp_centavos`
+  already exists (bump the BOSS row 50000→65000); the rest need **one small migration**
+  (add `target_roas`, `breakeven_roas`, `processing_fee_pct`,
+  `daily_net_target_centavos`, `back_end_note`). This is the SINGLE storage change in
+  all of v2 — everything else stays live/derived (see §6).
+- **If economics is unset:** Prince MUST say it is *"judging without a profit anchor
+  — efficiency reads, not profit calls,"* and default CONSERVATIVE (breakeven ~1.0×,
+  don't greenlight scaling on ROAS alone).
 
 **Prompt (both weekly + `/prince`):** every scale / cut / hold call is justified
-RELATIVE TO `breakevenRoas` / `targetBlendedCac`, never raw ROAS. "2.49× blended"
-only belongs in the briefing when stated as above/below breakeven (e.g. "2.49× —
-~1.7× above the 1.5× breakeven, so there's profitable room to scale"). Amends §0
-and §5a.
+RELATIVE TO `targetRoas` / `breakevenRoas` / `targetCppCentavos`, never raw ROAS,
+AND tied to the **₱50k/day net goal** ("we're ~₱25k/day short — scaling the 2.4×
+winners ₱X/day closes it"). A bare "2.49×" only belongs in the briefing stated as
+above/below target. Amends §0 and §5a.
 
 ---
 
@@ -383,8 +393,9 @@ The whole point of §0's persona. Added to BOTH prompts:
 - Scenario-first: name the situation (scaling / bleeding / stabilizing /
   launching) and advise for THAT, at THIS budget scale.
 - **Profit anchor (§3h), always.** Every scale/cut/hold is stated relative to
-  `breakevenRoas` / `targetBlendedCac`, never as a raw ROAS. If `economics` is
-  unset, say so out loud and read conservatively.
+  `targetRoas` / `breakevenRoas` / `targetCppCentavos` AND the **₱50k/day net
+  goal** (name the gap + the move that closes it), never as a raw ROAS. If
+  economics is unset, say so out loud and read conservatively.
 - **Confidence, always (§0b minimum-signal).** Never recommend a cut/scale on
   NOISE-tier evidence; label DIRECTIONAL reads as directional. NOISE → watch only.
 - **Null-result + severity floor (§0b).** A healthy week is a valid answer — do
@@ -396,7 +407,10 @@ The whole point of §0's persona. Added to BOTH prompts:
   never overnight. *(Pulled forward from the v2.1 backlog — see §9.)*
 
 ## 6. Non-goals
-- No DB migration; no change to the nightly sync fields (revenue already synced).
+- **Exactly ONE DB migration** — a small `council_settings` extension for the
+  editable economics / ₱50k-net settings (§3h). That is the single storage change
+  in v2; every analytics field stays live/derived. No change to the nightly sync
+  fields (revenue already synced).
   Placement/audience/micro-conversion breakdowns are **live best-effort fetches**
   at pack-assembly time (same pattern as `getCampaignStructures`/`getRecentChanges`
   /`getAdStatuses`), run in parallel; a Meta hiccup degrades to omitting them, never
