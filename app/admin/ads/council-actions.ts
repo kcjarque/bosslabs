@@ -20,7 +20,8 @@ export async function saveCouncilSettingsAction(
   if (!Number.isFinite(target) || target < 10000 || target > 10_000_000) {
     return { ok: false, error: 'target CPP out of range' };
   }
-  await saveCouncilSettings({ brand: 'BOSS', mode: mode as Mode, targetCppCentavos: target });
+  const current = await getCouncilSettings('BOSS');
+  await saveCouncilSettings({ ...current, mode: mode as Mode, targetCppCentavos: target });
   revalidatePath('/admin/ads');
   return { ok: true };
 }

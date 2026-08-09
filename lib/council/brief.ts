@@ -132,7 +132,7 @@ function tierCounts(verdicts: VerdictResult[]): Record<Tier, number> {
  *  the daily deliberately gives NO action list, so it can't push over-management. */
 export function buildPulse(args: {
   dateManila: string;
-  yesterday: { spendCentavos: number; purchases: number } | null;
+  yesterday: { spendCentavos: number; purchases: number; revenueCentavos: number } | null;
   avg7Cpp: number | null;
   dayQuality: DayQuality;
   verdicts: VerdictResult[];
@@ -140,6 +140,7 @@ export function buildPulse(args: {
 }): string {
   const { dateManila, yesterday, avg7Cpp, dayQuality, verdicts, fires } = args;
   const yCpp = yesterday && yesterday.purchases > 0 ? yesterday.spendCentavos / yesterday.purchases : null;
+  const yRoas = yesterday && yesterday.spendCentavos > 0 ? yesterday.revenueCentavos / yesterday.spendCentavos : null;
   const pct = yCpp != null && avg7Cpp != null && avg7Cpp !== 0 ? ((yCpp - avg7Cpp) / avg7Cpp) * 100 : null;
 
   const prettyDate = (() => {
@@ -158,10 +159,11 @@ export function buildPulse(args: {
       : Math.abs(pct) < 8 ? ' · about usual'
       : pct < 0 ? ` · <b>${Math.round(-pct)}% cheaper</b> than usual`
       : ` · ${Math.round(pct)}% pricier than usual`;
+    const roasSuffix = yRoas != null ? ` · <b>${yRoas.toFixed(2)}x</b> ROAS` : '';
     yesterdayBlock =
       `💰 <b>Yesterday</b>\n` +
       `${peso(yesterday.spendCentavos)} spent → ${yesterday.purchases} buyers\n` +
-      `<b>${peso(yCpp)}</b> per buyer${compare}`;
+      `<b>${peso(yCpp)}</b> per buyer${compare}${roasSuffix}`;
   }
 
   // ── Ad-health block (2×2, easier to scan than one dense row) ──────────

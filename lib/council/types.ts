@@ -33,7 +33,11 @@ export type CampaignWindow = {
   blendedCpp7Centavos: number | null;
 };
 
-export type CouncilSettingsRow = { brand: Brand; mode: Mode; targetCppCentavos: number };
+export type CouncilSettingsRow = {
+  brand: Brand; mode: Mode; targetCppCentavos: number;
+  targetRoas: number; breakevenRoas: number; processingFeePct: number;
+  dailyNetTargetCentavos: number; backEndNote: string;
+};
 
 export type PriorsRow = {
   brand: Brand;

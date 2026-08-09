@@ -32,7 +32,8 @@ import { syncAdMetricsDaily } from './meta-sync';
 import { refreshPriors } from './priors';
 import { resolveDuePredictions } from './ledger';
 import { detectTriggers } from './triggers';
-import { runCouncilSession, settledDay } from './session';
+import { runStagedCouncil, settledDay } from './session';
+import { deriveWeekBounds } from './pack';
 import { analyzeMissingCreatives } from './creative-context';
 import { buildBrief, buildPulse, dayQualityFor } from './brief';
 import type { AdSeries, Brand, VerdictResult } from './types';
@@ -58,15 +59,6 @@ function isoDaysBefore(dateStr: string, days: number): string {
 
 function isMondayManila(dateManila: string): boolean {
   return new Date(`${dateManila}T00:00:00Z`).getUTCDay() === 1;
-}
-
-/** Monday-start of the week `dateStr` falls in — mirrors pack.ts's private
- *  `weekStartOf` (not exported there, so replicated). */
-function weekStartOf(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  const dow = d.getUTCDay(); // 0=Sun..6=Sat
-  d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
-  return d.toISOString().slice(0, 10);
 }
 
 function errMsg(err: unknown): string {
@@ -167,17 +159,18 @@ async function fetchNextLine(brand: Brand): Promise<string> {
   return `${rows.length} open prediction${rows.length === 1 ? '' : 's'} — nearest deadline ${rows[0].deadline}.`;
 }
 
-/** paid/attended signups created THIS ISO week (Monday-start, Manila),
- *  for the brief's COHORT line. Deliberately NOT `assemblePack` — that
+/** paid/attended signups in the SAME Mon–Sun week `assemblePack`'s
+ *  `thisWeek` analyzes (`deriveWeekBounds(settledDay())`, not the calendar
+ *  week of `todayManila`) — so the brief's "this week" cohort line always
+ *  matches the week the council just analyzed, never a day or two ahead of
+ *  it. For the brief's COHORT line. Deliberately NOT `assemblePack` — that
  *  pulls `getSignups()` (the whole table) plus webinar/DFY income sums the
  *  brief doesn't need; this is a small direct query instead (controller
  *  decision). A buyer-less week is a real zero, not "no data" — `null` is
  *  reserved for "Supabase isn't configured at all". */
-async function fetchCohortThisWeek(
-  todayManila: string,
-): Promise<{ buyers: number; showUpPct: number | null; applications: number } | null> {
+async function fetchCohortThisWeek(): Promise<{ buyers: number; showUpPct: number | null; applications: number } | null> {
   if (!isSupabaseConfigured()) return null;
-  const weekStart = weekStartOf(todayManila);
+  const { weekStart } = deriveWeekBounds(settledDay());
   const { data, error } = await getSupabase()
     .from('signups')
     .select('status')
@@ -359,11 +352,11 @@ export async function runCouncilPipeline(
   if (weekly && !(await sessionExistsToday(brand, todayManila))) {
     try {
       const reasons = triggers.length > 0 ? triggers : ['Weekly scheduled analysis'];
-      const result = await runCouncilSession(brand, reasons, { model: WEEKLY_MODEL });
+      const result = await runStagedCouncil(brand, reasons, { model: WEEKLY_MODEL });
       sessionId = result.sessionId;
       failedPredictionInserts = result.failedPredictionInserts;
     } catch (err) {
-      console.error('[council pipeline] weekly runCouncilSession failed', errMsg(err));
+      console.error('[council pipeline] weekly runStagedCouncil failed', errMsg(err));
     }
   }
 
@@ -374,18 +367,22 @@ export async function runCouncilPipeline(
   let yesterdayFound = false;
   let yesterdaySpend = 0;
   let yesterdayPurchases = 0;
+  let yesterdayRevenue = 0;
   for (const s of series) {
     for (const d of s.days) {
       if (d.date === yesterdayDate) {
         yesterdayFound = true;
         yesterdaySpend += d.spendCentavos;
         yesterdayPurchases += d.purchases;
+        yesterdayRevenue += d.revenueCentavos;
       }
     }
   }
   // Deliberately unsettled (yesterday, not asOf) — buildBrief labels this
   // preliminary itself; Meta restates conversions for up to 72h.
-  const yesterday = yesterdayFound ? { spendCentavos: yesterdaySpend, purchases: yesterdayPurchases } : null;
+  const yesterday = yesterdayFound
+    ? { spendCentavos: yesterdaySpend, purchases: yesterdayPurchases, revenueCentavos: yesterdayRevenue }
+    : null;
   const yCpp = yesterday && yesterday.purchases > 0 ? yesterday.spendCentavos / yesterday.purchases : null;
   const avg7Cpp = blendedCpp7Centavos;
   const dayQuality = dayQualityFor(yCpp, avg7Cpp, priors);
@@ -409,7 +406,7 @@ export async function runCouncilPipeline(
   if (weekly) {
     // Full analysis brief — root cause + ranked plan from the session just run.
     const [cohort, sessionAction, nextLine] = await Promise.all([
-      fetchCohortThisWeek(todayManila),
+      fetchCohortThisWeek(),
       fetchTodaySessionAction(brand, todayManila),
       fetchNextLine(brand),
     ]);

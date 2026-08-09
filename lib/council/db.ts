@@ -203,19 +203,45 @@ export async function pipelineRanToday(brand: Brand, dateManila: string): Promis
 /* council_settings                                                      */
 /* --------------------------------------------------------------------- */
 
-type CouncilSettingsRowDb = { brand: string; mode: string; target_cpp_centavos: number };
+type CouncilSettingsRowDb = {
+  brand: string; mode: string; target_cpp_centavos: number;
+  // supabase-js (PostgREST /rest/v1) returns these numeric/bigint columns as JS
+  // numbers (verified on the live endpoint). The Number() wraps in getCouncilSettings
+  // are harmless defensive coding — they also cover the Management API SQL path,
+  // which DOES return numeric as strings.
+  target_roas: number; breakeven_roas: number; processing_fee_pct: number;
+  daily_net_target_centavos: number; back_end_note: string;
+};
 
 export async function getCouncilSettings(brand: Brand): Promise<CouncilSettingsRow> {
-  if (!isSupabaseConfigured()) return { brand, mode: 'recommend', targetCppCentavos: 50000 };
+  if (!isSupabaseConfigured()) {
+    return {
+      brand, mode: 'recommend', targetCppCentavos: 65000,
+      targetRoas: 2.0, breakevenRoas: 1.04, processingFeePct: 0.035,
+      dailyNetTargetCentavos: 5000000, backEndNote: '',
+    };
+  }
   const { data, error } = await getSupabase()
     .from('council_settings')
     .select('*')
     .eq('brand', brand)
     .maybeSingle();
   if (error) throw new Error(`getCouncilSettings: ${error.message}`);
-  if (!data) return { brand, mode: 'recommend', targetCppCentavos: 50000 };
+  if (!data) {
+    return {
+      brand, mode: 'recommend', targetCppCentavos: 65000,
+      targetRoas: 2.0, breakevenRoas: 1.04, processingFeePct: 0.035,
+      dailyNetTargetCentavos: 5000000, backEndNote: '',
+    };
+  }
   const r = data as CouncilSettingsRowDb;
-  return { brand: r.brand as Brand, mode: r.mode as Mode, targetCppCentavos: r.target_cpp_centavos };
+  return {
+    brand: r.brand as Brand, mode: r.mode as Mode, targetCppCentavos: r.target_cpp_centavos,
+    targetRoas: Number(r.target_roas), breakevenRoas: Number(r.breakeven_roas),
+    processingFeePct: Number(r.processing_fee_pct),
+    dailyNetTargetCentavos: Number(r.daily_net_target_centavos),
+    backEndNote: r.back_end_note ?? '',
+  };
 }
 
 export async function saveCouncilSettings(row: CouncilSettingsRow): Promise<void> {
@@ -224,6 +250,11 @@ export async function saveCouncilSettings(row: CouncilSettingsRow): Promise<void
     brand: row.brand,
     mode: row.mode,
     target_cpp_centavos: row.targetCppCentavos,
+    target_roas: row.targetRoas,
+    breakeven_roas: row.breakevenRoas,
+    processing_fee_pct: row.processingFeePct,
+    daily_net_target_centavos: row.dailyNetTargetCentavos,
+    back_end_note: row.backEndNote,
     updated_at: new Date().toISOString(),
   };
   const { error } = await getSupabase()

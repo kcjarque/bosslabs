@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "npx tsx --test lib/council/*.test.ts tests/council/*.test.ts",
     "db:scaffold": "node scripts/scaffold-db.mjs"
   },
   "dependencies": {
