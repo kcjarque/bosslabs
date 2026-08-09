@@ -26,6 +26,8 @@ import {
   countPaidOrders,
   getRetreatReservation,
   markRetreatReservationPaid,
+  getSettings,
+  getEvent,
 } from '@/lib/db';
 import { recordCommission } from '@/lib/affiliates';
 import { syncCrmCardForSignup } from '@/lib/crm';
@@ -231,7 +233,30 @@ async function handleMainPaid(event: XenditEvent) {
     xenditInvoiceId: event.id,
     paidAmount: event.amount,
   };
-  await updateSignup(signup.id, { status: 'paid', metadata: paidMeta });
+
+  // Abandoned-cart paid LATE: if the signup's tagged webinar has already
+  // happened (or is missing), enroll them in the CURRENT active event. Without
+  // this, templateVarsForSignup renders the dead event's date/time + Zoom link,
+  // and they land on the wrong reminder list (e.g. paying now for a webinar that
+  // already ran → "seat for Thursday, August 6" instead of the next session). A
+  // deliberately-picked FUTURE session (picker) is in the future, so it's left
+  // alone. Best-effort: a settings/event lookup hiccup must never block a payment.
+  let eventRetag: { eventId?: string } = {};
+  try {
+    const activeEventId = (await getSettings())?.activeEventId ?? null;
+    if (activeEventId && signup.eventId !== activeEventId) {
+      const current = signup.eventId ? await getEvent(signup.eventId) : null;
+      const startsMs = current?.startsAtIso ? Date.parse(current.startsAtIso) : NaN;
+      const stale = !current || Number.isNaN(startsMs) || startsMs < Date.now();
+      if (stale) {
+        eventRetag = { eventId: activeEventId };
+        signup.eventId = activeEventId; // so templateVarsForSignup below resolves the NEW event
+      }
+    }
+  } catch {
+    /* leave the event as-is on any lookup error */
+  }
+  await updateSignup(signup.id, { status: 'paid', metadata: paidMeta, ...eventRetag });
 
   // Vault bumped at checkout (₱999 main + ₱999 Vault in one invoice) →
   // provision a Hub account immediately so the thank-you page can show
