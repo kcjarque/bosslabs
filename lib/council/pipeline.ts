@@ -32,7 +32,7 @@ import { syncAdMetricsDaily } from './meta-sync';
 import { refreshPriors } from './priors';
 import { resolveDuePredictions } from './ledger';
 import { detectTriggers } from './triggers';
-import { runCouncilSession, settledDay } from './session';
+import { runStagedCouncil, settledDay } from './session';
 import { analyzeMissingCreatives } from './creative-context';
 import { buildBrief, buildPulse, dayQualityFor } from './brief';
 import type { AdSeries, Brand, VerdictResult } from './types';
@@ -359,11 +359,11 @@ export async function runCouncilPipeline(
   if (weekly && !(await sessionExistsToday(brand, todayManila))) {
     try {
       const reasons = triggers.length > 0 ? triggers : ['Weekly scheduled analysis'];
-      const result = await runCouncilSession(brand, reasons, { model: WEEKLY_MODEL });
+      const result = await runStagedCouncil(brand, reasons, { model: WEEKLY_MODEL });
       sessionId = result.sessionId;
       failedPredictionInserts = result.failedPredictionInserts;
     } catch (err) {
-      console.error('[council pipeline] weekly runCouncilSession failed', errMsg(err));
+      console.error('[council pipeline] weekly runStagedCouncil failed', errMsg(err));
     }
   }
 
