@@ -13,4 +13,15 @@ import { settledDay } from '@/lib/council/session';
   console.log('\nbreakdowns.audience:');
   for (const r of p.thisWeek?.breakdowns?.audience ?? []) console.log(' ', r.key, '| roas', r.roas?.toFixed(2), '| spend₱', (r.spendCentavos / 100).toFixed(0), '| purchases', r.purchases);
   console.log('\nfunnel:', p.thisWeek?.funnel);
+  console.log('\nthisWeek.pacing:');
+  for (const r of p.thisWeek?.pacing ?? []) {
+    console.log(' ', r.scope, r.name, '|', r.budgetType, '| budget₱', r.dailyBudgetCentavos != null ? (r.dailyBudgetCentavos / 100).toFixed(0) : 'null',
+      '| avgDailySpend₱', (r.avgDailySpendCentavos / 100).toFixed(0), '| util', r.utilizationPct != null ? `${(r.utilizationPct * 100).toFixed(0)}%` : 'null',
+      '| underDelivering', r.underDelivering, '| budgetCapped', r.budgetCapped);
+  }
+  console.log('\ncontext.dayOfWeek:');
+  for (const r of p.context?.dayOfWeek ?? []) {
+    console.log(' ', r.weekday, '| cpp₱', r.cppCentavos != null ? (r.cppCentavos / 100).toFixed(0) : 'null',
+      '| roas', r.roas?.toFixed(2) ?? 'null', '| spendShare', r.spendSharePct != null ? `${(r.spendSharePct * 100).toFixed(1)}%` : 'null');
+  }
 })();

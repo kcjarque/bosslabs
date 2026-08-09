@@ -20,6 +20,7 @@ import { getCampaignStructures, getRecentChanges, getAdStatuses, type CampaignSt
 import { getWeekBreakdowns, type Row as BreakdownRow, type Funnel as WeekFunnel } from './breakdowns';
 import { confidenceFor, type Confidence } from './confidence';
 import { detectMalfunctions, type Malfunction } from './malfunction';
+import { utilization } from './pacing';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -115,6 +116,28 @@ export type CouncilPack = {
      *  Zeros on fetch failure. */
     funnel: WeekFunnel;
     northStar: { currentDailyNetCentavos: number; targetNetSpendCentavos: number; netGapCentavos: number };
+    /** Pacing / budget utilization (spec §3c) — this week's average daily
+     *  spend joined to the declared budget, per campaign (CBO/ADVANTAGE+) or
+     *  per ad set (ABO — budget sits there instead). Tells "weak results"
+     *  apart from "under-delivering" (or "budget-capped, ready to scale").
+     *  Best-effort: [] when `structure` is empty (Meta unreachable). */
+    pacing: Array<{
+      scope: 'campaign' | 'adset'; name: string; budgetType: CampaignStructure['budgetType'];
+      dailyBudgetCentavos: number | null; avgDailySpendCentavos: number;
+      utilizationPct: number | null; underDelivering: boolean; budgetCapped: boolean;
+    }>;
+  };
+  /** Day-of-week rhythm (spec §3d) — per-weekday (Mon..Sun) blended
+   *  cpp/roas/spend-share over the 4-week CONTEXT window (last ~28 days ≤
+   *  asOfSettled, ~4 samples/weekday), NOT the single analyzed week. Same
+   *  CONTEXT status as weeklyTrend/pastPlans/etc: useful only to spot RHYTHM
+   *  ("weekends run pricier"), never a per-ad cut reason — capped at
+   *  DIRECTIONAL confidence by construction (§0b minimum-signal rule; too
+   *  few samples per weekday to ever be SOLID). roas a ratio; spendSharePct
+   *  a 0..1 fraction of the window's total spend (both null on 0 spend that
+   *  weekday). */
+  context: {
+    dayOfWeek: Array<{ weekday: string; cppCentavos: number | null; roas: number | null; spendSharePct: number | null }>;
   };
   /** Deterministic "is it just broken?" pre-check (spec §0b Stage 1) —
    *  DISAPPROVED/REVENUE_CLIFF/LP_COLLAPSE candidates the council must rule
@@ -402,6 +425,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
   const since21 = isoDaysBefore(asOfSettled, 20); // 21-day trailing window, inclusive of asOfSettled
   const since14 = isoDaysBefore(asOfSettled, 13); // 14-day trailing window, inclusive of asOfSettled
+  const since28 = isoDaysBefore(asOfSettled, 27); // 28-day (4-week) trailing window for context.dayOfWeek (§3d)
 
   // Single pass over every fetched ad series: computes windowsFor once per
   // ad, folding the result into BOTH the campaign totals (every ad
@@ -475,11 +499,15 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   //  - spendByWeek: ad spend per ISO week, feeding cohorts[].adSpendCentavos
   //    below — this also means the CURRENT (in-progress) cohort week only
   //    counts its settled days so far, not the full calendar week.
+  //  - weekdayAgg: same days, additionally bucketed by weekday (Mon=0..Sun=6)
+  //    when within the trailing 28-day window — feeds context.dayOfWeek (§3d).
   const distinctDates = new Set<string>();
   const spendByWeek = new Map<string, number>();
   // Rich per-ISO-week aggregate for the 4-week trend (spend/impr/clicks/purch).
   type WeekAgg = { spend: number; impr: number; clicks: number; purch: number; rev: number };
   const weekAgg = new Map<string, WeekAgg>();
+  type WeekdayAgg = { spend: number; purch: number; rev: number };
+  const weekdayAgg = new Map<number, WeekdayAgg>();
   for (const s of series) {
     for (const d of s.days) {
       if (d.date > asOfSettled) continue;
@@ -493,10 +521,35 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
       a.purch += d.purchases;
       a.rev += d.revenueCentavos;
       weekAgg.set(wk, a);
+
+      if (d.date >= since28) {
+        const dow = new Date(`${d.date}T00:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
+        const idx = dow === 0 ? 6 : dow - 1; // Mon=0..Sun=6
+        const wd = weekdayAgg.get(idx) ?? { spend: 0, purch: 0, rev: 0 };
+        wd.spend += d.spendCentavos;
+        wd.purch += d.purchases;
+        wd.rev += d.revenueCentavos;
+        weekdayAgg.set(idx, wd);
+      }
     }
   }
   const dataMode: 'A' | 'B' = distinctDates.size >= 14 ? 'B' : 'A';
   const cohorts = buildCohorts(signups, asOfSettled, spendByWeek);
+
+  // Day-of-week rhythm (§3d) — Mon..Sun labels over the 28-day window just
+  // aggregated above. spendSharePct is each weekday's share of the WINDOW's
+  // total spend (0..1), not of any single week.
+  const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const totalWindowSpend = Array.from(weekdayAgg.values()).reduce((a, w) => a + w.spend, 0);
+  const dayOfWeek: CouncilPack['context']['dayOfWeek'] = WEEKDAY_LABELS.map((weekday, idx) => {
+    const w = weekdayAgg.get(idx) ?? { spend: 0, purch: 0, rev: 0 };
+    return {
+      weekday,
+      cppCentavos: w.purch > 0 ? w.spend / w.purch : null,
+      roas: w.spend > 0 ? w.rev / w.spend : null,
+      spendSharePct: totalWindowSpend > 0 ? w.spend / totalWindowSpend : null,
+    };
+  });
 
   // Last 4 ISO weeks (oldest → newest) — the month arc for the weekly analysis.
   const currentWeek = weekStartOf(asOfSettled);
@@ -565,6 +618,41 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     targetNetSpendCentavos: targetNetSpendCentavos(econ.dailyNetTargetCentavos, econ.targetRoas, econ.processingFeePct),
     netGapCentavos: netGapCentavos(Math.round(currentDailyNet), econ.dailyNetTargetCentavos),
   };
+
+  // Pacing / budget utilization (§3c) — this week's actual spend per
+  // campaign/ad set, joined to the structure's declared budget. ABO budgets
+  // live on the ad set; CBO/ADVANTAGE+/unknown on the campaign. Best-effort:
+  // `structure` is [] when Meta is unreachable, so this naturally becomes [].
+  const spendByCampaignName = new Map<string, number>();
+  const spendByAdSetName = new Map<string, number>();
+  for (const { s, w } of weekAds) {
+    spendByCampaignName.set(s.campaignName, (spendByCampaignName.get(s.campaignName) ?? 0) + w.spend);
+    spendByAdSetName.set(s.adsetName, (spendByAdSetName.get(s.adsetName) ?? 0) + w.spend);
+  }
+  const pacing: CouncilPack['thisWeek']['pacing'] = [];
+  for (const c of structure) {
+    if (c.budgetType === 'ABO') {
+      for (const as of c.adSets) {
+        const avgDailySpendCentavos = (spendByAdSetName.get(as.name) ?? 0) / days;
+        const u = utilization(avgDailySpendCentavos, as.dailyBudgetCentavos);
+        pacing.push({
+          scope: 'adset', name: as.name, budgetType: c.budgetType,
+          dailyBudgetCentavos: as.dailyBudgetCentavos, avgDailySpendCentavos,
+          utilizationPct: u.pct, underDelivering: u.underDelivering, budgetCapped: u.budgetCapped,
+        });
+      }
+    } else {
+      // CBO / ADVANTAGE+ / unknown: budget sits on the campaign.
+      const avgDailySpendCentavos = (spendByCampaignName.get(c.name) ?? 0) / days;
+      const u = utilization(avgDailySpendCentavos, c.dailyBudgetCentavos);
+      pacing.push({
+        scope: 'campaign', name: c.name, budgetType: c.budgetType,
+        dailyBudgetCentavos: c.dailyBudgetCentavos, avgDailySpendCentavos,
+        utilizationPct: u.pct, underDelivering: u.underDelivering, budgetCapped: u.budgetCapped,
+      });
+    }
+  }
+
   // This-week blended CPP (centavos) — the confidenceFor denominator for every
   // ad below; confidenceFor itself falls back to the ₱650 target when this is
   // null/0 (no purchases yet this week).
@@ -601,6 +689,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     breakdowns: { placement: weekBreakdowns.placement, audience: weekBreakdowns.audience },
     funnel: weekBreakdowns.funnel,
     northStar,
+    pacing,
   };
 
   return {
@@ -608,7 +697,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     weekStart, weekEnd, settledCutoff,
     ads, campaign, thisWeek, malfunctions, cohorts,
     structure, recentChanges, winningCreatives,
-    weeklyTrend, pastPlans,
+    weeklyTrend, pastPlans, context: { dayOfWeek },
     priors, weights, openPredictions, lastVerdict,
     settings: { ...settings, economics: econ },
     backEnd: { webinarIncomeCentavos, dfyIncomeCentavos },
