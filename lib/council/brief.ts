@@ -202,7 +202,7 @@ export type StagedBrief = {
     currentDailyNetCentavos: number; netGapCentavos: number; targetNetSpendCentavos: number;
     dailyNetTargetCentavos: number; configured: boolean;
   } | null;
-  problems: Array<{ type: string; description: string; pesoImpact: number; confidence: string; evidence: string }>;
+  problems: Array<{ type: string; headline: string; description: string; pesoImpact: number; confidence: string; evidence: string }>;
   solutions: Array<{ fix: string }>;
   watchlist: Array<{ item: string }>;
 };
@@ -228,13 +228,14 @@ export function stagedBriefFromVerdict(verdict: unknown): StagedBrief | null {
       const ev = (typeof o.evidence === 'object' && o.evidence !== null ? o.evidence : {}) as Record<string, unknown>;
       return {
         type: typeof o.type === 'string' ? o.type : '',
+        headline: typeof o.headline === 'string' ? o.headline : '',
         description: typeof o.description === 'string' ? o.description : '',
         pesoImpact: typeof o.pesoImpact === 'number' ? o.pesoImpact : 0,
         confidence: typeof ev.confidence === 'string' ? ev.confidence : '',
         evidence: typeof ev.text === 'string' ? ev.text : '',
       };
     })
-    .filter((p) => p.description);
+    .filter((p) => p.headline || p.description);
 
   const solutions = solutionsRaw
     .map((s) => {
@@ -269,10 +270,20 @@ export function stagedBriefFromVerdict(verdict: unknown): StagedBrief | null {
   };
 }
 
-/** Truncate to `n` chars with an ellipsis — keeps the briefing tight (§5a). */
+/** Truncate to `n` chars with an ellipsis, cutting at a WORD boundary so it
+ *  never ends mid-word ("sitting well u…"). Keeps the briefing tight (§5a). */
 function trimTo(s: string, n: number): string {
   const t = s.trim();
-  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > n * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+}
+
+/** Money for the owner's eye — round to ₱k above 1,000 (₱135,000 → ₱135k). */
+function pesoK(n: number): string {
+  const v = Math.round(n);
+  return v >= 1000 ? `₱${Math.round(v / 1000).toLocaleString()}k` : `₱${v.toLocaleString()}`;
 }
 
 /** §5a section 1 — decision first: the one-line action headline + the short
@@ -312,14 +323,23 @@ function problemsBlock(problems: StagedBrief['problems']): string | null {
   if (problems.length === 0) return null;
   const sorted = [...problems].sort((a, b) => b.pesoImpact - a.pesoImpact);
   const rows = sorted.slice(0, 4).map((p, i) => {
-    const type = p.type ? `[${escHtml(p.type)}] ` : '';
-    const impact = p.pesoImpact > 0 ? ` <i>(~₱${Math.round(p.pesoImpact).toLocaleString()}/wk)</i>` : '';
-    const dir = p.confidence === 'DIRECTIONAL' ? ' ⚠ directional' : '';
-    const ev = p.evidence ? `\n   ${escHtml(trimTo(collapseNewlines(p.evidence), 160))}` : '';
-    return `${i + 1}. ${type}${escHtml(p.description)}${impact}${dir}${ev}`;
+    // Bold plain headline → one plain "so what" line → clean money line. The
+    // raw evidence.text (variable names / ad IDs) is deliberately NOT shown —
+    // it stays in the DB for the app. Old rows without a headline fall back to
+    // the description as the headline.
+    const headline = collapseNewlines(p.headline || p.description);
+    const lines = [`<b>${i + 1}. ${escHtml(headline)}</b>`];
+    if (p.headline && p.description && p.description.trim() !== p.headline.trim()) {
+      lines.push(escHtml(collapseNewlines(p.description)));
+    }
+    const tags: string[] = [];
+    if (p.pesoImpact > 0) tags.push(`≈ ${pesoK(p.pesoImpact)}/week at stake`);
+    if (p.confidence === 'DIRECTIONAL') tags.push('early read');
+    if (tags.length) lines.push(`<i>${tags.join(' · ')}</i>`);
+    return lines.join('\n');
   });
-  const more = sorted.length > 4 ? `\n…and ${sorted.length - 4} more in the app.` : '';
-  return `🚨 <b>What’s costing you</b>\n${rows.join('\n')}${more}`;
+  const more = sorted.length > 4 ? `\n\n…and ${sorted.length - 4} more in the app.` : '';
+  return `🚨 <b>What’s costing you</b>\n\n${rows.join('\n\n')}${more}`;
 }
 
 /** §5a section 4 — the executable fixes (earn-more / spend-less), one per
@@ -346,9 +366,12 @@ function degradedBlock(s: StagedBrief): string {
     `⚠️ <b>Analysis incomplete — Pass 1 failed, no verdict this week.</b>\n` +
     `The council couldn’t find the problems this run — re-run the weekly analysis.`;
   if (s.problems.length === 0) return head;
-  const rows = s.problems
-    .slice(0, 5)
-    .map((p) => `• ${escHtml(p.description)}${p.evidence ? ` — ${escHtml(trimTo(collapseNewlines(p.evidence), 140))}` : ''}`);
+  const rows = s.problems.slice(0, 5).map((p) => {
+    const h = collapseNewlines(p.headline || p.description);
+    const detail = p.headline && p.description && p.description.trim() !== p.headline.trim()
+      ? ` — ${trimTo(collapseNewlines(p.description), 140)}` : '';
+    return `• ${escHtml(h)}${escHtml(detail)}`;
+  });
   return `${head}\n\n🚨 <b>Auto-detected (still worth checking):</b>\n${rows.join('\n')}`;
 }
 

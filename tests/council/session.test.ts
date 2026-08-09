@@ -83,7 +83,7 @@ function validSession(over: Record<string, unknown> = {}) {
       hook: 'Paulit-ulit bang nawawalan ka ng staff?', why: 'Testimonial angle is winning but resto-owner persona is untested',
     }],
     problems: [{
-      type: 'audience', description: 'CPM climbing across the account', severity: 'medium', pesoImpact: 8000,
+      type: 'audience', headline: 'Reaching people is getting pricier', description: 'CPM climbing across the account', severity: 'medium', pesoImpact: 8000,
       evidence: { confidence: 'DIRECTIONAL', text: 'CPM up 18% week over week' },
     }],
     solutions: [{

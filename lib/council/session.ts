@@ -41,7 +41,12 @@ type ProblemType =
  *  pesoImpact — whole PESOS, not centavos — is what ranking and the §5a
  *  severity floor actually key off. */
 type Problem = {
-  type: ProblemType; description: string; severity: 'high' | 'medium' | 'low';
+  type: ProblemType;
+  /** Plain-English title an owner reads at a glance — ≤ ~10 words, NO numbers,
+   *  NO jargon (e.g. "Your top-spending ad is fading"). This is what the weekly
+   *  brief shows in bold; `description` is the one-line so-what under it. */
+  headline: string;
+  description: string; severity: 'high' | 'medium' | 'low';
   pesoImpact: number; evidence: { confidence: Confidence; text: string };
 };
 /** Stage-4 fix for one confirmed (above-floor) problem. `problem` names
@@ -138,7 +143,9 @@ const OUTPUT_DISCIPLINE_RULE =
   '- CITE ONLY THE 1-3 NUMBERS THAT DRIVE THE CALL. The rest of the pack is reserve — reference it only if it changes the recommendation or the owner asks. NO METRIC-DUMPING: say "Cut FB Reels — it is eating ₱62k at 1.29x while Feed does 2.28x; move it to Feed + Stories," never a table of every placement. Having 10 data points is for KNOWING what to look at, not for reciting all 10.\n' +
   '- SEVERITY FLOOR: a problem whose plausible impact is < ~5% of pack.thisWeek.campaign.spend does NOT belong in problems/solutions/synthesis — put it in "watchlist": [{item, why}] instead. The main briefing carries only above-floor problems, ranked by pesoImpact, highest first.\n' +
   '- SCALING-VELOCITY GUARDRAIL: budget raises of more than ~20-30%/day risk re-entering learning, and any significant edit resets learning — so scale winners in STEPS across several days, never overnight, and say so in the fix/expectedEffect.\n' +
-  '- Name the scenario (scaling / bleeding / stabilizing / launching) and advise for THAT situation, at THIS budget scale.';
+  '- Name the scenario (scaling / bleeding / stabilizing / launching) and advise for THAT situation, at THIS budget scale.\n' +
+  '- PLAIN LANGUAGE (the owner reads this on their PHONE, not an analyst dashboard). Every OWNER-FACING field — each problem\'s headline + description, each solution\'s fix, each watchlist item, and synthesis — must be plain business English a non-technical owner understands at a glance. NEVER put internal field/variable names (spend7, cpp7, cppPrior7, roas7, freq7, linkCtr, utilizationPct, viewToPurchase), ad IDs (the long 120... numbers), or raw stat dumps in these fields. Those raw numbers belong ONLY in problems[].evidence.text — the technical record for the app, which the owner never sees. State AT MOST 1-2 numbers per point, in plain words: "cost per buyer is up 27% this week", "using only about half its daily budget", "eating ~₱39k/week" — NEVER "cpp7=₱78,588 vs cppPrior7=₱61,647 (+27%)".\n' +
+  '- PROBLEM SHAPE (corporate one-pager, NOT an info dump): each problem is a bold plain-English "headline" (≤ ~10 words, NO numbers, NO jargon — e.g. "Your top-spending ad is fading", "Two campaigns are underspending their budget") PLUS a one-sentence "description" that says what it means and why it matters in plain words (at most 1-2 numbers, stated plainly). Keep evidence.text as the raw technical proof (variable names/IDs OK there — it is not shown to the owner). Headline = the WHAT at a glance; description = the SO-WHAT; evidence.text = the proof for the record.';
 
 /** Unit-conventions rule (controller directive) — resolves a reviewer-
  *  flagged 100x hazard: doctrine §5.2's own example JSON shows
@@ -322,12 +329,12 @@ function normalizeProblems(x: unknown): Problem[] {
       const o = (typeof p === 'object' && p !== null ? p : {}) as Record<string, unknown>;
       const ev = (typeof o.evidence === 'object' && o.evidence !== null ? o.evidence : {}) as Record<string, unknown>;
       return {
-        type: o.type, description: asStr(o.description), severity: o.severity,
+        type: o.type, headline: asStr(o.headline), description: asStr(o.description), severity: o.severity,
         pesoImpact: typeof o.pesoImpact === 'number' ? o.pesoImpact : 0,
         evidence: { confidence: ev.confidence, text: asStr(ev.text) },
       } as Problem;
     })
-    .filter((p) => p.description);
+    .filter((p) => p.description || p.headline);
 }
 function normalizeSolutions(x: unknown): Solution[] {
   if (!Array.isArray(x)) return [];
@@ -492,7 +499,7 @@ export async function runCouncilSession(
   // and safely defaults exactly this class of gap regardless of prompt
   // wording.
   const user = JSON.stringify({ trigger_reasons: triggerReasons, pack,
-    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), creative_ideas:[{concept:string, angle:string, persona:string, hook:string, why:string}] (2-3 net-new creative concepts to test, grounded in winningCreatives + the untested tag/persona whitespace), problems:[{type:"malfunction"|"creative"|"fatigue"|"audience"|"offer"|"setup"|"algorithm"|"market", description:string, severity:"high"|"medium"|"low", pesoImpact:number, evidence:{confidence:"SOLID"|"DIRECTIONAL"|"NOISE", text:string}}] (§0b Stage 1 — every ABOVE-floor problem found this week, ranked by pesoImpact descending; below-floor or NOISE-tier items go in watchlist instead, never here — [] on a genuinely healthy week per the NULL-RESULT LAW), solutions:[{problem:string, fix:string, lever:string, expectedEffect:string}] (§0b Stage 4 — one concrete, structure-aware fix per confirmed problem; "problem" must match the description of the problems[] entry it addresses), synthesis:string (§0b Stage 5 — one cohesive briefing paragraph ranked by business impact; on a healthy week, plainly say "nothing needs fixing this week" per the NULL-RESULT LAW), watchlist:[{item:string, why:string}] (below-floor / NOISE-tier items kept OUT of problems — on a healthy week this still names the ONE thing to watch), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer. pesoImpact is a plain PESO number (e.g. 5000 means ₱5,000/week), NOT centavos — do not multiply by 100.' });
+    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), creative_ideas:[{concept:string, angle:string, persona:string, hook:string, why:string}] (2-3 net-new creative concepts to test, grounded in winningCreatives + the untested tag/persona whitespace), problems:[{type:"malfunction"|"creative"|"fatigue"|"audience"|"offer"|"setup"|"algorithm"|"market", headline:string (plain-English title, <=~10 words, NO numbers, NO jargon — e.g. "Your top-spending ad is fading"), description:string (ONE plain-English sentence — the so-what an owner reads on their phone; at most 1-2 numbers in plain words; NEVER variable names like cpp7/spend7 or ad IDs), severity:"high"|"medium"|"low", pesoImpact:number, evidence:{confidence:"SOLID"|"DIRECTIONAL"|"NOISE", text:string (the TECHNICAL proof for the record — raw numbers/variable names/ad IDs allowed HERE only; the owner never sees this field)}}] (§0b Stage 1 — every ABOVE-floor problem found this week, ranked by pesoImpact descending; below-floor or NOISE-tier items go in watchlist instead, never here — [] on a genuinely healthy week per the NULL-RESULT LAW), solutions:[{problem:string, fix:string, lever:string, expectedEffect:string}] (§0b Stage 4 — one concrete, structure-aware fix per confirmed problem; "problem" must match the description of the problems[] entry it addresses), synthesis:string (§0b Stage 5 — one cohesive briefing paragraph ranked by business impact; on a healthy week, plainly say "nothing needs fixing this week" per the NULL-RESULT LAW), watchlist:[{item:string, why:string}] (below-floor / NOISE-tier items kept OUT of problems — on a healthy week this still names the ONE thing to watch), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer. pesoImpact is a plain PESO number (e.g. 5000 means ₱5,000/week), NOT centavos — do not multiply by 100.' });
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -678,7 +685,7 @@ function validateStageProblems(parsed: unknown): StageProblems {
  *  change between passes), reusing the exact pesoImpact unit-convention
  *  sentence from runCouncilSession's own schema text. */
 const STAGE_PROBLEMS_SCHEMA =
-  'Respond with ONLY a JSON object: {problems:[{type:"malfunction"|"creative"|"fatigue"|"audience"|"offer"|"setup"|"algorithm"|"market", description:string, severity:"high"|"medium"|"low", pesoImpact:number, evidence:{confidence:"SOLID"|"DIRECTIONAL"|"NOISE", text:string}}], watchlist:[{item:string, why:string}]}. ' +
+  'Respond with ONLY a JSON object: {problems:[{type:"malfunction"|"creative"|"fatigue"|"audience"|"offer"|"setup"|"algorithm"|"market", headline:string (plain-English title, <=~10 words, NO numbers, NO jargon — e.g. "Your top-spending ad is fading"), description:string (ONE plain-English sentence — the so-what an owner reads on their phone; at most 1-2 numbers in plain words; NEVER variable names like cpp7/spend7 or ad IDs), severity:"high"|"medium"|"low", pesoImpact:number, evidence:{confidence:"SOLID"|"DIRECTIONAL"|"NOISE", text:string (the TECHNICAL proof for the record — raw numbers/variable names/ad IDs allowed HERE only; the owner never sees this field)}}], watchlist:[{item:string, why:string}]}. ' +
   'pesoImpact is a plain PESO number (e.g. 5000 means ₱5,000/week), NOT centavos — do not multiply by 100. watchlist entries are things you are not confident enough to call a problem yet, or that are below the severity floor — always at least 1 entry, even when problems is non-empty.';
 
 /** Pass 4's output contract — the same fields runCouncilSession's schema
@@ -912,7 +919,10 @@ export function degradedSession(pack: CouncilPack, reason: string): SessionJson 
   // them; pesoImpact 0 (a broken pixel / disapproved ad often can't be sized).
   const problems: Problem[] = pack.malfunctions.map((m) => ({
     type: 'malfunction',
-    description: `${m.adName}: ${m.kind}`,
+    headline: `${m.adName} ${m.kind === 'DISAPPROVED' ? 'is disapproved and not running'
+      : m.kind === 'REVENUE_CLIFF' ? 'suddenly stopped converting'
+      : 'may have a broken landing page'}`,
+    description: m.detail,
     severity: 'high',
     pesoImpact: 0,
     evidence: { confidence: 'SOLID', text: m.detail },

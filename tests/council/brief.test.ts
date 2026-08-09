@@ -198,8 +198,8 @@ const STAGED_VERDICT = {
   synthesis: 'FB Reels is dragging blended ROAS; shift its budget to Feed and scale the winners in steps.',
   northStar: { currentDailyNetCentavos: 2_600_000, netGapCentavos: 2_400_000, targetNetSpendCentavos: 1_800_000, dailyNetTargetCentavos: 5_000_000, configured: true },
   problems: [
-    { type: 'audience', description: 'FB Reels dragging ROAS', severity: 'high', pesoImpact: 18000, evidence: { confidence: 'SOLID', text: '₱62k at 1.29x vs Feed 2.28x' } },
-    { type: 'offer', description: 'Checkout leak', severity: 'medium', pesoImpact: 9000, evidence: { confidence: 'DIRECTIONAL', text: '40% add-to-cart, 12% buy' } },
+    { type: 'audience', headline: 'FB Reels is draining budget', description: 'FB Reels returns far less than Feed while eating a third of spend.', severity: 'high', pesoImpact: 18000, evidence: { confidence: 'SOLID', text: 'spend7=₱62,000 roas7=1.29 vs Feed 2.28 (120xxx)' } },
+    { type: 'offer', headline: 'Checkout is leaking buyers', description: 'People add to cart but far fewer finish paying.', severity: 'medium', pesoImpact: 9000, evidence: { confidence: 'DIRECTIONAL', text: 'cvr7 40% add-to-cart, 12% buy' } },
   ],
   solutions: [
     { fix: 'Exclude FB Reels placement; move budget to Feed + Stories.' },
@@ -224,14 +224,19 @@ test('B2: staged verdict renders sections 1-5 in order with the right content', 
   assert.match(out, /FB Reels is dragging blended ROAS/);       // §1 synthesis
   assert.match(out, /Toward ₱50,000\/day net/);                 // §2 north star target
   assert.match(out, /₱24,000 short/);                           // §2 gap
-  assert.match(out, /FB Reels dragging ROAS/);                  // §3 problem
-  assert.match(out, /~₱18,000\/wk/);                            // §3 peso impact
-  assert.match(out, /⚠ directional/);                           // §3 DIRECTIONAL flag
+  assert.match(out, /FB Reels is draining budget/);            // §3 plain HEADLINE (not the description or raw metrics)
+  assert.match(out, /₱18k\/week at stake/);                    // §3 impact, rounded to ₱k plainly
+  assert.match(out, /early read/);                             // §3 DIRECTIONAL rendered as plain "early read"
   assert.match(out, /Exclude FB Reels placement/);             // §4 solution
   assert.match(out, /Watch \(2\):/);                            // §5 watchlist count
   // staged supersedes the legacy action/plan blocks
   assert.doesNotMatch(out, /Do this today/);
   assert.doesNotMatch(out, /<b>The plan<\/b>/);
+  // READABILITY (the whole point): no raw evidence dump, variable names, ad IDs,
+  // bracket type-tags, or jargon leak into the owner-facing brief.
+  assert.doesNotMatch(out, /spend7|cpp7|cvr7|roas7|120xxx/);
+  assert.doesNotMatch(out, /\[audience\]|\[offer\]/);
+  assert.doesNotMatch(out, /⚠ directional/);
 });
 
 test('B2: legacy session (no staged verdict) renders the original plan/action shape', () => {
