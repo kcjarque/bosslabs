@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { gradeAd } from '../../lib/council/verdict-engine';
 import type { AdSeries, AdDay } from '../../lib/council/types';
 
-const SETTINGS = { brand: 'BOSS' as const, mode: 'recommend' as const, targetCppCentavos: 50000 };
+const SETTINGS = {
+  brand: 'BOSS' as const, mode: 'recommend' as const, targetCppCentavos: 50000,
+  targetRoas: 2.0, breakevenRoas: 1.04, processingFeePct: 0.035,
+  dailyNetTargetCentavos: 5000000, backEndNote: '',
+};
 
 function day(date: string, over: Partial<AdDay> = {}): AdDay {
   return { date, spendCentavos: 100000, impressions: 10000, reach: 8000, frequency: 1.2,
