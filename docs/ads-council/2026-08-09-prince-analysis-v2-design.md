@@ -35,6 +35,62 @@ sees everything a Fortune-500 buyer would, then says only what a great one would
 
 ---
 
+## 0b. The analysis method — how Prince reasons (5 stages)
+
+Every analysis follows this flow. The council **cross-checks at each stage** — no
+stage's output is trusted until it's been challenged. This supersedes the old
+single-pass "diagnose one lever, then prescribe."
+
+**Stage 1 — Find & classify ALL problems (divergent first).** Braindump every
+problem visible across the account, then tag each by TYPE — because the fix
+depends on the type:
+- **Malfunction (rule out FIRST)** — something *broken*: disapproved ad
+  (`WITH_ISSUES`), pixel/tracking not firing (spend continues but purchases/
+  revenue cliff to ~0), landing page down (lpViewRate collapses), any metric
+  falling off a cliff overnight. A senior buyer asks "is it just broken?" before
+  optimizing anything — never prescribe a creative fix for a tracking outage.
+- **Creative** — ad isn't earning the click/watch (link-CTR, hook/hold).
+- **Fatigue** — a working ad wearing out (CTR↓ + frequency↑).
+- **Audience** — expensive to reach the right people (CPM, placement, demo).
+- **Offer / post-click** — clicks don't convert (CVR, LP-view→purchase).
+- **Setup / structure** — misconfig (wrong optimization goal, budget too low to
+  exit learning, CBO starving a winner, wrong objective for the goal).
+- **Algorithm / delivery** — learning not resolving, spend mis-allocating,
+  Advantage+ mis-delivering.
+
+**Stage 2 — Identify which data matters** to each problem (don't boil the ocean):
+map each problem to its diagnostic metric(s) — creative→link-CTR/hook,
+fatigue→CTR-trend+freq, audience→CPM/placement/demo, offer→CVR/funnel,
+setup→structure/optimization, malfunction→status/metric-cliff.
+
+**Stage 3 — Find the evidence** where it matters: the specific proof — the
+placement dragging, the creative context, the demo segment, the funnel step that
+leaks, the day a metric cliffed. Real numbers, not vibes.
+
+**Stage 4 — Provide solutions**: per confirmed problem, the concrete executable
+fix, framed **earn-more or spend-less**, structure-aware.
+
+**Stage 5 — Full analysis**: synthesize into one cohesive briefing, ranked by
+business impact, honest dissent on record.
+
+**Staged council (Hybrid — decided):**
+- **Weekly Run Analysis (Opus):** a genuine multi-pass council. Each stage is its
+  own pass where the experts cross-examine the *previous* stage's output before it
+  advances (problems challenged before data is picked; evidence challenged before
+  solutions). Real rigor. Est ~₱300/run (~₱1.2k/mo — ~0.1% of ad spend).
+- **/prince Q&A (Sonnet):** ONE fast pass using the SAME 5-stage structure
+  (still find→classify→evidence→solve) — keeps answers snappy (~seconds).
+- **Daily pulse:** unchanged (deterministic, no LLM).
+
+Implementation note: `SessionJson` changes to carry the stages —
+`problems:[{type, description, severity, evidence}]` → `solutions:[…]` →
+synthesis — and `session.ts` gains a staged orchestrator for the weekly path. A
+small deterministic **malfunction pre-check** (from `WITH_ISSUES` status + a
+purchases/revenue-cliff scan of the series) flags candidates so the council never
+misses an obvious outage.
+
+---
+
 ## 1. Problem
 
 Prince (the weekly Run Analysis on Opus, the `/prince` Q&A on Sonnet, and the
@@ -287,12 +343,19 @@ The whole point of §0's persona. Added to BOTH prompts:
   (age/gender/region) + micro-conversion (ATC/IC) weekly fetches.
 - `lib/meta-ads.ts` — objective/optimization/bid + `attribution_spec` on
   `getCampaignStructures`; ADVANTAGE+ detection fix (GUIDED_CREATION).
-- `lib/council/session.ts` + `lib/council/prince.ts` — **§0 persona + §5a output
-  discipline**, SCOPE law, ROAS co-equal, objective rules, pacing/day-of-week/
-  placement/audience/funnel rules, relabeled context.
+- `lib/council/session.ts` — **§0b 5-stage method + staged multi-pass council**
+  (weekly orchestrator: one cross-examined pass per stage), new `SessionJson`
+  shape (`problems[{type,description,severity,evidence}]` → `solutions` →
+  synthesis), **§0 persona + §5a output discipline**, SCOPE law, ROAS co-equal,
+  objective rules, pacing/day-of-week/placement/audience/funnel rules, relabeled
+  context.
+- `lib/council/prince.ts` — same persona + 5-stage method, but SINGLE fast pass.
+- **`lib/council/malfunction.ts` (new, small)** — deterministic pre-check:
+  `WITH_ISSUES` ads + purchases/revenue-cliff scan → candidate outages the
+  council must address first.
 - `lib/council/brief.ts` + `pipeline.ts` — yesterday ROAS in pulse; Mon–Sun
-  cohort alignment.
-- Tests/factories updated for new fields.
+  cohort alignment; run the weekly staged council instead of the single call.
+- Tests/factories updated for new fields + the staged flow.
 
 ## 8. Verification
 - Typecheck + build clean.
@@ -303,3 +366,6 @@ The whole point of §0's persona. Added to BOTH prompts:
 - Dry-run one `/prince` question + one weekly session; eyeball the §0/§5a persona:
   leads with the decision (earn-more/spend-less), cites only the 1–3 driving
   numbers, treats history as context, and does NOT metric-dump.
+- Weekly staged run: confirm it produces the 5 stages with real cross-examination
+  between them, classifies problems by type, and the malfunction pre-check flags
+  the 2 `WITH_ISSUES` ads (and any purchases/revenue cliff) as rule-out-first.
