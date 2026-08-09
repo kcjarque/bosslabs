@@ -48,6 +48,36 @@ test('omni_purchase + purchase co-occurring on one row is picked, not summed (Me
   assert.equal(fb.revenueCentavos, 40_864_900); // omni_purchase value * 100, not the sum
 });
 
+test('offsite_conversion.fb_pixel_purchase is used as a 3rd-priority fallback when omni_purchase/purchase are both absent (matches meta-sync.ts\'s purchasesOf/revenueOf)', () => {
+  const pixelOnly = [
+    {
+      publisher_platform: 'facebook',
+      spend: '1000',
+      actions: [{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '4' }],
+      action_values: [{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '3996' }],
+    },
+  ];
+  const out = aggregateBreakdown(pixelOnly as any, ['publisher_platform']);
+  const fb = out.find((r) => r.key === 'facebook')!;
+  assert.equal(fb.purchases, 4);
+  assert.equal(fb.revenueCentavos, 399_600); // 3996 * 100
+});
+
+test('purchase still outranks offsite_conversion.fb_pixel_purchase when both are present (priority order, not additive)', () => {
+  const both = [
+    {
+      publisher_platform: 'facebook',
+      spend: '1000',
+      actions: [{ action_type: 'purchase', value: '2' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' }],
+      action_values: [{ action_type: 'purchase', value: '1998' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '1998' }],
+    },
+  ];
+  const out = aggregateBreakdown(both as any, ['publisher_platform']);
+  const fb = out.find((r) => r.key === 'facebook')!;
+  assert.equal(fb.purchases, 2); // purchase (priority), not 2+2
+  assert.equal(fb.revenueCentavos, 199_800); // purchase value * 100, not the sum
+});
+
 test('rows sharing a key get summed, not overwritten', () => {
   const dup = [
     { publisher_platform: 'facebook', spend: '500', actions: [{ action_type: 'purchase', value: '2' }], action_values: [{ action_type: 'purchase', value: '1000' }] },

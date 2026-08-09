@@ -17,6 +17,7 @@ import { economicsFromSettings, dailyNetCentavos, targetNetSpendCentavos, netGap
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
 import { getCampaignStructures, getRecentChanges, getAdStatuses, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
+import { getWeekBreakdowns, type Row as BreakdownRow, type Funnel as WeekFunnel } from './breakdowns';
 import { confidenceFor, type Confidence } from './confidence';
 import { detectMalfunctions, type Malfunction } from './malfunction';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
@@ -102,6 +103,17 @@ export type CouncilPack = {
        *  a cut/scale/exclude. */
       confidence: Confidence;
     }>;
+    /** Placement + audience breakdowns for the week (spec §3e/§3f) — live
+     *  best-effort Meta pulls, BOSS-scoped (see breakdowns.ts's isBoss).
+     *  CONTEXT like everything else outside `ads[]`/`campaign` above: point
+     *  at a placement/segment lever, never the sole basis for a per-ad cut.
+     *  [] on fetch failure. */
+    breakdowns: { placement: BreakdownRow[]; audience: BreakdownRow[] };
+    /** Micro-conversion funnel for the week (spec §3g): linkClicks ->
+     *  lpViews -> addToCart -> initiateCheckout -> purchases, so a
+     *  mid-funnel leak can be named instead of a vague "CVR problem".
+     *  Zeros on fetch failure. */
+    funnel: WeekFunnel;
     northStar: { currentDailyNetCentavos: number; targetNetSpendCentavos: number; netGapCentavos: number };
   };
   /** Deterministic "is it just broken?" pre-check (spec §0b Stage 1) —
@@ -346,6 +358,10 @@ async function fetchPastPlans(brand: Brand): Promise<CouncilPack['pastPlans']> {
  *  concurrently. `getSignups()` is the one heavy call (~2k rows) — called
  *  exactly once, here. */
 export async function assemblePack(brand: Brand, asOfSettled: string): Promise<CouncilPack> {
+  // Mon–Sun bounds of the just-finished narrative week (spec §2) — derived
+  // up front (pure, no network) so the best-effort breakdowns call below AND
+  // the `thisWeek` narrative built further down can share one derivation.
+  const { weekStart, weekEnd, settledCutoff } = deriveWeekBounds(asOfSettled);
   const [series, verdicts, priors, settings, weights, signups,
     webinarIncomeCentavos, dfyIncomeCentavos, openPredictions, lastVerdict, creativeBriefs, pastPlans] = await Promise.all([
     getAdSeries(brand),
@@ -361,13 +377,18 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     getCreativeBriefs(brand),
     fetchPastPlans(brand),
   ]);
-  // Live structure (CBO/ABO/Advantage+ + learning phase) and the operational
-  // change feed — separate best-effort calls; a Meta hiccup must never sink the
-  // whole pack, so they're not in the Promise.all.
-  const [structure, recentChanges, adStatus] = await Promise.all([
+  // Live structure (CBO/ABO/Advantage+ + learning phase), the operational
+  // change feed, and the placement/audience/funnel breakdowns (spec
+  // §3e/§3f/§3g) — separate best-effort calls; a Meta hiccup must never sink
+  // the whole pack, so they're not in the Promise.all above.
+  const [structure, recentChanges, adStatus, weekBreakdowns] = await Promise.all([
     getCampaignStructures().catch(() => [] as CampaignStructure[]),
     getRecentChanges().catch(() => [] as AccountChange[]),
     getAdStatuses().catch(() => new Map<string, string>()),
+    getWeekBreakdowns(weekStart, weekEnd).catch(() => ({
+      placement: [] as BreakdownRow[], audience: [] as BreakdownRow[],
+      funnel: { linkClicks: 0, lpViews: 0, addToCart: 0, initiateCheckout: 0, purchases: 0 } as WeekFunnel,
+    })),
   ]);
   // Malfunction pre-check (spec §0b Stage 1) — pure/sync, but best-effort like
   // the Meta calls above: a bad series shape must never sink the whole pack.
@@ -518,8 +539,8 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   // Mon–Sun narrative week (spec §2/§3a) + §3h profit-anchor north star.
   // Blends `weekWindow` (imported, not recreated) across every ad with
   // delivery this week, alongside the settled-trailing-7 `ads`/`campaign`
-  // built above (kept as-is for back-compat).
-  const { weekStart, weekEnd, settledCutoff } = deriveWeekBounds(asOfSettled);
+  // built above (kept as-is for back-compat). weekStart/weekEnd/settledCutoff
+  // were already derived at the top of this function.
   const econ = economicsFromSettings(settings);
   const weekAds = series
     .map((s) => ({ s, w: weekWindow(s, weekStart, weekEnd, settledCutoff) }))
@@ -577,6 +598,8 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
       week: w,
       confidence: confidenceFor(w.purchases, w.spend, blendedThisWeekCppCentavos),
     })),
+    breakdowns: { placement: weekBreakdowns.placement, audience: weekBreakdowns.audience },
+    funnel: weekBreakdowns.funnel,
     northStar,
   };
 

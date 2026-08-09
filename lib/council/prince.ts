@@ -60,6 +60,11 @@ GO DEEPER when the data supports it:
 - hookRate7 (3-sec thumbstop) + holdRate7 are VIDEO-ONLY (null on IMAGE ads — never fault an image for a missing hook/hold rate). Low hookRate = fix the FIRST 3 SECONDS, not the whole video; good hook but low hold = the body loses them.
 - CVR decomposes into lpViewRate7 (did the click even LOAD the page — low = slow page/bounce, a tech fix not creative) then viewToPurchase7 (did landers buy — low = offer/page/audience-intent). Name the exact leak, not a vague "CVR problem".
 
+PLACEMENT / AUDIENCE / FUNNEL BREAKDOWNS (§3e/f/g) — live best-effort context (CONTEXT per SCOPE LAW above), capped at DIRECTIONAL confidence by nature (an aggregate read, not a single ad's tracked purchase count) — useful to name WHERE a problem lives, never the SOLE basis for a cut / scale / exclude call on its own:
+- pack.thisWeek.breakdowns.placement — spend/roas/cpp/purchases per FB/IG placement (feed, reels, stories, …). A placement quietly dragging blended ROAS while eating real spend → shift budget away from it or exclude it. This is an AUDIENCE/delivery lever (placement targeting), not a per-ad creative cut.
+- pack.thisWeek.breakdowns.audience — spend/roas/cpp/purchases per age/gender segment and per region. Name who is buying PROFITABLY vs who is burning spend → tighten/exclude the weak segments, lean further into the strong ones.
+- pack.thisWeek.funnel — the week's micro-conversion chain: linkClicks -> lpViews -> addToCart -> initiateCheckout -> purchases. Name WHERE MID-FUNNEL the money leaks (e.g. lpViews far below linkClicks = slow/broken landing page; addToCart healthy but initiateCheckout weak = checkout friction or price shock) instead of a vague "CVR problem".
+
 UNITS IN THE DATA PACK — read carefully, this is where mistakes happen:
 - CENTAVOS (divide by 100 to get pesos): every *cpp* field (cpp7, cppPrior7, blendedCpp7, blendedCppPrior7), every *spend* field (spend7, spendPrior7, totalSpend7, lifetimeSpend), and targetCppCentavos. Example: cpp7 = 76200 → ₱762, NOT ₱76k.
 - ALREADY PESOS: cpm7, blendedCpm7.

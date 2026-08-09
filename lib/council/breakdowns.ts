@@ -3,6 +3,7 @@
 // Best-effort throughout: any fetch failure degrades that section to
 // []/zeros, never throws. Raw-fetch pattern mirrors lib/council/meta-sync.ts
 // (lib/meta-ads.ts's graph()/token/version consts aren't exported).
+import { brandFromCampaignName } from './meta-sync';
 
 const GRAPH = process.env.META_GRAPH_VERSION || 'v23.0';
 const ACCOUNT = process.env.META_ADS_ACCOUNT_ID || '118264717761938';
@@ -36,6 +37,22 @@ function pickActionType(list: ActionVal[], typesByPriority: string[]): number {
   }
   return 0;
 }
+/** Purchase-like action types in priority order — matches meta-sync.ts's
+ *  purchasesOf/revenueOf exactly (omni_purchase, then plain purchase, then
+ *  the pixel fallback some ad sets report under instead of either). Shared
+ *  by every purchases/revenue read below (aggregateBreakdown's buckets +
+ *  getWeekBreakdowns' funnel) so they can never drift out of sync with each
+ *  other or with meta-sync.ts. */
+const PURCHASE_TYPES = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
+
+/** True when a row's campaign belongs to BOSS. This Meta account runs
+ *  BOSS + CONX + LEO campaigns together (confirmed live: ~300 ads
+ *  account-wide vs ~69 BOSS), so an unfiltered breakdown blends in the other
+ *  brands' spend. Mirrors meta-sync.ts's syncAdMetricsDaily row filter
+ *  ("launch scope: BOSS only", spec decision 2) exactly. */
+function isBoss(row: InsightRow): boolean {
+  return brandFromCampaignName(String(row.campaign_name ?? '')) === 'BOSS';
+}
 
 export type Row = {
   key: string;
@@ -68,8 +85,8 @@ export function aggregateBreakdown(rows: InsightRow[], keyFields: string[]): Row
     const key = keyFields.map((f) => String(row[f] ?? '')).join('/');
     const b = buckets.get(key) ?? { spendCentavos: 0, revenueCentavos: 0, purchases: 0 };
     b.spendCentavos += Math.round(num(row.spend) * 100);
-    b.revenueCentavos += Math.round(pickActionType(actionsOf(row, 'action_values'), ['omni_purchase', 'purchase']) * 100);
-    b.purchases += Math.round(pickActionType(actionsOf(row, 'actions'), ['omni_purchase', 'purchase']));
+    b.revenueCentavos += Math.round(pickActionType(actionsOf(row, 'action_values'), PURCHASE_TYPES) * 100);
+    b.purchases += Math.round(pickActionType(actionsOf(row, 'actions'), PURCHASE_TYPES));
     buckets.set(key, b);
   }
   return Array.from(buckets.entries()).map(([key, b]) => ({
@@ -118,13 +135,21 @@ export async function getWeekBreakdowns(
   weekStart: string,
   weekEnd: string,
 ): Promise<{ placement: Row[]; audience: Row[]; funnel: Funnel }> {
-  const spendFields = 'spend,actions,action_values';
-  const [placementRows, ageGenderRows, regionRows, funnelRows] = await Promise.all([
+  const spendFields = 'spend,actions,action_values,campaign_name';
+  const [placementRowsRaw, ageGenderRowsRaw, regionRowsRaw, funnelRowsRaw] = await Promise.all([
     fetchInsights(weekStart, weekEnd, spendFields, 'publisher_platform,platform_position'),
     fetchInsights(weekStart, weekEnd, spendFields, 'age,gender'),
     fetchInsights(weekStart, weekEnd, spendFields, 'region'),
-    fetchInsights(weekStart, weekEnd, 'actions,inline_link_clicks'),
+    fetchInsights(weekStart, weekEnd, 'actions,inline_link_clicks,campaign_name'),
   ]);
+
+  // This account is multi-brand (BOSS + CONX + LEO) — filter to BOSS BEFORE
+  // aggregating so every breakdown/funnel figure below matches BOSS's real
+  // spend, not the inflated whole-account total (see isBoss above).
+  const placementRows = placementRowsRaw.filter(isBoss);
+  const ageGenderRows = ageGenderRowsRaw.filter(isBoss);
+  const regionRows = regionRowsRaw.filter(isBoss);
+  const funnelRows = funnelRowsRaw.filter(isBoss);
 
   const placement = aggregateBreakdown(placementRows, ['publisher_platform', 'platform_position']);
   const audience = [
@@ -148,7 +173,7 @@ export async function getWeekBreakdowns(
         0,
       ),
     ),
-    purchases: Math.round(funnelRows.reduce((s, r) => s + pickActionType(actionsOf(r, 'actions'), ['omni_purchase', 'purchase']), 0)),
+    purchases: Math.round(funnelRows.reduce((s, r) => s + pickActionType(actionsOf(r, 'actions'), PURCHASE_TYPES), 0)),
   };
 
   return { placement, audience, funnel };
