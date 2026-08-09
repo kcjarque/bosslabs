@@ -108,6 +108,7 @@ export type CouncilPack = {
   weeklyTrend: Array<{
     weekStart: string; spendCentavos: number; cpp: number | null;
     cpm: number | null; linkCtr: number | null; cvr: number | null;
+    roas: number | null; revenue: number;
   }>;
   /** The last few analyses + whether their predictions came true — Prince
    *  grades his OWN past advice ("we cut X two weeks ago; did CPP drop?"). */
@@ -436,7 +437,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   const distinctDates = new Set<string>();
   const spendByWeek = new Map<string, number>();
   // Rich per-ISO-week aggregate for the 4-week trend (spend/impr/clicks/purch).
-  type WeekAgg = { spend: number; impr: number; clicks: number; purch: number };
+  type WeekAgg = { spend: number; impr: number; clicks: number; purch: number; rev: number };
   const weekAgg = new Map<string, WeekAgg>();
   for (const s of series) {
     for (const d of s.days) {
@@ -444,11 +445,12 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
       distinctDates.add(d.date);
       const wk = weekStartOf(d.date);
       spendByWeek.set(wk, (spendByWeek.get(wk) ?? 0) + d.spendCentavos);
-      const a = weekAgg.get(wk) ?? { spend: 0, impr: 0, clicks: 0, purch: 0 };
+      const a = weekAgg.get(wk) ?? { spend: 0, impr: 0, clicks: 0, purch: 0, rev: 0 };
       a.spend += d.spendCentavos;
       a.impr += d.impressions;
       a.clicks += d.linkClicks;
       a.purch += d.purchases;
+      a.rev += d.revenueCentavos;
       weekAgg.set(wk, a);
     }
   }
@@ -459,7 +461,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   const currentWeek = weekStartOf(asOfSettled);
   const weeklyTrend = [3, 2, 1, 0].map((back) => {
     const weekStart = isoDaysBefore(currentWeek, back * 7);
-    const a = weekAgg.get(weekStart) ?? { spend: 0, impr: 0, clicks: 0, purch: 0 };
+    const a = weekAgg.get(weekStart) ?? { spend: 0, impr: 0, clicks: 0, purch: 0, rev: 0 };
     return {
       weekStart,
       spendCentavos: a.spend,
@@ -467,6 +469,8 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
       cpm: a.impr > 0 ? (a.spend / 100 / a.impr) * 1000 : null,
       linkCtr: a.impr > 0 ? (a.clicks / a.impr) * 100 : null,
       cvr: a.clicks > 0 ? (a.purch / a.clicks) * 100 : null,
+      roas: a.spend > 0 ? a.rev / a.spend : null,
+      revenue: a.rev,
     };
   });
 
