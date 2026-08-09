@@ -202,8 +202,8 @@ const STAGED_VERDICT = {
     { type: 'offer', headline: 'Checkout is leaking buyers', description: 'People add to cart but far fewer finish paying.', severity: 'medium', pesoImpact: 9000, evidence: { confidence: 'DIRECTIONAL', text: 'cvr7 40% add-to-cart, 12% buy' } },
   ],
   solutions: [
-    { fix: 'Exclude FB Reels placement; move budget to Feed + Stories.' },
-    { fix: 'Fix the checkout step — trust badges + faster load.' },
+    { headline: 'Move budget off FB Reels', fix: 'Exclude FB Reels placement; move budget to Feed + Stories.' },
+    { headline: 'Fix the checkout step', fix: 'Add trust badges and speed up the page load.' },
   ],
   watchlist: [{ item: '7_Manual2 at ₱186 CPP' }, { item: 'CPM creeping up week 3' }],
 };
@@ -217,7 +217,7 @@ test('B2: staged verdict renders sections 1-5 in order with the right content', 
   const iNorth = out.indexOf('Toward ₱');
   const iProblems = out.indexOf('costing you');
   const iSolutions = out.indexOf('Do this');
-  const iWatch = out.indexOf('Watch (');
+  const iWatch = out.indexOf('Keep an eye on');
   assert.ok(iBottom >= 0 && iNorth > iBottom && iProblems > iNorth && iSolutions > iProblems && iWatch > iSolutions,
     `sections out of order: bottom=${iBottom} north=${iNorth} problems=${iProblems} solutions=${iSolutions} watch=${iWatch}`);
 
@@ -227,8 +227,9 @@ test('B2: staged verdict renders sections 1-5 in order with the right content', 
   assert.match(out, /FB Reels is draining budget/);            // §3 plain HEADLINE (not the description or raw metrics)
   assert.match(out, /₱18k\/week at stake/);                    // §3 impact, rounded to ₱k plainly
   assert.match(out, /early read/);                             // §3 DIRECTIONAL rendered as plain "early read"
-  assert.match(out, /Exclude FB Reels placement/);             // §4 solution
-  assert.match(out, /Watch \(2\):/);                            // §5 watchlist count
+  assert.match(out, /Move budget off FB Reels/);               // §4 solution HEADLINE
+  assert.match(out, /Exclude FB Reels placement/);             // §4 solution detail line
+  assert.match(out, /Keep an eye on \(2\)/);                   // §5 watchlist as a titled bullet list
   // staged supersedes the legacy action/plan blocks
   assert.doesNotMatch(out, /Do this today/);
   assert.doesNotMatch(out, /<b>The plan<\/b>/);

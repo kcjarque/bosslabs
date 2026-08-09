@@ -87,7 +87,7 @@ function validSession(over: Record<string, unknown> = {}) {
       evidence: { confidence: 'DIRECTIONAL', text: 'CPM up 18% week over week' },
     }],
     solutions: [{
-      problem: 'CPM climbing across the account', fix: 'Test 2 new lookalike audiences',
+      problem: 'CPM climbing across the account', headline: 'Test fresh audiences', fix: 'Test 2 new lookalike audiences',
       lever: 'audience', expectedEffect: 'Lower blended CPM ~10%',
     }],
     synthesis: 'CPM is the bottleneck this week; testing fresh audiences is the move.',

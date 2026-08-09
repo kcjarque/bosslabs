@@ -203,7 +203,7 @@ export type StagedBrief = {
     dailyNetTargetCentavos: number; configured: boolean;
   } | null;
   problems: Array<{ type: string; headline: string; description: string; pesoImpact: number; confidence: string; evidence: string }>;
-  solutions: Array<{ fix: string }>;
+  solutions: Array<{ headline: string; fix: string }>;
   watchlist: Array<{ item: string }>;
 };
 
@@ -240,9 +240,12 @@ export function stagedBriefFromVerdict(verdict: unknown): StagedBrief | null {
   const solutions = solutionsRaw
     .map((s) => {
       const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
-      return { fix: typeof o.fix === 'string' ? o.fix : '' };
+      return {
+        headline: typeof o.headline === 'string' ? o.headline : '',
+        fix: typeof o.fix === 'string' ? o.fix : '',
+      };
     })
-    .filter((s) => s.fix);
+    .filter((s) => s.fix || s.headline);
 
   const watchlist = watchlistRaw
     .map((w) => {
@@ -346,16 +349,26 @@ function problemsBlock(problems: StagedBrief['problems']): string | null {
  *  confirmed problem. */
 function solutionsBlock(solutions: StagedBrief['solutions']): string | null {
   if (solutions.length === 0) return null;
-  const rows = solutions.slice(0, 5).map((s) => `• ${escHtml(collapseNewlines(s.fix))}`);
-  return `✅ <b>Do this</b>\n${rows.join('\n')}`;
+  // Same corporate rhythm as problems: bold action headline → one plain how/why
+  // line. Old rows (fix only, no headline) fall back to the fix as the headline.
+  const rows = solutions.slice(0, 5).map((s, i) => {
+    const headline = collapseNewlines(s.headline || s.fix);
+    const lines = [`<b>${i + 1}. ${escHtml(headline)}</b>`];
+    if (s.headline && s.fix && s.fix.trim() !== s.headline.trim()) {
+      lines.push(escHtml(collapseNewlines(s.fix)));
+    }
+    return lines.join('\n');
+  });
+  return `✅ <b>Do this</b>\n\n${rows.join('\n\n')}`;
 }
 
 /** §5a section 5 — the watchlist as ONE compact line (count + names only). */
 function watchlistBlock(watchlist: StagedBrief['watchlist']): string | null {
   if (watchlist.length === 0) return null;
-  const names = watchlist.slice(0, 4).map((w) => escHtml(w.item.replace(/\s+/g, ' ').trim()));
-  const more = watchlist.length > 4 ? ` +${watchlist.length - 4} more` : '';
-  return `👀 <b>Watch (${watchlist.length}):</b> ${names.join('; ')}${more}`;
+  // A clean bulleted list the owner skims — not a semicolon blob.
+  const shown = watchlist.slice(0, 5).map((w) => `• ${escHtml(collapseNewlines(w.item).replace(/\s+/g, ' ').trim())}`);
+  const more = watchlist.length > 5 ? `\n<i>+${watchlist.length - 5} more in the app</i>` : '';
+  return `👀 <b>Keep an eye on (${watchlist.length})</b>\n${shown.join('\n')}${more}`;
 }
 
 /** DEGRADED render (spec §9 / B1) — leads with "analysis incomplete", NEVER a
