@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractJson, validateSessionJson } from '../../lib/council/session';
+import { extractJson, validateSessionJson, stagedOutcome } from '../../lib/council/session';
 
 // --- extractJson: balanced-brace scan from the first '{' to the brace that
 // closes depth back to 0, ignoring braces inside string literals ---
@@ -206,4 +206,28 @@ test('validateSessionJson: a problem entry missing its evidence object never thr
 test('validateSessionJson: a non-object top-level value throws', () => {
   assert.throws(() => validateSessionJson('just a string'), /not a JSON object/);
   assert.throws(() => validateSessionJson(null), /not a JSON object/);
+});
+
+// --- stagedOutcome: the runStagedCouncil control-flow decision (spec §9
+// "Pass-1 failure ≠ null result"). An errored Pass 1 must NEVER read as a
+// healthy null-result week; only a SUCCESSFUL-but-empty Pass 1 is null. ---
+
+test('stagedOutcome: errored Pass 1 → DEGRADED, never null-result (even with 0 problems)', () => {
+  assert.equal(stagedOutcome({ pass1Ok: false, malfunctionsCount: 0, aboveFloorCount: 0 }), 'DEGRADED');
+});
+
+test('stagedOutcome: errored Pass 1 → DEGRADED even when malfunctions/problems exist', () => {
+  assert.equal(stagedOutcome({ pass1Ok: false, malfunctionsCount: 2, aboveFloorCount: 3 }), 'DEGRADED');
+});
+
+test('stagedOutcome: successful Pass 1 with no malfunction and nothing above floor → NULL_RESULT', () => {
+  assert.equal(stagedOutcome({ pass1Ok: true, malfunctionsCount: 0, aboveFloorCount: 0 }), 'NULL_RESULT');
+});
+
+test('stagedOutcome: successful Pass 1 with a deterministic malfunction → FULL (never null-result)', () => {
+  assert.equal(stagedOutcome({ pass1Ok: true, malfunctionsCount: 1, aboveFloorCount: 0 }), 'FULL');
+});
+
+test('stagedOutcome: successful Pass 1 with an above-floor problem → FULL', () => {
+  assert.equal(stagedOutcome({ pass1Ok: true, malfunctionsCount: 0, aboveFloorCount: 2 }), 'FULL');
 });

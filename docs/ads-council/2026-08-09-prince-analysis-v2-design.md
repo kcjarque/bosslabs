@@ -2,8 +2,9 @@
 
 **Date:** 2026-08-09
 **Status:** Draft for review
-**Scope:** `lib/council/*` (verdict pack + prompts) and `lib/meta-ads.ts`. No DB
-migration. No new nightly sync. Brand scope: BOSS.
+**Scope:** `lib/council/*` (verdict pack + prompts) and `lib/meta-ads.ts`. One
+small DB migration (council_settings economics — §3h). No new nightly sync. Brand
+scope: BOSS.
 
 ---
 
@@ -361,7 +362,7 @@ above/below target. Amends §0 and §5a.
     structure, recentChanges, winningCreatives, cohorts,
     pastPlans, priors, weights, openPredictions, lastVerdict, backEnd,
   },
-  settings: { …, economics: { breakevenRoas, targetBlendedCac, frontEndMarginPct, backEndNote } }, // §3h — may be unset → conservative reads
+  settings: { …, economics: { targetRoas, breakevenRoas, targetCppCentavos, processingFeePct, frontEndMarginPct, dailyNetTargetCentavos, backEndNote } }, // §3h — may be unset → conservative reads
 }
 ```
 
@@ -433,7 +434,7 @@ The whole point of §0's persona. Added to BOTH prompts:
   → `solutions` → synthesis, plus a `watchlist[]` array), **§0 persona + §5a output
   discipline**, SCOPE law, ROAS co-equal, objective rules, pacing/day-of-week/
   placement/audience/funnel rules, relabeled context, **plus the three required
-  upgrades**: profit-anchor framing (§3h `breakevenRoas`/`targetBlendedCac`),
+  upgrades**: profit-anchor framing (§3h `breakevenRoas`/`targetCppCentavos`),
   minimum-signal confidence tiers (§0b), null-result law + severity floor (§0b/§5a),
   the market/auction problem type (§0b), and the scaling-velocity guardrail (§5a).
 - `lib/council/prince.ts` — same persona + 5-stage method + all three upgrades,
@@ -512,11 +513,14 @@ at the flip; everything below is v2.1):
   Sunday run's unsettled tail. `thisWeek.campaign.settled` is already computed;
   switch the north-star to it (or present both). Bounded today by the scaling
   guardrail + recommend-mode.
-- **Pass-1 transport failure can read as a "healthy week."** In `runStagedCouncil`,
-  an errored Pass 1 returns `problems:[]` → cost guard may short-circuit to
-  null-result. The deterministic malfunction pre-check still forces a full run for
-  real outages, and the failure is surfaced in the watchlist, but consider not
-  treating an *errored* Pass 1 as a genuine null result (+ allow a same-day retry).
+- **DONE (promoted 2026-08-09) — Pass-1 failure ≠ healthy week.** `runProblemStage`
+  now returns `ok:false` on a transport/parse error, distinguishing it from a
+  successful-but-empty Pass 1. `runStagedCouncil` retries Pass 1 once same-day; if it
+  still fails the pure `stagedOutcome()` (unit-tested) returns DEGRADED and the run
+  persists `verdict.degraded=true` (`degradedSession`) — the weekly brief leads with
+  "Analysis incomplete — Pass 1 failed, no verdict this week" and NEVER the
+  null-result/healthy message. The deterministic malfunctions still surface. Only a
+  SUCCESSFUL empty Pass 1 with no malfunction is a genuine null result.
 - **Pacing/pack join by NAME not ID** — collision risk if two tracked campaigns/
   ad sets share a name or are renamed mid-day. Switch to campaign.id/adset.id when
   a second brand/looser-named account is onboarded.
@@ -535,9 +539,12 @@ at the flip; everything below is v2.1):
 - **No unit test for `buildPulse`/`buildBrief`**; two stale code comments
   (`breakdowns.ts` "account-wide fallback"; `session.ts` stage1System exception
   list omits BREAKDOWNS_RULE).
-- **Staged 5-stage output (`problems`/`solutions`/`synthesis`) is persisted to
-  `council_sessions.verdict` but not yet rendered** in the weekly Telegram brief
-  (which still renders `verdict.action` + `action_plan` + `creative_ideas`). Add a
-  brief/admin surface for the richer analysis.
+- **DONE (promoted 2026-08-09) — staged 5-stage output rendered in the weekly brief.**
+  `stagedBriefFromVerdict()` (brief.ts) maps the persisted `verdict` into a
+  `StagedBrief`; `buildBrief` renders, in order, bottom line (synthesis) → north star
+  (§3h net gap — persisted via `persistedNorthStar`/`toPersistedVerdict`) →
+  above-floor problems (peso-ranked, DIRECTIONAL flagged) → solutions → watchlist,
+  superseding the old action/plan blocks. Degrades to the legacy render for pre-v2
+  rows. No new column/migration — all carried in the existing `verdict` JSONB.
 - **Creative pipeline output** + **pixel-vs-bank blended MER** (from the original
   §9 list above) remain deferred.

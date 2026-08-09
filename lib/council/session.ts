@@ -74,7 +74,13 @@ type SessionJson = {
   watchlist: Array<{ item: string; why: string }>;
   verdict: { action: string; why_it_wins: string; what_it_costs: string;
     kill_switch: PredictionShape;
-    dissent_on_record: string; also_cleared: string[] };
+    dissent_on_record: string; also_cleared: string[];
+    /** Set true ONLY on the degraded path (`degradedSession`) when Pass 1
+     *  failed even after a retry — the brief leads with "analysis incomplete"
+     *  instead of a null-result/healthy message. Absent on every normal (LLM
+     *  or null-result) session, so it's carried through `...verdict` without a
+     *  migration and read back by brief.ts's `stagedBriefFromVerdict`. */
+    degraded?: boolean; degradedReason?: string };
   transcript_md: string;
 };
 
@@ -749,7 +755,7 @@ function stage4System(pack: CouncilPack, doctrine: string): string {
  *  also empty. */
 async function runProblemStage(
   key: string, model: string, system: string, user: string, label: string, fallback: StageProblems,
-): Promise<StageProblems & { usage: TokenUsage | null }> {
+): Promise<StageProblems & { usage: TokenUsage | null; ok: boolean; errorMsg: string | null }> {
   try {
     const { text, usage, stopReason } = await callClaude(key, model, system, user);
     let result: StageProblems;
@@ -758,14 +764,21 @@ async function runProblemStage(
     } catch (err) {
       throw new Error(`${errMsg(err)}. stop_reason=${stopReason ?? 'unknown'}. Raw text (first 300 chars): ${text.slice(0, 300)}`);
     }
-    return { ...result, usage };
+    return { ...result, usage, ok: true, errorMsg: null };
   } catch (err) {
     const msg = errMsg(err).replace(/\s+/g, ' ').slice(0, 300);
     console.error(`[runStagedCouncil] ${label} failed, carrying the prior stage forward unchanged: ${msg}`);
+    // ok:false distinguishes a TRANSPORT/PARSE failure (this catch) from a
+    // SUCCESSFUL pass that genuinely found no problems (empty array, ok:true).
+    // For Pass 1 that difference is load-bearing: only a successful-but-empty
+    // Pass 1 is a valid null-result; an errored one must NOT read as healthy
+    // (see stagedOutcome + degradedSession).
     return {
       problems: fallback.problems,
       watchlist: [...fallback.watchlist, { item: `${label} failed this run — its output was skipped.`, why: msg }],
       usage: null,
+      ok: false,
+      errorMsg: msg,
     };
   }
 }
@@ -822,7 +835,7 @@ async function runSynthesisStage(
  *  honors the NULL-RESULT LAW ("a healthy account is a valid finding").
  *  Below-floor problems Pass 1 still found are folded into watchlist
  *  rather than silently dropped. */
-function nullResultSession(pack: CouncilPack, stage1: StageProblems, floorPesos: number): SessionJson {
+export function nullResultSession(pack: CouncilPack, stage1: StageProblems, floorPesos: number): SessionJson {
   const watchlist: SessionJson['watchlist'] = [...stage1.watchlist];
   for (const p of stage1.problems) {
     watchlist.push({
@@ -861,6 +874,98 @@ function nullResultSession(pack: CouncilPack, stage1: StageProblems, floorPesos:
   };
 }
 
+/** The staged run's control-flow decision (spec §9 "Pass-1 failure ≠ null
+ *  result", promoted to v2). Pure + exported so the branch is unit-tested
+ *  with no network:
+ *  - Pass 1 errored even after its retry (`pass1Ok=false`) → DEGRADED: an
+ *    errored Pass 1 returns an EMPTY problem list, which must NOT read as a
+ *    healthy week (the bug this fixes).
+ *  - Pass 1 SUCCEEDED and nothing crossed the floor and no deterministic
+ *    malfunction → NULL_RESULT (the genuine healthy week; cost guard skips
+ *    Passes 2-4).
+ *  - otherwise → FULL (run Passes 2-4). */
+export function stagedOutcome(p: {
+  pass1Ok: boolean; malfunctionsCount: number; aboveFloorCount: number;
+}): 'DEGRADED' | 'NULL_RESULT' | 'FULL' {
+  if (!p.pass1Ok) return 'DEGRADED';
+  if (p.malfunctionsCount === 0 && p.aboveFloorCount === 0) return 'NULL_RESULT';
+  return 'FULL';
+}
+
+const DEGRADED_HEADLINE =
+  'Analysis incomplete — Pass 1 failed, no verdict this week. Re-run the weekly council once the API is healthy.';
+
+/** DEGRADED session (spec §9) — built when Pass 1 (find & classify) failed
+ *  even after a same-day retry, so there is no trustworthy problem list. It
+ *  must NOT masquerade as a healthy null-result: `verdict.degraded=true` and
+ *  the synthesis/action lead with "analysis incomplete". The deterministic
+ *  malfunction pre-check (`pack.malfunctions`) still surfaces regardless — it
+ *  needs no LLM — so a real outage is never hidden behind the failure. */
+export function degradedSession(pack: CouncilPack, reason: string): SessionJson {
+  // Deterministic malfunctions carried as problems so the brief still lists
+  // them; pesoImpact 0 (a broken pixel / disapproved ad often can't be sized).
+  const problems: Problem[] = pack.malfunctions.map((m) => ({
+    type: 'malfunction',
+    description: `${m.adName}: ${m.kind}`,
+    severity: 'high',
+    pesoImpact: 0,
+    evidence: { confidence: 'SOLID', text: m.detail },
+  }));
+  const malfNote = problems.length > 0
+    ? ` The automatic pre-check still flagged ${problems.length} possible malfunction(s) below — rule those out first.`
+    : '';
+  return {
+    snapshot: [DEGRADED_HEADLINE],
+    floor: [], cross_examination: [], disagreement: '',
+    diagnosis: { root_cause: '', lever: '', evidence: '' },
+    action_plan: [], creative_ideas: [],
+    problems, solutions: [],
+    synthesis: `${DEGRADED_HEADLINE}${malfNote}`,
+    watchlist: [{ item: 'Re-run the weekly council once the API is healthy.', why: `Pass 1 failed this run: ${reason}` }],
+    verdict: {
+      action: DEGRADED_HEADLINE,
+      why_it_wins: '', what_it_costs: '',
+      kill_switch: defaultPrediction(),
+      dissent_on_record: '', also_cleared: [],
+      degraded: true, degradedReason: reason,
+    },
+    transcript_md:
+      `=== BOSSLABS ADS COUNCIL — STAGED (DEGRADED) — ${pack.brand} ===\n${DEGRADED_HEADLINE}\nReason: ${reason}\n` +
+      pack.malfunctions.map((m) => `• ${m.adName}: ${m.detail}`).join('\n'),
+  };
+}
+
+/** Compact §3h north-star snapshot persisted onto the session verdict so the
+ *  weekly brief (brief.ts) can render the profit gap without re-assembling
+ *  the pack. Carried in the existing `verdict` JSONB — no new column. */
+export type PersistedNorthStar = {
+  currentDailyNetCentavos: number; netGapCentavos: number; targetNetSpendCentavos: number;
+  dailyNetTargetCentavos: number; configured: boolean;
+};
+export function persistedNorthStar(pack: CouncilPack): PersistedNorthStar {
+  return {
+    currentDailyNetCentavos: pack.thisWeek.northStar.currentDailyNetCentavos,
+    netGapCentavos: pack.thisWeek.northStar.netGapCentavos,
+    targetNetSpendCentavos: pack.thisWeek.northStar.targetNetSpendCentavos,
+    dailyNetTargetCentavos: pack.settings.economics.dailyNetTargetCentavos,
+    configured: pack.settings.economics.configured,
+  };
+}
+
+/** The exact `verdict` JSONB blob persistSession writes — factored out so the
+ *  persist path and the brief-render tests build it identically (a drift
+ *  between what is stored and what brief.ts reads would silently blank the
+ *  weekly analysis). Mirrors runCouncilSession's own inline verdict shape
+ *  PLUS the §3h northStar snapshot (which the on-demand path does not need). */
+export function toPersistedVerdict(parsed: SessionJson, northStar: PersistedNorthStar | null): Record<string, unknown> {
+  return {
+    ...parsed.verdict,
+    diagnosis: parsed.diagnosis, action_plan: parsed.action_plan, creative_ideas: parsed.creative_ideas,
+    problems: parsed.problems, solutions: parsed.solutions, synthesis: parsed.synthesis, watchlist: parsed.watchlist,
+    northStar,
+  };
+}
+
 /** Inserts one council_sessions row + one council_predictions row per floor
  *  expert prediction + the Chair's kill switch. Logic-identical to
  *  runCouncilSession's own persistence tail — copied out (not imported
@@ -874,8 +979,7 @@ async function persistSession(
   const { data, error } = await sb.from('council_sessions').insert({
     date: today, brand, trigger_reasons: triggerReasons, data_mode: pack.dataMode,
     transcript_md: parsed.transcript_md,
-    verdict: { ...parsed.verdict, diagnosis: parsed.diagnosis, action_plan: parsed.action_plan, creative_ideas: parsed.creative_ideas,
-      problems: parsed.problems, solutions: parsed.solutions, synthesis: parsed.synthesis, watchlist: parsed.watchlist },
+    verdict: toPersistedVerdict(parsed, persistedNorthStar(pack)),
     model,
     input_tokens: usage?.input_tokens ?? null, output_tokens: usage?.output_tokens ?? null,
   }).select('id').single();
@@ -926,21 +1030,44 @@ export async function runStagedCouncil(
   const pack = await assemblePack(brand, settledDay());
   const floorPesos = severityFloorPesos(pack);
 
-  // ---- Pass 1 — Stage 1: braindump + classify, malfunction-first ----
-  const stage1 = await runProblemStage(
-    key, model, stage1System(pack),
-    JSON.stringify({ trigger_reasons: triggerReasons, pack, severity_floor_pesos: floorPesos, output_schema: STAGE_PROBLEMS_SCHEMA }),
-    'Pass 1 (Stage 1 — find & classify)',
-    { problems: [], watchlist: [] },
+  // ---- Pass 1 — Stage 1: braindump + classify, malfunction-first.
+  // One same-day retry if it ERRORS (transport/parse): an errored Pass 1
+  // returns an empty problem list, and that must never read as a healthy week
+  // (spec §9 "Pass-1 failure ≠ null result"). ----
+  const stage1User = JSON.stringify({ trigger_reasons: triggerReasons, pack, severity_floor_pesos: floorPesos, output_schema: STAGE_PROBLEMS_SCHEMA });
+  let stage1 = await runProblemStage(
+    key, model, stage1System(pack), stage1User,
+    'Pass 1 (Stage 1 — find & classify)', { problems: [], watchlist: [] },
   );
   let usage = stage1.usage;
+  if (!stage1.ok) {
+    const retry = await runProblemStage(
+      key, model, stage1System(pack), stage1User,
+      'Pass 1 retry (Stage 1 — find & classify)', { problems: [], watchlist: [] },
+    );
+    usage = addUsage(usage, retry.usage);
+    stage1 = retry;
+  }
 
-  // ---- COST GUARD (spec §0b + plan Step 2) — skip Passes 2-4 when there is
-  // genuinely nothing to cross-examine: no deterministic malfunction AND no
-  // problem clears the severity floor. Saves ~3/4 of the run's tokens and
-  // is the code-level enforcement of the NULL-RESULT LAW. ----
+  // ---- Decide the run's shape (spec §9 + the COST GUARD, plan Step 2):
+  //  DEGRADED   — Pass 1 still errored after its retry → surface "analysis
+  //               incomplete" + the deterministic malfunctions, NEVER a
+  //               healthy null-result.
+  //  NULL_RESULT— Pass 1 SUCCEEDED but nothing crossed the severity floor and
+  //               there is no deterministic malfunction → skip Passes 2-4
+  //               (code-level enforcement of the NULL-RESULT LAW, saves ~3/4
+  //               of the run's tokens).
+  //  FULL       — otherwise → run Passes 2-4. ----
   const aboveFloor = stage1.problems.filter((p) => p.pesoImpact >= floorPesos);
-  if (pack.malfunctions.length === 0 && aboveFloor.length === 0) {
+  const outcome = stagedOutcome({
+    pass1Ok: stage1.ok, malfunctionsCount: pack.malfunctions.length, aboveFloorCount: aboveFloor.length,
+  });
+  if (outcome === 'DEGRADED') {
+    const session = degradedSession(pack, stage1.errorMsg ?? 'Pass 1 failed twice with no error detail');
+    sanitize(session);
+    return persistSession(brand, triggerReasons, pack, session, model, usage);
+  }
+  if (outcome === 'NULL_RESULT') {
     const session = nullResultSession(pack, stage1, floorPesos);
     sanitize(session);
     return persistSession(brand, triggerReasons, pack, session, model, usage);

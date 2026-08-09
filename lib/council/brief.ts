@@ -190,6 +190,168 @@ export function buildPulse(args: {
   ].join('\n\n');
 }
 
+/** The v2 staged council's analysis, extracted from the persisted
+ *  `council_sessions.verdict` JSONB for the weekly brief (spec §9 "render the
+ *  5-stage output"). `null` from `stagedBriefFromVerdict` means a legacy
+ *  (pre-v2) session with no staged fields — buildBrief falls back to the old
+ *  plan/ideas render. */
+export type StagedBrief = {
+  degraded: boolean; degradedReason: string;
+  action: string; synthesis: string;
+  northStar: {
+    currentDailyNetCentavos: number; netGapCentavos: number; targetNetSpendCentavos: number;
+    dailyNetTargetCentavos: number; configured: boolean;
+  } | null;
+  problems: Array<{ type: string; description: string; pesoImpact: number; confidence: string; evidence: string }>;
+  solutions: Array<{ fix: string }>;
+  watchlist: Array<{ item: string }>;
+};
+
+/** Reads a persisted `verdict` JSONB into a StagedBrief, or returns `null`
+ *  when the row predates v2 (no `synthesis`, `problems`, `watchlist`, or
+ *  `degraded` flag). Fully defensive — every field is type-checked, so a
+ *  malformed/partial verdict degrades to empty arrays rather than throwing. */
+export function stagedBriefFromVerdict(verdict: unknown): StagedBrief | null {
+  if (typeof verdict !== 'object' || verdict === null) return null;
+  const v = verdict as Record<string, unknown>;
+  const synthesis = typeof v.synthesis === 'string' ? v.synthesis : '';
+  const degraded = v.degraded === true;
+  const problemsRaw = Array.isArray(v.problems) ? v.problems : [];
+  const solutionsRaw = Array.isArray(v.solutions) ? v.solutions : [];
+  const watchlistRaw = Array.isArray(v.watchlist) ? v.watchlist : [];
+  // Legacy (pre-v2) rows carry none of these — signal "no staged verdict".
+  if (!degraded && synthesis === '' && problemsRaw.length === 0 && watchlistRaw.length === 0) return null;
+
+  const problems = problemsRaw
+    .map((p) => {
+      const o = (typeof p === 'object' && p !== null ? p : {}) as Record<string, unknown>;
+      const ev = (typeof o.evidence === 'object' && o.evidence !== null ? o.evidence : {}) as Record<string, unknown>;
+      return {
+        type: typeof o.type === 'string' ? o.type : '',
+        description: typeof o.description === 'string' ? o.description : '',
+        pesoImpact: typeof o.pesoImpact === 'number' ? o.pesoImpact : 0,
+        confidence: typeof ev.confidence === 'string' ? ev.confidence : '',
+        evidence: typeof ev.text === 'string' ? ev.text : '',
+      };
+    })
+    .filter((p) => p.description);
+
+  const solutions = solutionsRaw
+    .map((s) => {
+      const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return { fix: typeof o.fix === 'string' ? o.fix : '' };
+    })
+    .filter((s) => s.fix);
+
+  const watchlist = watchlistRaw
+    .map((w) => {
+      const o = (typeof w === 'object' && w !== null ? w : {}) as Record<string, unknown>;
+      return { item: typeof o.item === 'string' ? o.item : '' };
+    })
+    .filter((w) => w.item);
+
+  const nsRaw = (typeof v.northStar === 'object' && v.northStar !== null ? v.northStar : null) as Record<string, unknown> | null;
+  const northStar = nsRaw
+    ? {
+        currentDailyNetCentavos: typeof nsRaw.currentDailyNetCentavos === 'number' ? nsRaw.currentDailyNetCentavos : 0,
+        netGapCentavos: typeof nsRaw.netGapCentavos === 'number' ? nsRaw.netGapCentavos : 0,
+        targetNetSpendCentavos: typeof nsRaw.targetNetSpendCentavos === 'number' ? nsRaw.targetNetSpendCentavos : 0,
+        dailyNetTargetCentavos: typeof nsRaw.dailyNetTargetCentavos === 'number' ? nsRaw.dailyNetTargetCentavos : 0,
+        configured: nsRaw.configured === true,
+      }
+    : null;
+
+  return {
+    degraded,
+    degradedReason: typeof v.degradedReason === 'string' ? v.degradedReason : '',
+    action: typeof v.action === 'string' ? v.action : '',
+    synthesis, northStar, problems, solutions, watchlist,
+  };
+}
+
+/** Truncate to `n` chars with an ellipsis — keeps the briefing tight (§5a). */
+function trimTo(s: string, n: number): string {
+  const t = s.trim();
+  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+}
+
+/** §5a section 1 — decision first: the one-line action headline + the short
+ *  synthesis paragraph under it (skipped if it merely repeats the action). */
+function bottomLineBlock(s: StagedBrief): string {
+  const action = collapseNewlines(s.action).trim();
+  const synth = trimTo(collapseNewlines(s.synthesis), 400);
+  const lines = ['🧭 <b>Bottom line</b>'];
+  if (action) lines.push(`<b>${escHtml(action)}</b>`);
+  if (synth && synth !== action) lines.push(escHtml(synth));
+  return lines.join('\n');
+}
+
+/** §3h section 2 — the profit north star: current daily net, the gap to the
+ *  target, and the spend that closes it. Rendered only when economics is
+ *  configured (else there is no anchor to frame against). */
+function northStarBlock(ns: StagedBrief['northStar']): string | null {
+  if (!ns || !ns.configured || ns.dailyNetTargetCentavos <= 0) return null;
+  // A losing week reads "losing ₱X/day", never a bare "₱-5,000/day".
+  const now = ns.currentDailyNetCentavos < 0
+    ? `<b>losing ${peso(-ns.currentDailyNetCentavos)}/day</b>`
+    : `${peso(ns.currentDailyNetCentavos)}/day net`;
+  const target = peso(ns.dailyNetTargetCentavos);
+  if (ns.netGapCentavos > 0) {
+    const move = ns.targetNetSpendCentavos > 0
+      ? ` — reach it at ~${peso(ns.targetNetSpendCentavos)}/day spend on the 2×+ winners`
+      : '';
+    return `🎯 <b>Toward ${target}/day net</b>\nNow ${now} · <b>${peso(ns.netGapCentavos)} short</b>${move}.`;
+  }
+  return `🎯 <b>Toward ${target}/day net</b>\nNow ${now} — <b>at or above target</b>. Protect the winners.`;
+}
+
+/** §5a section 3 — above-floor problems ranked by peso impact (the persisted
+ *  list is already above-floor; below-floor items live in watchlist). Each:
+ *  type, one-line diagnosis, the driving numbers, DIRECTIONAL flagged. */
+function problemsBlock(problems: StagedBrief['problems']): string | null {
+  if (problems.length === 0) return null;
+  const sorted = [...problems].sort((a, b) => b.pesoImpact - a.pesoImpact);
+  const rows = sorted.slice(0, 4).map((p, i) => {
+    const type = p.type ? `[${escHtml(p.type)}] ` : '';
+    const impact = p.pesoImpact > 0 ? ` <i>(~₱${Math.round(p.pesoImpact).toLocaleString()}/wk)</i>` : '';
+    const dir = p.confidence === 'DIRECTIONAL' ? ' ⚠ directional' : '';
+    const ev = p.evidence ? `\n   ${escHtml(trimTo(collapseNewlines(p.evidence), 160))}` : '';
+    return `${i + 1}. ${type}${escHtml(p.description)}${impact}${dir}${ev}`;
+  });
+  const more = sorted.length > 4 ? `\n…and ${sorted.length - 4} more in the app.` : '';
+  return `🚨 <b>What’s costing you</b>\n${rows.join('\n')}${more}`;
+}
+
+/** §5a section 4 — the executable fixes (earn-more / spend-less), one per
+ *  confirmed problem. */
+function solutionsBlock(solutions: StagedBrief['solutions']): string | null {
+  if (solutions.length === 0) return null;
+  const rows = solutions.slice(0, 5).map((s) => `• ${escHtml(collapseNewlines(s.fix))}`);
+  return `✅ <b>Do this</b>\n${rows.join('\n')}`;
+}
+
+/** §5a section 5 — the watchlist as ONE compact line (count + names only). */
+function watchlistBlock(watchlist: StagedBrief['watchlist']): string | null {
+  if (watchlist.length === 0) return null;
+  const names = watchlist.slice(0, 4).map((w) => escHtml(w.item.replace(/\s+/g, ' ').trim()));
+  const more = watchlist.length > 4 ? ` +${watchlist.length - 4} more` : '';
+  return `👀 <b>Watch (${watchlist.length}):</b> ${names.join('; ')}${more}`;
+}
+
+/** DEGRADED render (spec §9 / B1) — leads with "analysis incomplete", NEVER a
+ *  healthy/null-result message. The deterministic malfunctions (carried as
+ *  problems by `degradedSession`) still surface so a real outage isn't hidden. */
+function degradedBlock(s: StagedBrief): string {
+  const head =
+    `⚠️ <b>Analysis incomplete — Pass 1 failed, no verdict this week.</b>\n` +
+    `The council couldn’t find the problems this run — re-run the weekly analysis.`;
+  if (s.problems.length === 0) return head;
+  const rows = s.problems
+    .slice(0, 5)
+    .map((p) => `• ${escHtml(p.description)}${p.evidence ? ` — ${escHtml(trimTo(collapseNewlines(p.evidence), 140))}` : ''}`);
+  return `${head}\n\n🚨 <b>Auto-detected (still worth checking):</b>\n${rows.join('\n')}`;
+}
+
 export function buildBrief(args: {
   brand: Brand; dateManila: string;
   yesterday: { spendCentavos: number; purchases: number } | null;
@@ -202,6 +364,11 @@ export function buildBrief(args: {
   plan?: { rootCause: string; steps: string[] } | null;
   /** Net-new creative concepts to test (from the weekly analysis). */
   ideas?: Array<{ concept: string; hook: string }> | null;
+  /** The v2 staged 5-stage analysis (spec §9). When present, the weekly brief
+   *  leads with it (bottom line → north star → problems → solutions →
+   *  watchlist) instead of the thinner plan/action blocks; `null` (legacy
+   *  sessions) falls back to the original render. */
+  staged?: StagedBrief | null;
 }): string {
   const { dateManila, yesterday, avg7Cpp, dayQuality, verdicts, cohort, chairNote } = args;
 
@@ -274,6 +441,32 @@ export function buildBrief(args: {
 
   // ── This week ────────────────────────────────────────────────────────
   const weekBlock = cohort ? `📈 <b>This week:</b> ${cohort.buyers} new buyers so far.` : null;
+
+  // ── v2 staged analysis (spec §9) — when a staged verdict is present, lead
+  // with the 5-stage output (decision-first per §5a); the deterministic
+  // context (creative ideas, yesterday, roster, movers, week) follows. The
+  // old action/plan blocks are superseded by synthesis + solutions here.
+  const staged = args.staged;
+  if (staged) {
+    const analysis = staged.degraded
+      ? [degradedBlock(staged)]
+      : [
+          bottomLineBlock(staged),
+          northStarBlock(staged.northStar),
+          problemsBlock(staged.problems),
+          solutionsBlock(staged.solutions),
+          watchlistBlock(staged.watchlist),
+        ];
+    return [
+      `📊 <b>ADS REVIEW — ${dateManila}</b>`,
+      ...analysis,
+      ideasBlock,
+      yesterdayBlock,
+      rosterBlock,
+      moversBlock,
+      weekBlock,
+    ].filter(Boolean).join('\n\n');
+  }
 
   return [
     `📊 <b>ADS REVIEW — ${dateManila}</b>`,

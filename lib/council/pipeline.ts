@@ -35,7 +35,7 @@ import { detectTriggers } from './triggers';
 import { runStagedCouncil, settledDay } from './session';
 import { deriveWeekBounds } from './pack';
 import { analyzeMissingCreatives } from './creative-context';
-import { buildBrief, buildPulse, dayQualityFor } from './brief';
+import { buildBrief, buildPulse, dayQualityFor, stagedBriefFromVerdict, type StagedBrief } from './brief';
 import type { AdSeries, Brand, VerdictResult } from './types';
 
 const MS_DAY = 86400000;
@@ -91,8 +91,10 @@ async function fetchTodaySessionAction(
   action: string | null;
   plan: { rootCause: string; steps: string[] } | null;
   ideas: Array<{ concept: string; hook: string }> | null;
+  /** The v2 staged 5-stage analysis (spec §9), or null for legacy sessions. */
+  staged: StagedBrief | null;
 }> {
-  if (!isSupabaseConfigured()) return { action: null, plan: null, ideas: null };
+  if (!isSupabaseConfigured()) return { action: null, plan: null, ideas: null, staged: null };
   const { data, error } = await getSupabase()
     .from('council_sessions')
     .select('verdict')
@@ -102,8 +104,9 @@ async function fetchTodaySessionAction(
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`fetchTodaySessionAction: ${error.message}`);
-  if (!data) return { action: null, plan: null, ideas: null };
-  const verdict = (data as { verdict: unknown }).verdict as {
+  if (!data) return { action: null, plan: null, ideas: null, staged: null };
+  const rawVerdict = (data as { verdict: unknown }).verdict;
+  const verdict = rawVerdict as {
     action?: unknown;
     diagnosis?: { root_cause?: unknown } | null;
     action_plan?: Array<{ step?: unknown }> | null;
@@ -120,7 +123,7 @@ async function fetchTodaySessionAction(
         .map((i) => ({ concept: typeof i?.concept === 'string' ? i.concept : '', hook: typeof i?.hook === 'string' ? i.hook : '' }))
         .filter((i) => i.concept)
     : [];
-  return { action, plan, ideas: ideas.length > 0 ? ideas : null };
+  return { action, plan, ideas: ideas.length > 0 ? ideas : null, staged: stagedBriefFromVerdict(rawVerdict) };
 }
 
 /** Any prediction resolved to a MISS by THIS run — `resolveDuePredictions`
@@ -414,7 +417,7 @@ export async function runCouncilPipeline(
     brief = buildBrief({
       brand, dateManila: todayManila, yesterday, avg7Cpp, dayQuality,
       verdicts: verdictsForBrief, cohort, chairNote, nextLine,
-      plan: sessionAction.plan, ideas: sessionAction.ideas,
+      plan: sessionAction.plan, ideas: sessionAction.ideas, staged: sessionAction.staged,
     });
   } else {
     // Daily pulse — deterministic heartbeat, no LLM, no action list.

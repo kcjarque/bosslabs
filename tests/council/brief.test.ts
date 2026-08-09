@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBrief, dayQualityFor } from '../../lib/council/brief';
+import { buildBrief, dayQualityFor, stagedBriefFromVerdict } from '../../lib/council/brief';
 import { detectTriggers } from '../../lib/council/triggers';
+import {
+  degradedSession, nullResultSession, persistedNorthStar, toPersistedVerdict,
+} from '../../lib/council/session';
+import type { CouncilPack } from '../../lib/council/pack';
 import type { VerdictResult, PriorsRow } from '../../lib/council/types';
 
 // Fixture helpers copied from tests/council/verdict-engine.test.ts's style
@@ -139,6 +143,134 @@ test('yesterday=null renders a waiting message, never crashes', () => {
 test('embedded newlines in chairNote never break the layout', () => {
   const out = buildBrief({ ...BASE_ARGS, chairNote: 'Turn off ad X\nline2\nline3' });
   assert.match(out, /Turn off ad X/);
+});
+
+
+/* --------------------------------------------------------------------- */
+/* buildBrief — v2 staged analysis (spec §9): B1 degraded + B2 render     */
+/* --------------------------------------------------------------------- */
+
+// Minimal CouncilPack — only the fields degradedSession / nullResultSession /
+// persistedNorthStar actually read. Cast is the same partial-fixture pattern
+// session.test.ts uses for validateSessionJson inputs.
+function pack(over: Record<string, unknown> = {}): CouncilPack {
+  return {
+    brand: 'BOSS',
+    malfunctions: [],
+    thisWeek: {
+      campaign: { spend: 1_000_000, roas: 2.4 }, // ₱10,000 spend, 2.4x
+      northStar: { currentDailyNetCentavos: 2_600_000, netGapCentavos: 2_400_000, targetNetSpendCentavos: 1_800_000 },
+    },
+    settings: { economics: { dailyNetTargetCentavos: 5_000_000, configured: true } },
+    ...over,
+  } as unknown as CouncilPack;
+}
+
+// B1 — an errored Pass 1 (degradedSession) must lead with "analysis
+// incomplete" and NEVER render the healthy null-result message.
+test('B1: degraded session leads with "Analysis incomplete", never a healthy message', () => {
+  const p = pack({
+    malfunctions: [{ adId: 'a1', adName: 'Ad One', kind: 'REVENUE_CLIFF', detail: 'Spent ₱800 with 0 purchases — check pixel.' }],
+  });
+  const staged = stagedBriefFromVerdict(toPersistedVerdict(degradedSession(p, 'Anthropic: 529 overloaded'), persistedNorthStar(p)));
+  const out = buildBrief({ ...BASE_ARGS, staged });
+  assert.match(out, /Analysis incomplete/);
+  assert.match(out, /Pass 1 failed/);
+  assert.doesNotMatch(out, /nothing needs fixing/i);
+  assert.doesNotMatch(out, /account is healthy/i);
+  assert.match(out, /Ad One/); // deterministic malfunction still surfaces
+});
+
+// B1 control — a SUCCESSFUL but empty Pass 1 (nullResultSession) renders the
+// healthy null-result brief, and NOT the degraded warning.
+test('B1 control: successful-but-empty Pass 1 renders the healthy null-result brief', () => {
+  const p = pack();
+  const staged = stagedBriefFromVerdict(toPersistedVerdict(nullResultSession(p, { problems: [], watchlist: [] }, 500), persistedNorthStar(p)));
+  const out = buildBrief({ ...BASE_ARGS, staged });
+  assert.match(out, /nothing needs fixing/i);
+  assert.doesNotMatch(out, /Analysis incomplete/);
+  assert.doesNotMatch(out, /Pass 1 failed/);
+});
+
+// B2 — a full staged verdict renders sections 1-5 in order.
+const STAGED_VERDICT = {
+  action: 'Cut FB Reels — move budget to Feed.',
+  synthesis: 'FB Reels is dragging blended ROAS; shift its budget to Feed and scale the winners in steps.',
+  northStar: { currentDailyNetCentavos: 2_600_000, netGapCentavos: 2_400_000, targetNetSpendCentavos: 1_800_000, dailyNetTargetCentavos: 5_000_000, configured: true },
+  problems: [
+    { type: 'audience', description: 'FB Reels dragging ROAS', severity: 'high', pesoImpact: 18000, evidence: { confidence: 'SOLID', text: '₱62k at 1.29x vs Feed 2.28x' } },
+    { type: 'offer', description: 'Checkout leak', severity: 'medium', pesoImpact: 9000, evidence: { confidence: 'DIRECTIONAL', text: '40% add-to-cart, 12% buy' } },
+  ],
+  solutions: [
+    { fix: 'Exclude FB Reels placement; move budget to Feed + Stories.' },
+    { fix: 'Fix the checkout step — trust badges + faster load.' },
+  ],
+  watchlist: [{ item: '7_Manual2 at ₱186 CPP' }, { item: 'CPM creeping up week 3' }],
+};
+
+test('B2: staged verdict renders sections 1-5 in order with the right content', () => {
+  const staged = stagedBriefFromVerdict(STAGED_VERDICT);
+  assert.ok(staged, 'staged verdict should map to a StagedBrief');
+  const out = buildBrief({ ...BASE_ARGS, staged });
+
+  const iBottom = out.indexOf('Bottom line');
+  const iNorth = out.indexOf('Toward ₱');
+  const iProblems = out.indexOf('costing you');
+  const iSolutions = out.indexOf('Do this');
+  const iWatch = out.indexOf('Watch (');
+  assert.ok(iBottom >= 0 && iNorth > iBottom && iProblems > iNorth && iSolutions > iProblems && iWatch > iSolutions,
+    `sections out of order: bottom=${iBottom} north=${iNorth} problems=${iProblems} solutions=${iSolutions} watch=${iWatch}`);
+
+  assert.match(out, /FB Reels is dragging blended ROAS/);       // §1 synthesis
+  assert.match(out, /Toward ₱50,000\/day net/);                 // §2 north star target
+  assert.match(out, /₱24,000 short/);                           // §2 gap
+  assert.match(out, /FB Reels dragging ROAS/);                  // §3 problem
+  assert.match(out, /~₱18,000\/wk/);                            // §3 peso impact
+  assert.match(out, /⚠ directional/);                           // §3 DIRECTIONAL flag
+  assert.match(out, /Exclude FB Reels placement/);             // §4 solution
+  assert.match(out, /Watch \(2\):/);                            // §5 watchlist count
+  // staged supersedes the legacy action/plan blocks
+  assert.doesNotMatch(out, /Do this today/);
+  assert.doesNotMatch(out, /<b>The plan<\/b>/);
+});
+
+test('B2: legacy session (no staged verdict) renders the original plan/action shape', () => {
+  const out = buildBrief({
+    ...BASE_ARGS,
+    plan: { rootCause: 'CPM climbing across the account', steps: ['Test 2 new audiences'] },
+    ideas: [{ concept: 'Problem-based ad for resto owners', hook: 'Paulit-ulit ba?' }],
+    // no `staged` → legacy render
+  });
+  assert.match(out, /Do this today/);        // legacy action block
+  assert.match(out, /<b>The plan<\/b>/);     // legacy plan block
+  assert.match(out, /Creative to test/);     // legacy ideas block
+  assert.doesNotMatch(out, /Bottom line/);   // staged sections absent
+  assert.doesNotMatch(out, /Toward ₱/);
+});
+
+test('B2: a legacy verdict blob (no synthesis/problems/watchlist/degraded) maps to null', () => {
+  // pre-v2 rows carried only action/diagnosis/action_plan/creative_ideas
+  assert.equal(stagedBriefFromVerdict({ action: 'Turn off X', diagnosis: { root_cause: 'y' }, action_plan: [{ step: 's' }] }), null);
+});
+
+test('B2: a losing week reads "losing ₱X/day", never a bare negative peso', () => {
+  const staged = stagedBriefFromVerdict({
+    ...STAGED_VERDICT,
+    northStar: { currentDailyNetCentavos: -500_000, netGapCentavos: 5_500_000, targetNetSpendCentavos: 1_800_000, dailyNetTargetCentavos: 5_000_000, configured: true },
+  });
+  const out = buildBrief({ ...BASE_ARGS, staged });
+  assert.match(out, /losing ₱5,000\/day/);
+  assert.doesNotMatch(out, /₱-5,000/);
+});
+
+test('B2: north-star line is omitted when economics is unconfigured', () => {
+  const staged = stagedBriefFromVerdict({
+    ...STAGED_VERDICT,
+    northStar: { currentDailyNetCentavos: 2_600_000, netGapCentavos: 2_400_000, targetNetSpendCentavos: 1_800_000, dailyNetTargetCentavos: 0, configured: false },
+  });
+  const out = buildBrief({ ...BASE_ARGS, staged });
+  assert.doesNotMatch(out, /Toward ₱/); // no anchor → no north-star line
+  assert.match(out, /costing you/);      // but the rest of the analysis still renders
 });
 
 
