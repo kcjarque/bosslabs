@@ -18,7 +18,10 @@ media buyer** with the instincts of a Fortune-500 performance lead and the
   and growth — never vanity metrics. Each move ties to a business lever: *earn
   more* (scale winners, raise budgets, lean into efficient audiences/placements,
   test into whitespace) or *spend less* (cut waste, fix leaks, reallocate off
-  draggers, stop paying for the wrong crowd).
+  draggers, stop paying for the wrong crowd). **Profit, not just efficiency:**
+  every ROAS/CPP read is judged against the **profit anchor** (§3h
+  `breakevenRoas` / `targetBlendedCac`) — a raw "2.49×" is meaningless until
+  stated as *above or below breakeven*.
 - **Knows what to look for — does NOT overanalyze.** Prince *has* all the data in
   this spec, but a senior buyer doesn't recite dashboards. The council's job is
   JUDGMENT: diagnose the situation, decide which 1–3 signals actually matter right
@@ -57,6 +60,17 @@ depends on the type:
   exit learning, CBO starving a winner, wrong objective for the goal).
 - **Algorithm / delivery** — learning not resolving, spend mis-allocating,
   Advantage+ mis-delivering.
+- **Market / auction** — broad, simultaneous cost inflation across ALL
+  campaigns/ads at once = external auction pressure (seasonality, competition,
+  election/holiday surges), NOT a per-ad fault. Fix is hold / reprice / ride it
+  out — NEVER restructure. *(Pulled forward from the v2.1 backlog — see §9.)*
+
+**NULL-RESULT LAW (Stage 1).** A healthy account is a valid finding. If nothing
+crosses the severity floor (§5a), say *"nothing needs fixing this week,"* name the
+ONE thing to watch, and STOP. Do NOT manufacture problems to fill the stage —
+"braindump every problem" means *list what's genuinely wrong*, never *invent
+something to look busy*. Stage 1's divergence is bounded by real severity, not by
+a quota.
 
 **Stage 2 — Identify which data matters** to each problem (don't boil the ocean):
 map each problem to its diagnostic metric(s) — creative→link-CTR/hook,
@@ -66,6 +80,20 @@ setup→structure/optimization, malfunction→status/metric-cliff.
 **Stage 3 — Find the evidence** where it matters: the specific proof — the
 placement dragging, the creative context, the demo segment, the funnel step that
 leaks, the day a metric cliffed. Real numbers, not vibes.
+
+**MINIMUM-SIGNAL RULE (confidence tiers).** Every evidence read — an ad, a
+placement, a segment, a day-of-week, a funnel step — is tagged by how much data
+backs it:
+- **SOLID** — ≥ ~10 purchases OR spend ≥ ~3× blended CPA in the window.
+- **DIRECTIONAL** — ≥ 3 purchases OR spend ≥ ~1× blended CPA.
+- **NOISE** — below that.
+
+HARD RULE: **no cut / scale / exclude recommendation may rest on NOISE-tier
+evidence** — NOISE reads appear ONLY as "watch" items. DIRECTIONAL reads MUST be
+labeled as such in the briefing. Day-of-week (§3d, 4 samples/weekday) is capped at
+DIRECTIONAL by definition. *(Worked example: `7_Manual2` at ₱186 CPP on ₱929
+spend is NOISE — never a scale call.)* Carried in `SessionJson` as
+`problems[].evidence.confidence`.
 
 **Stage 4 — Provide solutions**: per confirmed problem, the concrete executable
 fix, framed **earn-more or spend-less**, structure-aware.
@@ -83,9 +111,11 @@ business impact, honest dissent on record.
 - **Daily pulse:** unchanged (deterministic, no LLM).
 
 Implementation note: `SessionJson` changes to carry the stages —
-`problems:[{type, description, severity, evidence}]` → `solutions:[…]` →
-synthesis — and `session.ts` gains a staged orchestrator for the weekly path. A
-small deterministic **malfunction pre-check** (from `WITH_ISSUES` status + a
+`problems:[{type, description, severity, pesoImpact, evidence:{…, confidence}}]`
+→ `solutions:[…]` → synthesis — plus a `watchlist:[…]` array for below-floor /
+NOISE-tier items (§5a severity floor) that stay OUT of the main briefing. And
+`session.ts` gains a staged orchestrator for the weekly path. A small
+deterministic **malfunction pre-check** (from `WITH_ISSUES` status + a
 purchases/revenue-cliff scan of the series) flags candidates so the council never
 misses an obvious outage.
 
@@ -263,6 +293,34 @@ tighten/exclude weak segments, lean into strong ones. Context, not a per-ad cut.
 
 Both live best-effort; no migration.
 
+### 3h. Economics anchor — core
+A `settings.economics` block, configured per brand and carried in the pack, so
+every ROAS/CPP call is judged against a PROFIT floor — not a raw number:
+```
+economics: {
+  breakevenRoas,      // front-end ROAS at/below which the account loses money on the
+                      //   front end, derived from margin (≈ 1 / frontEndMarginPct, net of fees)
+  targetBlendedCac,   // allowable cost-per-front-end-buyer given back-end ascension.
+                      //   ₱999 webinar is a LOSS-LEADER into retreat/DFY; back-end is NOT
+                      //   ad-attributed, so the front-end target is SET FROM back-end economics
+                      //   (e.g. "tolerate 1.5× front ROAS because X% ascend at ₱Y").
+  frontEndMarginPct,  // gross margin on the ₱999 front-end product, net of processing/platform fees
+  backEndNote,        // one line stating the ascension assumption behind targetBlendedCac
+}
+```
+- Carried via the existing council settings (settings row / config) — **no new
+  column, no migration.**
+- **If `economics` is absent/unset:** Prince MUST say it is *"judging without a
+  profit anchor — these are efficiency reads, not profit calls,"* and default to
+  CONSERVATIVE reads (treat front-end breakeven as ~1.0×, don't greenlight
+  scaling on ROAS alone, flag the uncertainty).
+
+**Prompt (both weekly + `/prince`):** every scale / cut / hold call is justified
+RELATIVE TO `breakevenRoas` / `targetBlendedCac`, never raw ROAS. "2.49× blended"
+only belongs in the briefing when stated as above/below breakeven (e.g. "2.49× —
+~1.7× above the 1.5× breakeven, so there's profitable room to scale"). Amends §0
+and §5a.
+
 ---
 
 ## 4. Pack shape (labeled)
@@ -293,7 +351,7 @@ Both live best-effort; no migration.
     structure, recentChanges, winningCreatives, cohorts,
     pastPlans, priors, weights, openPredictions, lastVerdict, backEnd,
   },
-  settings,
+  settings: { …, economics: { breakevenRoas, targetBlendedCac, frontEndMarginPct, backEndNote } }, // §3h — may be unset → conservative reads
 }
 ```
 
@@ -324,6 +382,18 @@ The whole point of §0's persona. Added to BOTH prompts:
   reciting all 10.
 - Scenario-first: name the situation (scaling / bleeding / stabilizing /
   launching) and advise for THAT, at THIS budget scale.
+- **Profit anchor (§3h), always.** Every scale/cut/hold is stated relative to
+  `breakevenRoas` / `targetBlendedCac`, never as a raw ROAS. If `economics` is
+  unset, say so out loud and read conservatively.
+- **Confidence, always (§0b minimum-signal).** Never recommend a cut/scale on
+  NOISE-tier evidence; label DIRECTIONAL reads as directional. NOISE → watch only.
+- **Null-result + severity floor (§0b).** A healthy week is a valid answer — do
+  not manufacture problems. Problems whose plausible impact is **< ~5% of weekly
+  spend** go to the `watchlist` array, NOT the briefing; the briefing carries only
+  above-floor problems, **ranked by peso impact**.
+- **Scaling velocity guardrail.** Budget raises of >~20–30%/day risk re-entering
+  learning, and any significant edit resets learning — so scale winners in STEPS,
+  never overnight. *(Pulled forward from the v2.1 backlog — see §9.)*
 
 ## 6. Non-goals
 - No DB migration; no change to the nightly sync fields (revenue already synced).
@@ -345,11 +415,18 @@ The whole point of §0's persona. Added to BOTH prompts:
   `getCampaignStructures`; ADVANTAGE+ detection fix (GUIDED_CREATION).
 - `lib/council/session.ts` — **§0b 5-stage method + staged multi-pass council**
   (weekly orchestrator: one cross-examined pass per stage), new `SessionJson`
-  shape (`problems[{type,description,severity,evidence}]` → `solutions` →
-  synthesis), **§0 persona + §5a output discipline**, SCOPE law, ROAS co-equal,
-  objective rules, pacing/day-of-week/placement/audience/funnel rules, relabeled
-  context.
-- `lib/council/prince.ts` — same persona + 5-stage method, but SINGLE fast pass.
+  shape (`problems[{type,description,severity,pesoImpact,evidence:{…,confidence}}]`
+  → `solutions` → synthesis, plus a `watchlist[]` array), **§0 persona + §5a output
+  discipline**, SCOPE law, ROAS co-equal, objective rules, pacing/day-of-week/
+  placement/audience/funnel rules, relabeled context, **plus the three required
+  upgrades**: profit-anchor framing (§3h `breakevenRoas`/`targetBlendedCac`),
+  minimum-signal confidence tiers (§0b), null-result law + severity floor (§0b/§5a),
+  the market/auction problem type (§0b), and the scaling-velocity guardrail (§5a).
+- `lib/council/prince.ts` — same persona + 5-stage method + all three upgrades,
+  but SINGLE fast pass.
+- `lib/council/db.ts` (`getCouncilSettings`) + `lib/council/types.ts` — carry the
+  `economics` block (§3h) on the settings row/config; **no new column, no
+  migration** (stored in the existing settings; conservative default when unset).
 - **`lib/council/malfunction.ts` (new, small)** — deterministic pre-check:
   `WITH_ISSUES` ads + purchases/revenue-cliff scan → candidate outages the
   council must address first.
@@ -369,3 +446,38 @@ The whole point of §0's persona. Added to BOTH prompts:
 - Weekly staged run: confirm it produces the 5 stages with real cross-examination
   between them, classifies problems by type, and the malfunction pre-check flags
   the 2 `WITH_ISSUES` ads (and any purchases/revenue cliff) as rule-out-first.
+- **Required-upgrade dry-runs:**
+  - **(a) Null-result:** a healthy-week fixture (nothing above the severity floor)
+    produces a *"nothing needs fixing this week"* briefing with ONE watch item —
+    no manufactured problems; below-floor items land in `watchlist`, not the briefing.
+  - **(b) Minimum-signal:** a NOISE-tier "winner" (e.g. ₱186 CPP on ₱929 spend) is
+    NOT recommended for scaling — it appears only as a watch item; DIRECTIONAL
+    reads are labeled as such.
+  - **(c) Profit anchor:** a scale/cut/hold call (e.g. on the 2.49× blended) is
+    framed relative to `breakevenRoas` (above/below breakeven), never as a bare
+    ROAS; with `economics` unset, Prince states it is judging without a profit anchor.
+
+## 9. v2.1 backlog (not in this build)
+
+Tracked so they're not lost; out of scope for v2 unless marked **pulled-forward**.
+
+1. **Creative pipeline output.** A weekly "what to make next" brief — the winning
+   hook/format/angle pattern, a fatigue ETA per current winner, and N specific new
+   variants to brief the creator. Reuse BrandHub's **Pattern-Fit / Novelty**
+   thinking. *Deferred — v2 already emits `creative_ideas`; this is the fuller,
+   pipeline-grade version.*
+2. **Market / auction problem type.** Broad simultaneous cost inflation across ALL
+   campaigns/ads = external auction pressure (seasonality / competition); fix is
+   hold / reprice, never restructure. **DECISION: PULLED INTO v2** — it's one
+   taxonomy line + one prompt rule and it prevents a whole class of misdiagnosis
+   (a per-ad "creative fix" for an account-wide auction spike). Now in §0b Stage 1;
+   left listed here for the record.
+3. **Pixel vs bank truth (blended MER).** A weekly line comparing pixel
+   `action_values` revenue against actual Xendit-collected revenue (manual settings
+   entry acceptable) to keep attribution honest — pixel over/under-count drifts over
+   time. *Deferred — needs a revenue-truth input Prince doesn't have yet; pairs
+   naturally with §3h economics once wired.*
+4. **Scaling velocity guardrail.** Budget raises >~20–30%/day risk re-entering
+   learning; significant edits reset learning; scale winners in steps. **DECISION:
+   PULLED INTO v2** — one §5a line, cheap, and it prevents nuking a winner's
+   learning by scaling too fast. Now in §5a; left listed here for the record.
