@@ -142,7 +142,12 @@ export function deriveWeekBounds(asOfSettled: string): { weekStart: string; week
   const today = new Date(Date.parse(asOfSettled) + 3 * MS_DAY).toISOString().slice(0, 10);
   const d = new Date(`${today}T00:00:00Z`);
   const dow = d.getUTCDay(); // 0=Sun..6=Sat
-  d.setUTCDate(d.getUTCDate() + (dow === 0 ? 0 : 7 - dow));
+  // weekEnd = the MOST RECENT Sunday ≤ today (the just-finished Mon–Sun). On a
+  // Sunday run that is today itself (Fri–Sun are the rough <72h tail); on any
+  // other day (manual run / /prince Q&A, which call assemblePack too) it is last
+  // Sunday, a fully-settled just-finished week. Never the upcoming Sunday —
+  // going forward would put unelapsed days in the window and invert settledCutoff.
+  d.setUTCDate(d.getUTCDate() - dow);
   const weekEnd = d.toISOString().slice(0, 10);
   const weekStart = isoDaysBefore(weekEnd, 6);
   return { weekStart, weekEnd, settledCutoff: asOfSettled };
