@@ -205,15 +205,18 @@ export async function pipelineRanToday(brand: Brand, dateManila: string): Promis
 
 type CouncilSettingsRowDb = {
   brand: string; mode: string; target_cpp_centavos: number;
-  // numeric/bigint columns — PostgREST returns these as strings, not numbers.
-  target_roas: string; breakeven_roas: string; processing_fee_pct: string;
+  // supabase-js (PostgREST /rest/v1) returns these numeric/bigint columns as JS
+  // numbers (verified on the live endpoint). The Number() wraps in getCouncilSettings
+  // are harmless defensive coding — they also cover the Management API SQL path,
+  // which DOES return numeric as strings.
+  target_roas: number; breakeven_roas: number; processing_fee_pct: number;
   daily_net_target_centavos: number; back_end_note: string;
 };
 
 export async function getCouncilSettings(brand: Brand): Promise<CouncilSettingsRow> {
   if (!isSupabaseConfigured()) {
     return {
-      brand, mode: 'recommend', targetCppCentavos: 50000,
+      brand, mode: 'recommend', targetCppCentavos: 65000,
       targetRoas: 2.0, breakevenRoas: 1.04, processingFeePct: 0.035,
       dailyNetTargetCentavos: 5000000, backEndNote: '',
     };
@@ -226,7 +229,7 @@ export async function getCouncilSettings(brand: Brand): Promise<CouncilSettingsR
   if (error) throw new Error(`getCouncilSettings: ${error.message}`);
   if (!data) {
     return {
-      brand, mode: 'recommend', targetCppCentavos: 50000,
+      brand, mode: 'recommend', targetCppCentavos: 65000,
       targetRoas: 2.0, breakevenRoas: 1.04, processingFeePct: 0.035,
       dailyNetTargetCentavos: 5000000, backEndNote: '',
     };
