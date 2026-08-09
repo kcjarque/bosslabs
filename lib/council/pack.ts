@@ -17,6 +17,8 @@ import { economicsFromSettings, dailyNetCentavos, targetNetSpendCentavos, netGap
 import { getExpertWeights } from './ledger';
 import { getCreativeBriefs, getScripts, type CreativeBrief } from './creative-context';
 import { getCampaignStructures, getRecentChanges, getAdStatuses, type CampaignStructure, type AccountChange } from '@/lib/meta-ads';
+import { confidenceFor, type Confidence } from './confidence';
+import { detectMalfunctions, type Malfunction } from './malfunction';
 import type { AdDay, Brand, CouncilSettingsRow, PriorsRow, Role, Tier } from './types';
 
 const MS_DAY = 86400000;
@@ -94,9 +96,19 @@ export type CouncilPack = {
        *  above — reused, not re-fetched. */
       active: boolean; status: string;
       week: ReturnType<typeof weekWindow>;
+      /** How much this-week evidence backs this ad (spec §0b minimum-signal
+       *  rule) — SOLID/DIRECTIONAL/NOISE, from `week.purchases`/`week.spend`
+       *  vs the blended this-week CPP. NOISE-tier evidence may never justify
+       *  a cut/scale/exclude. */
+      confidence: Confidence;
     }>;
     northStar: { currentDailyNetCentavos: number; targetNetSpendCentavos: number; netGapCentavos: number };
   };
+  /** Deterministic "is it just broken?" pre-check (spec §0b Stage 1) —
+   *  DISAPPROVED/REVENUE_CLIFF/LP_COLLAPSE candidates the council must rule
+   *  out BEFORE prescribing creative/audience fixes. Best-effort: [] if the
+   *  check throws. */
+  malfunctions: Malfunction[];
   cohorts: Array<{
     weekStart: string; buyers: number; showUpPct: number | null;
     applications: number; frontRevenueCentavos: number; adSpendCentavos: number;
@@ -357,6 +369,14 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     getRecentChanges().catch(() => [] as AccountChange[]),
     getAdStatuses().catch(() => new Map<string, string>()),
   ]);
+  // Malfunction pre-check (spec §0b Stage 1) — pure/sync, but best-effort like
+  // the Meta calls above: a bad series shape must never sink the whole pack.
+  let malfunctions: Malfunction[] = [];
+  try {
+    malfunctions = detectMalfunctions(series, adStatus, asOfSettled);
+  } catch {
+    malfunctions = [];
+  }
 
   const verdictByAdId = new Map(verdicts.map((v) => [v.adId, v]));
   const since21 = isoDaysBefore(asOfSettled, 20); // 21-day trailing window, inclusive of asOfSettled
@@ -524,11 +544,16 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
     targetNetSpendCentavos: targetNetSpendCentavos(econ.dailyNetTargetCentavos, econ.targetRoas, econ.processingFeePct),
     netGapCentavos: netGapCentavos(Math.round(currentDailyNet), econ.dailyNetTargetCentavos),
   };
+  // This-week blended CPP (centavos) — the confidenceFor denominator for every
+  // ad below; confidenceFor itself falls back to the ₱650 target when this is
+  // null/0 (no purchases yet this week).
+  const thisWeekCpp = twPurch > 0 ? twSpend / twPurch : null;
+  const blendedThisWeekCppCentavos = thisWeekCpp ?? 0;
 
   const thisWeek: CouncilPack['thisWeek'] = {
     campaign: {
       spend: twSpend, revenue: twRev, roas: blendedRoas,
-      cpp: twPurch > 0 ? twSpend / twPurch : null,
+      cpp: thisWeekCpp,
       aov: twPurch > 0 ? Math.round(twRev / twPurch) : null,
       cpm: twImpr > 0 ? (twSpend / 100 / twImpr) * 1000 : null,
       linkCtr: twImpr > 0 ? (twClicks / twImpr) * 100 : null,
@@ -550,6 +575,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
       active: (adStatus.get(s.adId) ?? '') === 'ACTIVE',
       status: adStatus.get(s.adId) ?? '',
       week: w,
+      confidence: confidenceFor(w.purchases, w.spend, blendedThisWeekCppCentavos),
     })),
     northStar,
   };
@@ -557,7 +583,7 @@ export async function assemblePack(brand: Brand, asOfSettled: string): Promise<C
   return {
     brand, asOf: asOfSettled, dataMode,
     weekStart, weekEnd, settledCutoff,
-    ads, campaign, thisWeek, cohorts,
+    ads, campaign, thisWeek, malfunctions, cohorts,
     structure, recentChanges, winningCreatives,
     weeklyTrend, pastPlans,
     priors, weights, openPredictions, lastVerdict,

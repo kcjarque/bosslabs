@@ -5,4 +5,6 @@ import { settledDay } from '@/lib/council/session';
   console.log('week', p.weekStart, '..', p.weekEnd, 'cutoff', p.settledCutoff);
   console.log('blendedRoas', p.thisWeek?.campaign?.roas, 'northStar', p.thisWeek?.northStar);
   console.log('economics', p.settings?.economics);
+  console.log('malfunctions', p.malfunctions);
+  console.log('sample confidence', p.thisWeek?.ads?.[0]?.confidence);
 })();
