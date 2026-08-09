@@ -76,6 +76,22 @@ function validSession(over: Record<string, unknown> = {}) {
     floor: [validFloorEntry()],
     cross_examination: ['CHARLEY -> NICK: ...'],
     disagreement: 'C1 is live',
+    diagnosis: { root_cause: 'CPM is climbing', lever: 'audience', evidence: 'CPM up 18% week over week' },
+    action_plan: [{ step: 'Test 2 new audiences', because: 'CPM is the bottleneck', lever: 'audience' }],
+    creative_ideas: [{
+      concept: 'Problem-based ad for resto owners', angle: 'pain-point', persona: 'resto-owner',
+      hook: 'Paulit-ulit bang nawawalan ka ng staff?', why: 'Testimonial angle is winning but resto-owner persona is untested',
+    }],
+    problems: [{
+      type: 'audience', description: 'CPM climbing across the account', severity: 'medium', pesoImpact: 8000,
+      evidence: { confidence: 'DIRECTIONAL', text: 'CPM up 18% week over week' },
+    }],
+    solutions: [{
+      problem: 'CPM climbing across the account', fix: 'Test 2 new lookalike audiences',
+      lever: 'audience', expectedEffect: 'Lower blended CPM ~10%',
+    }],
+    synthesis: 'CPM is the bottleneck this week; testing fresh audiences is the move.',
+    watchlist: [{ item: '7_Manual2 at ₱186 CPP', why: 'Only ₱929 spend — NOISE tier, not a real signal yet' }],
     verdict: {
       action: 'do the thing', why_it_wins: 'because', what_it_costs: 'a little',
       kill_switch: { text: 'reverse if X', metric: 'cpp_7d', threshold: 70000, target_id: 'ad1', deadline_days: 5 },
@@ -163,6 +179,28 @@ test('validateSessionJson: missing verdict prose fields (why_it_wins/what_it_cos
   assert.equal(out.verdict.what_it_costs, '');
   assert.equal(out.verdict.dissent_on_record, '');
   assert.equal(out.disagreement, '');
+});
+
+test('validateSessionJson: missing problems/solutions/synthesis/watchlist default to []/[]/\'\'/[]', () => {
+  const input = validSession();
+  delete (input as { problems?: unknown }).problems;
+  delete (input as { solutions?: unknown }).solutions;
+  delete (input as { synthesis?: unknown }).synthesis;
+  delete (input as { watchlist?: unknown }).watchlist;
+  const out = validateSessionJson(input);
+  assert.deepEqual(out.problems, []);
+  assert.deepEqual(out.solutions, []);
+  assert.equal(out.synthesis, '');
+  assert.deepEqual(out.watchlist, []);
+});
+
+test('validateSessionJson: a problem entry missing its evidence object never throws and defaults evidence.text to \'\'', () => {
+  const input = validSession({
+    problems: [{ type: 'audience', description: 'CPM climbing', severity: 'medium', pesoImpact: 8000 }],
+  });
+  const out = validateSessionJson(input);
+  assert.equal(out.problems[0].description, 'CPM climbing');
+  assert.equal(out.problems[0].evidence.text, '');
 });
 
 test('validateSessionJson: a non-object top-level value throws', () => {

@@ -11,6 +11,7 @@ import path from 'path';
 import { getSupabase } from '@/lib/supabase';
 import { assemblePack } from './pack';
 import type { Brand } from './types';
+import type { Confidence } from './confidence';
 
 const MODEL = process.env.COUNCIL_MODEL || 'claude-sonnet-5';
 
@@ -29,6 +30,24 @@ type ActionStep = { step: string; because: string; lever: string };
  *  (angle/persona/hook), the untested tag whitespace, and the winning scripts. */
 type CreativeIdea = { concept: string; angle: string; persona: string; hook: string; why: string };
 
+/** Stage-1 problem-classification taxonomy (spec §0b) — the fix depends on
+ *  the type: malfunction is ruled out FIRST (something is just broken),
+ *  market is account-wide auction pressure (never a per-ad fault, never a
+ *  restructure), the rest are the usual CPP-decomposition levers. */
+type ProblemType =
+  | 'malfunction' | 'creative' | 'fatigue' | 'audience' | 'offer' | 'setup' | 'algorithm' | 'market';
+/** One Stage-1 finding (braindump + classify), backed by a confidence-tiered
+ *  evidence read (§0b minimum-signal rule). severity is the coarse label;
+ *  pesoImpact — whole PESOS, not centavos — is what ranking and the §5a
+ *  severity floor actually key off. */
+type Problem = {
+  type: ProblemType; description: string; severity: 'high' | 'medium' | 'low';
+  pesoImpact: number; evidence: { confidence: Confidence; text: string };
+};
+/** Stage-4 fix for one confirmed (above-floor) problem. `problem` names
+ *  which problem this addresses (matches its description). */
+type Solution = { problem: string; fix: string; lever: string; expectedEffect: string };
+
 type SessionJson = {
   snapshot: string[];
   floor: Array<{ expert: 'CHARLEY'|'NICK'|'BEN'|'DARA'; read: string; diagnosis: string;
@@ -38,11 +57,82 @@ type SessionJson = {
   diagnosis: Diagnosis;
   action_plan: ActionStep[];
   creative_ideas: CreativeIdea[];
+  /** Stage 1 — every ABOVE-floor problem found this week, classified by
+   *  type and ranked by pesoImpact. Below-floor/NOISE-tier findings go in
+   *  `watchlist` instead (§5a severity floor, §0b NULL-RESULT LAW) — this
+   *  stays `[]` on a genuinely healthy week. */
+  problems: Problem[];
+  /** Stage 4 — one concrete, structure-aware fix per confirmed problem. */
+  solutions: Solution[];
+  /** Stage 5 — the cohesive briefing paragraph tying problems→solutions to
+   *  the profit picture, ranked by business impact. */
+  synthesis: string;
+  /** Below-floor / NOISE-tier items kept OUT of the main briefing (§5a
+   *  severity floor, §0b minimum-signal) — named so nothing silently
+   *  vanishes, just demoted. Always carries at least one entry, even on a
+   *  clean week (the NULL-RESULT LAW's "name the ONE thing to watch"). */
+  watchlist: Array<{ item: string; why: string }>;
   verdict: { action: string; why_it_wins: string; what_it_costs: string;
     kill_switch: PredictionShape;
     dissent_on_record: string; also_cleared: string[] };
   transcript_md: string;
 };
+
+/** §0 persona — the north star for every rule below: Prince is a complete
+ *  senior media buyer with a Fortune-500 buyer's instincts AND the business
+ *  owner's acumen — judges on profit, not vanity metrics; decides what
+ *  actually matters instead of reciting the pack; holds the same standard
+ *  at any budget scale. */
+const PERSONA_RULE =
+  'PERSONA (§0) — You are a complete senior media buyer: the instincts of a Fortune-500 performance lead PLUS the acumen of the business owner. Hold three traits at once:\n' +
+  '- BUSINESS-OWNER MINDSET: every read and recommendation serves ONE objective — make the business earn more and spend less. Think in profit, ROAS, and growth, never vanity metrics. Frame every move as a business lever: EARN MORE (scale winners, raise budgets, lean into efficient audiences/placements, test into whitespace) or SPEND LESS (cut waste, fix leaks, reallocate off draggers, stop paying for the wrong crowd). Profit, not just efficiency — see PROFIT ANCHOR below.\n' +
+  '- JUDGMENT, NOT RECITATION: you have all the data in the pack, but a senior buyer does not recite dashboards. Decide which 1-3 signals actually matter right now and act on them — everything else is reserve, drawn on only if it changes the call or the owner asks.\n' +
+  '- ADAPTS TO ANY SCENARIO AND SCALE: the same brain applies whether the budget is ₱1k/day or ₱1M/day, whether the account is scaling, bleeding, stabilizing, or launching. Thresholds are relative (vs target / prior / blended), never hardcoded to one business size.';
+
+/** §0b — the 5-stage analysis method plus the two hard rules (NULL-RESULT,
+ *  MINIMUM-SIGNAL) that keep it honest. Directly shapes the new
+ *  problems/solutions/synthesis/watchlist output fields. */
+const METHOD_RULE =
+  'THE 5-STAGE METHOD (§0b) — every analysis follows this flow; no stage is trusted until challenged by the rest of the floor:\n' +
+  'STAGE 1 — FIND & CLASSIFY ALL PROBLEMS (divergent first). Braindump every problem visible across the account, then tag each by TYPE, because the fix depends on the type. Emit "problems": [{type, description, severity, pesoImpact, evidence:{confidence, text}}]:\n' +
+  '  - malfunction (RULE OUT FIRST): something is BROKEN — a disapproved ad (WITH_ISSUES), pixel/tracking not firing (spend continues but purchases/revenue cliff to ~0), a landing page down (lpViewRate collapses), any metric falling off a cliff overnight. Check pack.malfunctions first — it is a deterministic pre-check of exactly this. A senior buyer asks "is it just broken?" before optimizing anything — NEVER prescribe a creative fix for a tracking outage.\n' +
+  '  - creative: the ad is not earning the click/watch (link-CTR, hook/hold).\n' +
+  '  - fatigue: a working ad wearing out (CTR falling + frequency rising).\n' +
+  '  - audience: expensive to reach the right people (CPM, placement, demo).\n' +
+  '  - offer: clicks do not convert (CVR, LP-view-to-purchase) — the leak is after the click.\n' +
+  '  - setup: misconfiguration (wrong optimization goal, budget too low to exit learning, CBO starving a winner, wrong objective for the goal).\n' +
+  '  - algorithm: learning not resolving, spend mis-allocating, Advantage+ mis-delivering.\n' +
+  '  - market: broad, SIMULTANEOUS cost inflation across ALL campaigns/ads at once — external auction pressure (seasonality, competition, election/holiday surges), NOT a per-ad fault. Fix is hold / reprice / ride it out — NEVER restructure.\n' +
+  '  NULL-RESULT LAW: a healthy account is a valid finding. If nothing crosses the severity floor (see OUTPUT DISCIPLINE below), say so in synthesis ("nothing needs fixing this week"), name the ONE thing to watch in watchlist, and STOP — do NOT manufacture problems to fill the stage. "Braindump every problem" means list what is genuinely wrong, never invent something to look busy.\n' +
+  'STAGE 2 — identify which data matters to each problem (do not boil the ocean): map each problem to its diagnostic metric(s) — creative to link-CTR/hook, fatigue to CTR-trend+frequency, audience to CPM/placement/demo, offer to CVR/funnel, setup to structure/optimization, malfunction to status/metric-cliff. (The diagnostic-spine, creative-quality, structure, and movement rules further below are exactly this mapping, spelled out in full.)\n' +
+  'STAGE 3 — find the evidence where it matters: the specific proof — the placement dragging, the creative context, the demo segment, the funnel step that leaks, the day a metric cliffed. Real numbers, not vibes. MINIMUM-SIGNAL RULE — every evidence read (an ad, a placement, a segment, a day-of-week, a funnel step) is tagged by how much data backs it: SOLID (>= ~10 purchases OR spend >= ~3x blended CPA in the window), DIRECTIONAL (>= 3 purchases OR spend >= ~1x blended CPA), NOISE (below that). pack.thisWeek.ads[] already carries each ad\'s own precomputed confidence — use it. HARD RULE: no cut / scale / exclude recommendation may EVER rest on NOISE-tier evidence — a NOISE read belongs ONLY in watchlist. DIRECTIONAL reads MUST be labeled "DIRECTIONAL" in the evidence text. Day-of-week context is capped at DIRECTIONAL by definition (only 4 samples/weekday). Record the tier in problems[].evidence.confidence.\n' +
+  'STAGE 4 — provide solutions: per CONFIRMED (above-floor) problem, the concrete executable fix, framed earn-more or spend-less, structure-aware (see the structure rule further below). Emit "solutions": [{problem, fix, lever, expectedEffect}] — one entry per problem that has an actionable fix (a market/auction hold, or a pure watch item, may have none).\n' +
+  'STAGE 5 — full analysis: synthesize everything into one cohesive briefing, ranked by business impact (peso impact, highest first), with honest dissent on record. Emit "synthesis": a short paragraph a busy owner reads once, tying the ranked problems to the plan and the profit picture.';
+
+/** §3h — every scale/cut/hold call is judged against the economics block,
+ *  never a raw ROAS/CPP number, and tied to the ₱50k/day net goal. */
+const PROFIT_ANCHOR_RULE =
+  'PROFIT ANCHOR (§3h) — every scale / cut / hold call is judged AGAINST pack.settings.economics, never as a raw number:\n' +
+  '- targetRoas (front-end ROAS target — below it is flagged), breakevenRoas (front end LOSES money below this), targetCppCentavos (the CAC ceiling). A ROAS or CPP is only meaningful stated as above/below one of these — never cite a bare "2.49x" without saying whether that clears target or merely breakeven.\n' +
+  '- THE NORTH STAR: pack.thisWeek.northStar carries currentDailyNetCentavos (today\'s actual daily net = revenue - spend - processing), targetNetSpendCentavos (spend/day needed to hit the net target at targetRoas), and netGapCentavos (the shortfall to settings.economics.dailyNetTargetCentavos — the ₱50k/day net goal). Frame the weekly plan around CLOSING that gap: name it in pesos and the specific move that closes it (e.g. "we are ~₱25k/day short of ₱50k — scaling the 2.4x winners by ₱X/day closes it"), never a generic "improve performance." Any gap-closing scale-up still obeys the scaling-velocity guardrail (see OUTPUT DISCIPLINE below) — steps, not overnight jumps.\n' +
+  '- IF pack.settings.economics.configured is false: say out loud that you are "judging without a profit anchor — efficiency reads, not profit calls," and default CONSERVATIVE (treat breakeven as ~1.0x; do not greenlight scaling on ROAS alone).';
+
+/** §2 — the temporal spine: THE WEEK is the subject, everything else in the
+ *  pack is background that explains it, never the thing being graded. */
+const SCOPE_RULE =
+  'SCOPE LAW (§2) — you are judging THE WEEK: pack.thisWeek (the just-finished Mon-Sun, pack.weekStart to pack.weekEnd). Its last ~3 days (after pack.settledCutoff) are still inside Meta\'s attribution window — carried but ROUGH; lean hard calls on the settled Mon-Thu portion and treat the fresh tail as directional. Everything else in the pack is CONTEXT that EXPLAINS the week, never the subject you grade:\n' +
+  '- pack.ads[] / pack.campaign (the older settled trailing-7 figures), pack.weeklyTrend (4-week arc), pack.pastPlans (self-grade), pack.cohorts, pack.structure, pack.recentChanges — all CONTEXT. Use them to explain WHY the week looks the way it does ("CPP up this week — third straight week frequency climbed"), never grade the history itself, and never let a lifetime/blended figure override what pack.thisWeek actually shows.\n' +
+  '- When this-week and history disagree, THE WEEK WINS as the subject of the verdict; history only supplies the "why."';
+
+/** §5a — signal over noise: the output discipline that keeps the persona
+ *  above sharp instead of a dashboard recitation. */
+const OUTPUT_DISCIPLINE_RULE =
+  'OUTPUT DISCIPLINE (§5a) — signal over noise; this is the whole point of the persona above:\n' +
+  '- LEAD WITH THE DECISION, not the data — the one-line bottom line first, in both synthesis and verdict.action.\n' +
+  '- CITE ONLY THE 1-3 NUMBERS THAT DRIVE THE CALL. The rest of the pack is reserve — reference it only if it changes the recommendation or the owner asks. NO METRIC-DUMPING: say "Cut FB Reels — it is eating ₱62k at 1.29x while Feed does 2.28x; move it to Feed + Stories," never a table of every placement. Having 10 data points is for KNOWING what to look at, not for reciting all 10.\n' +
+  '- SEVERITY FLOOR: a problem whose plausible impact is < ~5% of pack.thisWeek.campaign.spend does NOT belong in problems/solutions/synthesis — put it in "watchlist": [{item, why}] instead. The main briefing carries only above-floor problems, ranked by pesoImpact, highest first.\n' +
+  '- SCALING-VELOCITY GUARDRAIL: budget raises of more than ~20-30%/day risk re-entering learning, and any significant edit resets learning — so scale winners in STEPS across several days, never overnight, and say so in the fix/expectedEffect.\n' +
+  '- Name the scenario (scaling / bleeding / stabilizing / launching) and advise for THAT situation, at THIS budget scale.';
 
 /** Unit-conventions rule (controller directive) — resolves a reviewer-
  *  flagged 100x hazard: doctrine §5.2's own example JSON shows
@@ -188,6 +278,44 @@ function normalizeCreativeIdeas(x: unknown): CreativeIdea[] {
     })
     .filter((s) => s.concept);
 }
+/** Stage-1 problems (§0b) — `type`/`severity`/`evidence.confidence` are
+ *  passed through as-is (same laxness as `floor[].expert`/`confidence`
+ *  above: this function guarantees STRUCTURE, not enum membership).
+ *  Entries missing `description` are dropped, mirroring
+ *  normalizeActionPlan/normalizeCreativeIdeas' filter-on-primary-field
+ *  convention. */
+function normalizeProblems(x: unknown): Problem[] {
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((p) => {
+      const o = (typeof p === 'object' && p !== null ? p : {}) as Record<string, unknown>;
+      const ev = (typeof o.evidence === 'object' && o.evidence !== null ? o.evidence : {}) as Record<string, unknown>;
+      return {
+        type: o.type, description: asStr(o.description), severity: o.severity,
+        pesoImpact: typeof o.pesoImpact === 'number' ? o.pesoImpact : 0,
+        evidence: { confidence: ev.confidence, text: asStr(ev.text) },
+      } as Problem;
+    })
+    .filter((p) => p.description);
+}
+function normalizeSolutions(x: unknown): Solution[] {
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((s) => {
+      const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return { problem: asStr(o.problem), fix: asStr(o.fix), lever: asStr(o.lever), expectedEffect: asStr(o.expectedEffect) };
+    })
+    .filter((s) => s.fix);
+}
+function normalizeWatchlist(x: unknown): SessionJson['watchlist'] {
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((s) => {
+      const o = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return { item: asStr(o.item), why: asStr(o.why) };
+    })
+    .filter((s) => s.item);
+}
 
 /** Minimal §5-shaped fallback rendered only when the model's own
  *  transcript_md is missing — not a reproduction of buildBrief's format,
@@ -217,7 +345,9 @@ function renderFallbackTranscript(verdictAction: string, floor: SessionJson['flo
  *    `cross_examination`/`snapshot`/`also_cleared` → `[]`; missing
  *    `transcript_md` → a minimal rendered fallback; the remaining verdict
  *    prose fields (`why_it_wins`, `what_it_costs`, `dissent_on_record`,
- *    `disagreement`) → `''` if not already a string. */
+ *    `disagreement`) → `''` if not already a string; missing
+ *    `problems`/`solutions`/`watchlist` → `[]` and missing `synthesis` →
+ *    `''` (same never-throw treatment as `action_plan`/`creative_ideas`). */
 export function validateSessionJson(parsed: unknown): SessionJson {
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('validateSessionJson: response is not a JSON object');
@@ -253,6 +383,10 @@ export function validateSessionJson(parsed: unknown): SessionJson {
     diagnosis: normalizeDiagnosis(p.diagnosis),
     action_plan: normalizeActionPlan(p.action_plan),
     creative_ideas: normalizeCreativeIdeas(p.creative_ideas),
+    problems: normalizeProblems(p.problems),
+    solutions: normalizeSolutions(p.solutions),
+    synthesis: asStr(p.synthesis),
+    watchlist: normalizeWatchlist(p.watchlist),
     verdict: {
       action: v.action,
       why_it_wins: asStr(v.why_it_wins),
@@ -317,7 +451,7 @@ export async function runCouncilSession(
   const model = opts.model || MODEL;
   const pack = await assemblePack(brand, settledDay());
   const doctrine = readFileSync(path.join(process.cwd(), 'docs/ads-council/DOCTRINE.md'), 'utf8');
-  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${MEMORY_RULE}\n${STRUCTURE_RULE}\n${MOVEMENT_LEARNING_RULE}\n${CREATIVE_IDEAS_RULE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
+  const system = `${doctrine}\n\n=== RUNTIME RULES ===\nYou are the full council + Chair. Data mode: ${pack.dataMode}. ${pack.dataMode === 'A' ? 'DEGRADED MODE — reversible verdicts only, confidence capped Medium.' : ''}\n${PERSONA_RULE}\n${METHOD_RULE}\n${PROFIT_ANCHOR_RULE}\n${SCOPE_RULE}\n${OUTPUT_DISCIPLINE_RULE}\nObey doctrine §5 output shape. Banned phrases: "monitor closely", "consider testing", "keep an eye on".\nThe verdict.action field is read by a non-technical business owner on their phone: write it as ONE plain-English imperative sentence naming the ad and the move (e.g. "Turn off the ad 'X' — it keeps showing to the same people without selling"). Say "turn off" or "pause", never "kill". No section references (§...), no jargon like "CPP", "frequency", "spend share", "fatigue definition" — put all that reasoning in transcript_md, never in action. NEVER recommend turning off an ad that is still producing sales at a reasonable cost in its most recent days — a rising cost on a small-budget ad is a "watch", not a cut.\nEach ad now carries a "creative" object (creativeTag/format/angle/persona/awarenessLevel/hook/visualQuality/onBrand/tags) describing WHAT the creative is. creativeTag is the headline label from a fixed vocabulary: Testimonial, Talking Head, Walkthrough, Problem-Based, Income Claim, Objection, Urgency, Graphic, Other. Reason about creative STRATEGY, not just numbers: which creativeTags/personas carry the winners vs which are saturated or untested, whether low-quality or off-brand (onBrand=false) creative explains weak performance, and what to test next. When you recommend testing a new creative, name it using this SAME vocabulary (e.g. "test a Problem-Based ad for the resto-owner persona") plus the specific hook to try, grounded in what is currently winning vs missing. creative may be null for not-yet-analyzed ads — treat that as "unknown", not a negative signal.\n${DIAGNOSTIC_SPINE}\n${CREATIVE_METRICS_RULE}\n${MEMORY_RULE}\n${STRUCTURE_RULE}\n${MOVEMENT_LEARNING_RULE}\n${CREATIVE_IDEAS_RULE}\n${UNIT_CONVENTIONS}\nRespond with ONLY a JSON object matching the provided schema — transcript_md holds the human-readable §5-format transcript.`;
   // The 2nd real dry run parsed as valid JSON but crashed sanitize() on an
   // undefined verdict/prediction field — the brief's shorthand named
   // "kill_switch" and "prediction" without ever spelling out that each is
@@ -327,7 +461,7 @@ export async function runCouncilSession(
   // and safely defaults exactly this class of gap regardless of prompt
   // wording.
   const user = JSON.stringify({ trigger_reasons: triggerReasons, pack,
-    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), creative_ideas:[{concept:string, angle:string, persona:string, hook:string, why:string}] (2-3 net-new creative concepts to test, grounded in winningCreatives + the untested tag/persona whitespace), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer.' });
+    output_schema: 'SessionJson: {snapshot:string[], floor:[{expert,read,diagnosis,action,prediction:{text,metric,threshold,target_id,deadline_days},confidence}] (exactly 4 — one per CHARLEY,NICK,BEN,DARA), cross_examination:string[] (>=2 entries), disagreement:string, diagnosis:{root_cause:string, lever:"audience"|"creative"|"offer"|"fatigue"|"mixed"|"healthy", evidence:string}, action_plan:[{step:string, because:string, lever:string}] (2-4 ordered steps, biggest CPP lever first), creative_ideas:[{concept:string, angle:string, persona:string, hook:string, why:string}] (2-3 net-new creative concepts to test, grounded in winningCreatives + the untested tag/persona whitespace), problems:[{type:"malfunction"|"creative"|"fatigue"|"audience"|"offer"|"setup"|"algorithm"|"market", description:string, severity:"high"|"medium"|"low", pesoImpact:number, evidence:{confidence:"SOLID"|"DIRECTIONAL"|"NOISE", text:string}}] (§0b Stage 1 — every ABOVE-floor problem found this week, ranked by pesoImpact descending; below-floor or NOISE-tier items go in watchlist instead, never here — [] on a genuinely healthy week per the NULL-RESULT LAW), solutions:[{problem:string, fix:string, lever:string, expectedEffect:string}] (§0b Stage 4 — one concrete, structure-aware fix per confirmed problem; "problem" must match the description of the problems[] entry it addresses), synthesis:string (§0b Stage 5 — one cohesive briefing paragraph ranked by business impact; on a healthy week, plainly say "nothing needs fixing this week" per the NULL-RESULT LAW), watchlist:[{item:string, why:string}] (below-floor / NOISE-tier items kept OUT of problems — on a healthy week this still names the ONE thing to watch), verdict:{action,why_it_wins,what_it_costs,kill_switch:{text,metric,threshold,target_id,deadline_days},dissent_on_record,also_cleared:string[]}, transcript_md:string}. "prediction" and "kill_switch" are OBJECTS, not strings — every one of their 5 fields (text, metric, threshold, target_id, deadline_days) is REQUIRED and must never be omitted, even when metric is "" (non-machine-checkable): text/metric are always strings ("" allowed), threshold/target_id are number|null / string|null, deadline_days is an integer. pesoImpact is a plain PESO number (e.g. 5000 means ₱5,000/week), NOT centavos — do not multiply by 100.' });
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
