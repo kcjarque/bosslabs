@@ -93,9 +93,10 @@ backs it:
 HARD RULE: **no cut / scale / exclude recommendation may rest on NOISE-tier
 evidence** — NOISE reads appear ONLY as "watch" items. DIRECTIONAL reads MUST be
 labeled as such in the briefing. Day-of-week (§3d, 4 samples/weekday) is capped at
-DIRECTIONAL by definition. *(Worked example: `7_Manual2` at ₱186 CPP on ₱929
-spend is NOISE — never a scale call.)* Carried in `SessionJson` as
-`problems[].evidence.confidence`.
+DIRECTIONAL by definition. *(Worked examples: an ad at ₱250 spend / 0 buyers is NOISE
+— watch only, never a cut/scale call. By contrast `7_Manual2` (₱929 spend, 5 buyers)
+is DIRECTIONAL — a cautious scale is valid but MUST be labeled DIRECTIONAL and scaled
+in steps.)* Carried in `SessionJson` as `problems[].evidence.confidence`.
 
 **Stage 4 — Provide solutions**: per confirmed problem, the concrete executable
 fix, framed **earn-more or spend-less**, structure-aware.
@@ -440,8 +441,9 @@ The whole point of §0's persona. Added to BOTH prompts:
 - `lib/council/prince.ts` — same persona + 5-stage method + all three upgrades,
   but SINGLE fast pass.
 - `lib/council/db.ts` (`getCouncilSettings`) + `lib/council/types.ts` — carry the
-  `economics` block (§3h) on the settings row/config; **no new column, no
-  migration** (stored in the existing settings; conservative default when unset).
+  `economics` block (§3h) on the settings row/config, reading the economics columns
+  added by the **one `council_settings` migration** (§3h storage / §6); conservative
+  default when a field is unset.
 - **`lib/council/malfunction.ts` (new, small)** — deterministic pre-check:
   `WITH_ISSUES` ads + purchases/revenue-cliff scan → candidate outages the
   council must address first.
@@ -484,8 +486,9 @@ Tracked so they're not lost; out of scope for v2 unless marked **pulled-forward*
 1. **Creative pipeline output.** A weekly "what to make next" brief — the winning
    hook/format/angle pattern, a fatigue ETA per current winner, and N specific new
    variants to brief the creator. Reuse BrandHub's **Pattern-Fit / Novelty**
-   thinking. *Deferred — v2 already emits `creative_ideas`; this is the fuller,
-   pipeline-grade version.*
+   thinking. *Deferred — v2 already emits AND renders `creative_ideas` (the "Creative
+   to test" line in the weekly brief, confirmed in the B2 DONE entry below); this is
+   the fuller, pipeline-grade version.*
 2. **Market / auction problem type.** Broad simultaneous cost inflation across ALL
    campaigns/ads = external auction pressure (seasonality / competition); fix is
    hold / reprice, never restructure. **DECISION: PULLED INTO v2** — it's one
@@ -543,8 +546,11 @@ at the flip; everything below is v2.1):
   `stagedBriefFromVerdict()` (brief.ts) maps the persisted `verdict` into a
   `StagedBrief`; `buildBrief` renders, in order, bottom line (synthesis) → north star
   (§3h net gap — persisted via `persistedNorthStar`/`toPersistedVerdict`) →
-  above-floor problems (peso-ranked, DIRECTIONAL flagged) → solutions → watchlist,
-  superseding the old action/plan blocks. Degrades to the legacy render for pre-v2
-  rows. No new column/migration — all carried in the existing `verdict` JSONB.
+  above-floor problems (peso-ranked, DIRECTIONAL flagged) → solutions → watchlist, then
+  `creative_ideas` as the "Creative to test" block right after the watchlist (VERIFIED
+  it still renders in the staged path — only the old action/plan blocks are superseded,
+  so the weekly brief keeps its creative direction). Degrades to the legacy render for
+  pre-v2 rows. No new column/migration — the staged output is carried in the existing
+  `verdict` JSONB (distinct from the §3h economics `council_settings` migration).
 - **Creative pipeline output** + **pixel-vs-bank blended MER** (from the original
   §9 list above) remain deferred.
