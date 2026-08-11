@@ -212,21 +212,46 @@ export function ContractDocument({ data }: { data: ContractFormData }) {
           interim checkpoint shall be set at approximately three-quarters (3/4) of the target timeline to
           assess whether an extension is needed. If delivery reasonably exceeds the target timeline, the
           additional time shall be handled either on a pro-rated basis or by the addition of one (1)
-          further month of monthly Retainer, as agreed by the Parties. Timelines are estimates and may be
-          reasonably adjusted where delays are caused by the Client (e.g., delayed feedback, content,
-          approvals, or payments) or by factors outside the Provider&rsquo;s control.
+          further month of monthly Retainer, as agreed by the Parties. Timelines are estimates, expressed
+          in working days, and may be reasonably adjusted where delays are caused by the Client (e.g.,
+          delayed feedback, content, approvals, access, or materials) or by factors outside the
+          Provider&rsquo;s control; during any such delay the schedule shall pause and downstream dates,
+          including the phase dates under Section 2.5, shall shift accordingly.
         </Numbered>
         <Numbered n="2.5">
+          <strong>Development Timeline.</strong> The Provider shall deliver the Platform in three (3)
+          sequential phases:
+        </Numbered>
+        <Numbered n="2.5.1">
+          <strong>Phase 1 &mdash; Core Flow (Inquiry to Fulfillment).</strong> Development of the primary
+          end-to-end workflow of the Platform, covering the complete journey from customer inquiry through
+          order fulfillment. Completion of this phase constitutes delivery of the working core system.
+        </Numbered>
+        <Numbered n="2.5.2">
+          <strong>Phase 2 &mdash; Supplement Flow.</strong> Development of secondary and dependent
+          workflows that extend or support the Core Flow, including supporting modules, reports, and
+          auxiliary processes identified in the Scope of Work.
+        </Numbered>
+        <Numbered n="2.5.3">
+          <strong>Phase 3 &mdash; Polish and Nuances (UI Testing).</strong> Refinement of the user
+          interface, resolution of edge cases, usability adjustments, and UI/UX testing across the
+          Platform. Completion of this phase signals readiness for User Acceptance Testing and handover.
+        </Numbered>
+        <Numbered n="2.5.4">
+          Each phase shall commence upon completion of the preceding phase, subject to the delivery and
+          Client-delay provisions of Section 2.4.
+        </Numbered>
+        <Numbered n="2.6">
           <strong>Users.</strong> For Option A, the Platform is provisioned for up to five thousand
           (5,000) active users. For Options B and C, user capacity is scaled as part of the engagement and
           may be further increased by mutual agreement. The Client may define and manage its own user
           roles, codes, and access levels.
         </Numbered>
-        <Numbered n="2.6">
+        <Numbered n="2.7">
           <strong>Usability.</strong> The Platform shall be designed to be user-friendly and readily
           understood by ordinary, non-technical users.
         </Numbered>
-        <Numbered n="2.7">
+        <Numbered n="2.8">
           <strong>Third-Party Integrations.</strong> Where required by the Client, the Platform can
           integrate with third-party APIs, services, or channels as specified in the agreed scope. Such
           integrations are subject to the Client granting the necessary access and to the availability of
