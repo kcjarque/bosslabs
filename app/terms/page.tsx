@@ -25,6 +25,8 @@ export default function TermsPage() {
           The optional 1on1 MVP Session (Action Taker Bonus / One-Time Offer) is a
           separately delivered 1-hour private call with a BOSSLABS founder,
           available only at the time of purchase on the checkout / post-checkout offer page.
+          As a scheduled, personally-delivered service, the 1on1 MVP Session is
+          non-refundable and is not covered by the 7-day implementation guarantee below.
         </p>
       </Section>
 

@@ -299,7 +299,7 @@ export function OrderBumpActions() {
         )}
 
         <p className="mt-5 text-center text-[11px] uppercase tracking-[0.22em] text-ink-300">
-          {priceLabel} · one-time · 100% secure checkout
+          {priceLabel} · one-time · non-refundable · 100% secure checkout
         </p>
       </div>
     </div>
