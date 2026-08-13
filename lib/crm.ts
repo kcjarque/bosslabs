@@ -54,14 +54,24 @@ function boughtBuildSession(meta: { otoProduct?: string; bumpSession?: boolean }
 export async function listCrmCards(): Promise<CrmCard[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
-  const { data, error } = await sb
-    .from('crm_cards')
-    .select('*')
-    .order('stage', { ascending: true })
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`listCrmCards: ${error.message}`);
-  const rows = (data as CrmRow[]) ?? [];
+  // Fetch EVERY card. crm_cards holds one row per paid customer (thousands),
+  // but PostgREST caps a single select at 1000 rows — which silently dropped
+  // 1-on-1 cards past the cap from the board. Paginate so the full table loads,
+  // then filter to Build-Session buyers below.
+  const rows: CrmRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb
+      .from('crm_cards')
+      .select('*')
+      .order('stage', { ascending: true })
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error(`listCrmCards: ${error.message}`);
+    const batch = (data as CrmRow[]) ?? [];
+    rows.push(...batch);
+    if (batch.length < 1000) break;
+  }
 
   const signupIds = [...new Set(rows.map((r) => r.signup_id).filter(Boolean))] as string[];
   const bump = new Map<
@@ -69,17 +79,23 @@ export async function listCrmCards(): Promise<CrmCard[]> {
     { total: number; remarks: string; remarksUpdatedAt: string | null; eventStartsAt: string | null }
   >();
   if (signupIds.length) {
-    const { data: sigs } = await sb
-      .from('signups')
-      .select('id, bumped, amount_centavos, metadata, event_id')
-      .in('id', signupIds);
-    const sigRows = (sigs ?? []) as Array<{
+    // Chunk the id lookup: a single .in() of thousands of ids risks both the
+    // 1000-row response cap and an over-long URL. 500 per batch stays under both.
+    type SigRow = {
       id: string;
       bumped: boolean | null;
       amount_centavos: number | null;
       metadata: Record<string, unknown> | null;
       event_id: string | null;
-    }>;
+    };
+    const sigRows: SigRow[] = [];
+    for (let i = 0; i < signupIds.length; i += 500) {
+      const { data: sigs } = await sb
+        .from('signups')
+        .select('id, bumped, amount_centavos, metadata, event_id')
+        .in('id', signupIds.slice(i, i + 500));
+      sigRows.push(...((sigs ?? []) as SigRow[]));
+    }
     // Resolve each signup's event → its start date (the webinar they joined).
     const eventIds = [...new Set(sigRows.map((s) => s.event_id).filter(Boolean))] as string[];
     const eventStart = new Map<string, string>();
