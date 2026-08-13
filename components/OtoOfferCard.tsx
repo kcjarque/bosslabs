@@ -256,6 +256,11 @@ export function OtoOfferCard({
                       </div>
                     ))}
                   </div>
+                  {p === 'oto2' && (
+                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-300">
+                      Non-refundable
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -293,6 +298,11 @@ export function OtoOfferCard({
               <div className="font-serif text-4xl tracking-tight text-white sm:text-5xl">{priceLabel}</div>
               <div className="font-serif text-lg text-ink-300 line-through sm:text-xl">{singleOffer!.totalValue}</div>
             </div>
+            {single === 'oto2' && (
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-300">
+                Non-refundable
+              </p>
+            )}
           </>
         )}
       </div>
