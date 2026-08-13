@@ -7,7 +7,7 @@
  * and drag through the later stages. Sync runs on read so the board self-heals.
  */
 import { getSupabase, isSupabaseConfigured } from './supabase';
-import { getSignups } from './db';
+import { getSignups, getFunnels } from './db';
 import { sendEmail } from './email';
 import { sendSms } from './sms';
 import { RETREAT_CRM_STAGES, RETREAT_CURRENT_BATCH, type RetreatCrmStage, type RetreatCrmCard } from './retreat-crm-stages';
@@ -38,7 +38,21 @@ type CardRow = {
   batch: number | null;
 };
 
-const DEFAULT_VCR_DEAL_CENTAVOS = 7_500_000; // ₱75,000
+const DEFAULT_VCR_DEAL_CENTAVOS = 7_500_000; // ₱75,000 (legacy read-time fallback)
+
+/** The deal a NEW card starts at — the VibeCode Retreat's current full price
+ *  from the funnel config, so fresh leads track the live price (₱150k) instead
+ *  of the ₱50k column default. Existing cards keep their own stored deal. */
+async function newCardDealCentavos(): Promise<number> {
+  try {
+    const cfg = (await getFunnels()).find((f) => f.slug === 'vibecode-retreat')?.config as
+      | { standardPriceCentavos?: number }
+      | undefined;
+    return cfg?.standardPriceCentavos ?? DEFAULT_VCR_DEAL_CENTAVOS;
+  } catch {
+    return DEFAULT_VCR_DEAL_CENTAVOS;
+  }
+}
 
 type ResRow = {
   id: string;
@@ -105,6 +119,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
   const haveResIds = new Set(cards.map((c) => c.reservation_id).filter(Boolean));
 
   // Sync 1 — every reservation gets a card (Interested, or Paid if already paid).
+  const newDeal = await newCardDealCentavos();
   const toInsert = reservations
     .filter((r) => !haveResIds.has(r.id))
     .map((r) => ({
@@ -114,6 +129,7 @@ export async function listRetreatCrmCards(): Promise<RetreatCrmCard[]> {
       phone: r.phone,
       stage: isResPaid(r.status) ? 'paid' : 'interested',
       batch: RETREAT_CURRENT_BATCH,
+      deal_amount_centavos: newDeal,
     }));
   if (toInsert.length) {
     const { data: inserted } = await sb
@@ -175,6 +191,7 @@ export async function addRetreatCrmCard(input: {
       phone: input.phone ?? '',
       stage: input.stage ?? 'interested',
       batch: RETREAT_CURRENT_BATCH,
+      deal_amount_centavos: await newCardDealCentavos(),
     })
     .select('*')
     .single();
